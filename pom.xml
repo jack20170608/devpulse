@@ -16,6 +16,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <picocli.version>4.7.7</picocli.version>
         <typesafe-config.version>1.4.3</typesafe-config.version>
+        <tamboui.version>0.6.0</tamboui.version>
         <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
         <maven-shade-plugin.version>3.6.1</maven-shade-plugin.version>
     </properties>
@@ -30,6 +31,16 @@
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
             <version>${typesafe-config.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-tui</artifactId>
+            <version>${tamboui.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-jline3-backend</artifactId>
+            <version>${tamboui.version}</version>
         </dependency>
     </dependencies>
 

@@ -23,12 +23,13 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -218,8 +219,10 @@ public final class RunHistory {
     private static Snapshot read(Path directory) throws IOException {
         var file = directory.resolve("state.conf");
         try {
-            var config = ConfigFactory.parseFile(file.toFile(),
+            var config = ConfigFactory.parseString(
+                    Files.readString(file, StandardCharsets.UTF_8),
                     ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
+                            .setOriginDescription(file.toString())
                             .setAllowMissing(false)
                             .setIncluder(new NoIncludes()))
                     .resolve(ConfigResolveOptions.noSystem());
@@ -313,11 +316,33 @@ public final class RunHistory {
                 }
                 channel.force(true);
             }
-            Files.move(temporary, directory.resolve("state.conf"),
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING);
+            replaceSnapshot(temporary, directory.resolve("state.conf"));
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static void replaceSnapshot(Path temporary, Path destination)
+            throws IOException {
+        for (var attempt = 0; ; attempt++) {
+            try {
+                Files.move(temporary, destination,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (AccessDeniedException exception) {
+                // Windows readers can briefly block atomic replacement.
+                if (attempt >= 10) {
+                    throw exception;
+                }
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("State replacement interrupted.",
+                            interrupted);
+                }
+            }
         }
     }
 
