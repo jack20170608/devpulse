@@ -59,11 +59,15 @@
 **实现步骤**：
 
 - **解析配置**：按配置加载规则读取 HOCON 配置，构造配置模型。
+- **目标选择**：`pulse` 默认选择 `dev`；`pulse <名称>` 支持流水线或单任务。目标同时是任务名和流水线名时拒绝执行，要求用户消除重名。
 - **构建有向无环图（DAG）**：将 `tools` 列表中的每个工具视作一个节点（Vertex），将它们之间的 `needs` 依赖关系视作有向边（Edge）。
+- **依赖补齐**：流水线的 `tasks` 声明最终目标，自动补齐全部传递依赖；共享依赖和重复目标在本次执行中只运行一次。列表顺序不代表依赖顺序。
 - **拓扑排序与循环依赖检测**：采用 Kahn 算法或 DFS 算法检查依赖图。如果发现循环依赖（例如 A 依赖 B，B 又依赖 A），在启动任何命令前报错；执行时仅将所有依赖均已成功的任务加入就绪队列，并在并发上限内调度。
-- **底层进程控制器**：复用 Bash 基础组件拉起本地命令。将底层工具的错误流和标准流合并（`redirectErrorStream(true)`），持续读取并实时输出到终端。工具必须已安装且能被 Bash 找到；执行权限与当前用户相同，不提供沙箱。
+- **底层进程控制器**：复用 Bash 基础组件拉起本地命令，工作目录为项目配置所在目录。合并错误流和标准流（`redirectErrorStream(true)`），以 UTF-8 持续读取并输出带任务名前缀的日志。工具必须已安装且能被 Bash 找到；执行权限与当前用户相同，不提供沙箱。
 - **并发上限**：默认最多同时运行 4 个任务；支持配置 `parallelism` 与 `pulse --jobs` 覆盖，优先级为命令行参数高于项目配置、高于默认值。取值必须为正整数，并在执行前校验；该限制不控制外部任务内部的并发。
-- **失败处理**：任一任务失败后，停止启动新任务，等待所有已启动任务结束，最终返回非零退出码；不因该失败强制终止其他运行中任务。用户主动取消与任务超时的终止、进程清理规则另行定义。
+- **失败处理**：以 Bash 退出码判断任务结果；`0` 成功，非零失败。不隐式启用 `errexit` 或 `pipefail`，需要时由任务命令显式设置。观察到失败后停止启动新任务，等待所有已启动任务结束，返回非零退出码并汇总成功、失败和跳过数量。
+- **命令选项**：`--directory` 指定项目目录，`--bash` 指定 Bash，`--jobs` 覆盖并发上限；`--dry-run` 校验完整配置并显示补齐依赖后的计划及命令，不探测 Bash、不启动任务。
+- **执行边界**：仅支持前台、非交互批处理任务，不提供后台服务生命周期管理或任务超时。取消时尽力终止已知进程及可见后代，不保证终止已脱离进程树的后台进程。
 
 #### 5. 配置初始化模块（`InitCommand.java`）
 
@@ -154,11 +158,15 @@ CLI input -> devpulse entry point -> corresponding module
 **Implementation steps**:
 
 - **Configuration**: Load HOCON according to the configuration rules and construct configuration models.
+- **Target selection**: `pulse` defaults to `dev`; `pulse <name>` accepts either a pipeline or a single task. Reject targets that name both a task and a pipeline and require the collision to be resolved.
 - **DAG construction**: Treat each entry in `tools` as a vertex and each `needs` relationship as a directed edge.
+- **Dependency expansion**: Pipeline `tasks` declare final targets. Include all transitive dependencies automatically and run shared dependencies or duplicate targets once per invocation. List order does not define dependency order.
 - **Ordering and cycle detection**: Validate the dependency graph using Kahn's algorithm or DFS. Report cycles before starting commands. Only enqueue tasks whose dependencies have all succeeded, and schedule within the concurrency limit.
-- **Process execution**: Reuse the Bash component. Merge standard error and output using `redirectErrorStream(true)` and continuously stream output to the terminal. Tools must be installed and discoverable by Bash. Commands run with the current user's permissions; no sandbox is provided.
+- **Process execution**: Reuse the Bash component with the project configuration directory as the working directory. Merge standard error and output using `redirectErrorStream(true)`, continuously read UTF-8 output, and prefix log lines with task names. Tools must be installed and discoverable by Bash. Commands run with the current user's permissions; no sandbox is provided.
 - **Concurrency**: Run at most 4 tasks by default. Support `parallelism` and `pulse --jobs`, with CLI options overriding project configuration and defaults. Validate positive integers before execution. This does not limit concurrency inside external tasks.
-- **Failure policy**: After any task fails, stop launching new tasks, wait for started tasks to finish, and return a nonzero exit code. Do not forcibly stop other running tasks because of that failure. Cancellation, task timeouts, and their process cleanup rules remain to be defined.
+- **Failure policy**: Use the Bash exit code: zero means success, nonzero means failure. Do not implicitly enable `errexit` or `pipefail`; commands may set them explicitly. Once failure is observed, stop launching new tasks, wait for started tasks to finish, return a nonzero exit code, and summarize succeeded, failed, and skipped counts.
+- **Options**: `--directory` selects the project, `--bash` selects Bash, and `--jobs` overrides concurrency. `--dry-run` validates the whole configuration and prints the expanded plan and commands without discovering Bash or starting tasks.
+- **Execution boundaries**: Support foreground, non-interactive batch tasks only. Background-service lifecycle management and task timeouts are not provided. On cancellation, attempt to terminate known processes and visible descendants; detached background processes are not guaranteed to be terminated.
 
 #### 5. Configuration initializer (`InitCommand.java`)
 
