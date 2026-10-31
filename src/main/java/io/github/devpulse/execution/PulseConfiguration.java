@@ -37,6 +37,7 @@ public record PulseConfiguration(Path directory, int parallelism,
     public record Task(String name, String command, List<String> needs,
             ConfigOrigin origin) {
         public Task {
+            command = command.replace("\r\n", "\n");
             needs = List.copyOf(needs);
         }
     }

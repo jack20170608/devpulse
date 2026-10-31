@@ -1,5 +1,7 @@
 package io.github.devpulse.cli;
 
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.IVersionProvider;
@@ -23,7 +25,12 @@ public final class DevPulseCLI implements Runnable {
     private CommandSpec spec;
 
     public static void main(String[] args) {
-        System.exit(new CommandLine(new DevPulseCLI()).execute(args));
+        var cli = new CommandLine(new DevPulseCLI())
+                .setOut(new PrintWriter(System.out, true,
+                        StandardCharsets.UTF_8))
+                .setErr(new PrintWriter(System.err, true,
+                        StandardCharsets.UTF_8));
+        System.exit(cli.execute(args));
     }
 
     @Override

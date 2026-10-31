@@ -78,6 +78,28 @@
 - **覆盖保护**：默认仅创建新文件，配置已存在时拒绝写入并返回非零退出码；仅显式 `--force` 时允许覆盖普通文件，不跟随配置文件的符号链接。
 - **结果反馈**：成功后打印配置路径和命令审核提醒；目录无效或文件写入失败时明确报错，不执行示例任务。
 
+#### 6. 本地任务执行状态持久化（待实现）
+
+**方案**：首期采用项目内文件持久化，不引入数据库。当前执行状态仅保存在内存中，日志仅输出到控制台；以下为计划实现的行为。
+
+```text
+.devpulse\
+  runs\
+    <run-id>\
+      state.conf
+      logs\
+        <task-id>.log
+```
+
+- **存储布局**：每次实际执行生成唯一 `run-id`，在项目配置所在目录的 `.devpulse\runs` 下创建独立运行目录，避免多次或并发运行相互覆盖。使用生成的 `task-id` 作为日志文件名，不直接将任务名作为路径。`--dry-run` 不创建运行记录。
+- **状态格式**：`state.conf` 使用 UTF-8 HOCON，复用 Typesafe Config 读写。记录格式版本、运行 ID、目标、项目目录、实际并发上限、运行状态与起止时间，以及各任务的 ID、名称、依赖、状态、起止时间、退出码、失败原因和相对日志路径。尚未产生的结束时间、退出码等字段不写入。
+- **状态语义**：任务状态区分 `PENDING`、`RUNNING`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED`、`INTERRUPTED`；正常失败为 `FAILED`，因失败策略未启动的任务为 `SKIPPED`，主动取消导致终止的任务为 `CANCELLED`，执行器异常退出后无法确认结果的任务为 `INTERRUPTED`。运行记录也保存整体状态，不能将未完成记录视为成功。
+- **写入时机与一致性**：执行前保存初始计划，启动任务前持久化 `RUNNING`，任务结束后保存结果，运行结束时写入整体结果；主动取消时尽力保存取消状态。同次运行的状态写入串行化，先写同目录临时文件，再通过原子替换更新 `state.conf`。文件系统不支持原子替换时明确报错，不退化为直接覆盖。初始化失败时不启动任务；执行中的持久化失败应明确报错、停止启动新任务、等待已启动任务结束并返回非零退出码。
+- **日志落盘**：持续读取合并后的标准输出和错误输出，在保留现有控制台日志的同时写入对应任务的 UTF-8 日志文件。日志独立于状态快照写入，不因每行输出重写 `state.conf`；异常退出可能丢失尚未刷新的日志尾部。
+- **异常退出识别**：记录执行器 PID 和进程启动时间（可获取时），并在执行期间持有运行目录内的独占文件锁；PID 本身不足以确认进程身份。后续状态读取若发现未结束的运行，应先核验文件锁及执行器身份，不能将其他仍在执行的运行标为中断。确认原执行器已退出后，将遗留的 `RUNNING` 任务标记为 `INTERRUPTED`、尚未启动的任务标记为 `SKIPPED`，并保存运行中断状态；无法确认时保留原记录并提示状态不确定。
+- **查询与恢复边界**：首期支持读取历史运行的状态和日志；现有 `status` 的工具健康检查职责保留，执行记录查询的具体 CLI 形式在实现时确定。不自动断点续跑，也不接管遗留进程。后续若增加恢复执行，需校验命令及依赖是否变化，并明确中断任务的幂等性与重跑策略，不能直接跳过历史成功任务或重跑中断任务。
+- **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；大量历史检索或跨进程事务需求出现后再考虑 SQLite。
+
 ### 三、开发落地路线图
 
 首版范围包含 `init`、`pulse` 的并发调度、`gather` 和 `status`，不将并发或 AI 协同流推迟到后续版本。以下阶段为内部开发顺序，而不是对外版本的功能拆分。
@@ -99,6 +121,7 @@
 - 手写基于 Kahn 的拓扑排序函数，确保能够处理复杂的相互依赖。
 - 实现依赖就绪任务的并发调度，落实默认 4 个任务的并发上限，以及 `parallelism`、`--jobs` 的覆盖规则。
 - 完善 `ProcessBuilder` 的异常处理，落实停止新任务、等待运行中任务结束的失败策略，不会引起系统崩溃。
+- 实现基于文件的运行状态与日志持久化、异常退出识别及历史查询，不包含自动断点续跑。
 - 完成 `init` 默认配置生成与 `status` 本地工具健康状态展示，形成首版完整命令集合。
 
 ## English
@@ -177,6 +200,28 @@ CLI input -> devpulse entry point -> corresponding module
 - **Overwrite protection**: Create new files only by default. Refuse existing configurations with a nonzero exit code. Allow overwriting regular files only with explicit `--force`; do not follow configuration-file symbolic links.
 - **Feedback**: Print the configuration path and a command-review reminder on success. Clearly report invalid directories or write failures without executing example tasks.
 
+#### 6. Local task execution persistence (planned)
+
+**Approach**: Initially persist files within the project without introducing a database. Execution state currently exists only in memory, and logs go only to the console; the following behavior is planned.
+
+```text
+.devpulse\
+  runs\
+    <run-id>\
+      state.conf
+      logs\
+        <task-id>.log
+```
+
+- **Storage layout**: Generate a unique `run-id` for each actual execution and create a separate run directory under `.devpulse\runs` in the project configuration directory, preventing repeated or concurrent runs from overwriting each other. Use generated `task-id` values for log filenames rather than using task names as paths. `--dry-run` creates no run records.
+- **State format**: Use UTF-8 HOCON for `state.conf`, reusing Typesafe Config for reading and writing. Record the format version, run ID, target, project directory, effective concurrency limit, overall state and start/end times, plus each task's ID, name, dependencies, state, start/end times, exit code, failure reason, and relative log path. Omit fields such as end time and exit code until available.
+- **State semantics**: Distinguish task states `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. Ordinary failures are `FAILED`; tasks not started due to the failure policy are `SKIPPED`; tasks terminated by explicit cancellation are `CANCELLED`; tasks whose results cannot be confirmed after an unexpected executor exit are `INTERRUPTED`. Also persist the overall run state; unfinished records must not imply success.
+- **Write timing and consistency**: Save the initial plan before execution, persist `RUNNING` before starting a task, save its result after completion, and write the overall result when the run ends. Attempt to save cancellation state on explicit cancellation. Serialize state writes within each run, writing a temporary file in the same directory before atomically replacing `state.conf`. Report filesystems without atomic replacement support instead of falling back to direct overwrite. Do not start tasks if initialization fails. Persistence failures during execution must be reported, stop new task launches, wait for started tasks to finish, and return a nonzero exit code.
+- **Log persistence**: Continuously read merged standard output and error, retaining existing console output while writing each task's UTF-8 log file. Write logs independently of state snapshots rather than rewriting `state.conf` for every output line. Unexpected exits may lose an unflushed log tail.
+- **Unexpected exit detection**: Record the executor PID and process start time when available, and hold an exclusive file lock in the run directory during execution; PID alone cannot establish process identity. When a later state read finds an unfinished run, check the file lock and executor identity before marking it interrupted, without modifying another live run. Once the original executor is confirmed to have exited, mark remaining `RUNNING` tasks as `INTERRUPTED`, unstarted tasks as `SKIPPED`, and persist the interrupted run state. If identity cannot be confirmed, retain the record and report uncertainty.
+- **Query and recovery boundaries**: Initially support reading historical run states and logs. Retain the existing tool-health responsibility of `status`; determine the exact CLI form for execution-record queries during implementation. Do not automatically resume runs or take over orphaned processes. Future resume support must check for changed commands and dependencies and define idempotency and retry policies for interrupted tasks, rather than blindly skipping historically successful tasks or rerunning interrupted ones.
+- **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; consider SQLite later if extensive historical queries or cross-process transactions become necessary.
+
 ### 3. Development roadmap
 
 The first release includes `init`, concurrent `pulse`, `gather`, and `status`. Concurrency and AI collaboration are not deferred to later releases. These stages describe internal implementation order, not separate release scopes.
@@ -198,4 +243,5 @@ The first release includes `init`, concurrent `pulse`, `gather`, and `status`. C
 - Implement Kahn-based dependency ordering for complex graphs.
 - Implement dependency-ready concurrent scheduling with the default limit of 4 and `parallelism`/`--jobs` overrides.
 - Handle `ProcessBuilder` failures by stopping new tasks and waiting for started tasks without crashing the application.
+- Implement file-based run-state and log persistence, unexpected exit detection, and historical queries without automatic resume.
 - Complete init configuration generation and status health reporting for the first release's full command set.
