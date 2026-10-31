@@ -1,41 +1,14 @@
 # devpulse Java 实现基本思路与架构方案
 
-本项目基于 Java 25+ 技术栈开发，使用 Maven 管理依赖、构建与打包，旨在构建一个轻量、高效、具备 AI 协同能力的本地 DevOps 智能调度工具箱。
+本项目旨在构建一个轻量、高效、具备 AI 协同能力的本地 DevOps 智能调度工具箱。
 
-## 一、核心技术选型（Dependencies）
+技术栈、语言使用原则、构建打包、资源管理和测试约束统一维护在 [Copilot 仓库指令](.github/copilot-instructions.md) 中；本文描述功能行为、核心架构与开发路线图。
 
-为了保证工具箱的小巧和终端交互的极致体验，建议引入以下成熟的开源类库（统一通过 Maven 管理）：
+## 一、配置格式与加载
 
-- **命令行框架**：picocli（目前 Java 生态最强 CLI 框架，支持注解、彩色输出、自动生成帮助文档）。
-- **配置解析器**：Typesafe Config（Maven 坐标 `com.typesafe:config`），仅支持 HOCON 格式的 `.devpulse.conf`，不支持 YAML。
-- **日志/终端美化**：原生 Java 打印或集成 jansi，以支持丰富的终端色彩和动态进度条。
-
-### Java 语言与平台特性使用原则
-
-- 开发、构建与运行环境均要求 JDK 25 或更高版本；Maven Compiler Plugin 的 `release` 固定为 `25`，保证产物可在 Java 25 上运行。
-- 优先使用 Java 25 中已正式发布的现代语言特性，在适合的场景使用 `record` 表达配置与环境事实，使用 `sealed` 类型、模式匹配和 `switch` 表达式描述与处理封闭的状态集合。
-- 使用文本块维护多行 AI Prompt 模板，使用 try-with-resources 管理进程输出流等资源。
-- 后续实现并发调度时，优先使用虚拟线程处理进程等待与日志读取等阻塞操作；外部进程的并发数量仍需独立限制。
-- 默认不启用预览特性，避免用户运行时必须传入 `--enable-preview`；确需使用时，应明确记录原因及构建、运行要求。
-- 以简洁和可维护性为前提采用新特性，不为使用新语法而增加不必要的抽象。
-
-### Maven 构建与打包
-
-- 使用 `pom.xml` 统一定义依赖和插件版本，并明确 UTF-8 源码编码。
-- 使用 Maven Compiler Plugin 配置 `release` 为 `25`。
-- 使用 Maven Shade Plugin 在 `package` 阶段生成包含运行依赖的可执行 JAR，并通过 `ManifestResourceTransformer` 将 `Main-Class` 设置为 `DevPulseCLI` 的全限定类名。
-- 将构建产物名称固定为 `devpulse.jar`，执行 `mvn clean package` 后输出到 `target` 目录。
-- 分发该 JAR 时，目标机器仍需安装 Java 25+。
-
-```powershell
-mvn clean package
-java -jar target\devpulse.jar --help
-```
-
-### HOCON 配置加载
-
+- 仅支持 HOCON 格式的 `.devpulse.conf`，不支持 YAML。
 - 显式解析项目的 `.devpulse.conf`，通过 `withFallback` 合并内置 `reference.conf` 默认值，再调用 `resolve` 解析变量引用；不自动加载无关的 JVM 系统属性。
-- 使用 Typesafe Config 的类型化读取 API 构造不可变 `record` 配置模型，不依赖 Jackson 映射。
+- 使用 Typesafe Config 的类型化读取 API 构造配置模型。
 - `include` 仅允许本地文件或 classpath 资源，不允许远程 URL；实现时需限制包含资源的加载行为，而不是仅约定用户不写远程地址。
 - 配置错误应报告文件来源及可用的行号信息；字段类型、重复任务名、未知依赖和循环依赖均需在执行任何命令之前校验。
 - `gather` 生成的 Prompt 与 `init` 生成的默认配置统一使用 HOCON 示例。
@@ -51,8 +24,6 @@ java -jar target\devpulse.jar --help
 ### 1. 主入口类（`DevPulseCLI.java`）
 
 **职责**：负责接收终端传入的参数（如 `gather`、`pulse`），进行基本的全局校验。
-
-**实现**：使用 picocli 的 `@Command` 注解定义主命令和子命令。
 
 ### 2. 资产自动盘点模块（`GatherCommand.java`）
 
@@ -70,7 +41,7 @@ java -jar target\devpulse.jar --help
 
 **实现步骤**：
 
-- **解析配置**：使用 Typesafe Config 加载 HOCON 配置、合并默认值并解析变量引用，再通过类型化读取构造 `record` 配置模型。
+- **解析配置**：按配置加载规则读取 HOCON 配置，构造配置模型。
 - **构建有向无环图（DAG）**：将 `tools` 列表中的每个工具视作一个节点（Vertex），将它们之间的 `needs` 依赖关系视作有向边（Edge）。
 - **拓扑排序与循环依赖检测**：采用 Kahn 算法或 DFS 算法检查依赖图。如果发现循环依赖（例如 A 依赖 B，B 又依赖 A），在启动任何命令前报错；执行时仅将所有依赖均已成功的任务加入就绪队列，并在并发上限内调度。
 - **底层进程控制器**：使用 `java.lang.ProcessBuilder` 与 `sh`/`cmd` 动态适配，拉起本地命令。将底层工具的错误流和标准流合并（`redirectErrorStream(true)`），通过缓冲流（`BufferedReader`）实时输出到用户终端。
@@ -83,8 +54,8 @@ java -jar target\devpulse.jar --help
 
 ### 阶段一：建立脚手架与命令行骨架（MVP）
 
-- 配置好 Maven 依赖、Java 25 编译目标与可执行 JAR 打包插件，写出带有 `@Command` 的 Java 类。
-- 确保执行 `mvn clean package` 后，在终端运行 `java -jar target\devpulse.jar --help` 能打印出规范的帮助说明。
+- 按 Copilot 仓库指令建立构建与命令行骨架。
+- 确保打包后的可执行 JAR 能通过 `--help` 打印出规范的帮助说明。
 
 ### 阶段二：攻克 gather 模块（打通 AI 协同流）
 
