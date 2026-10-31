@@ -4,6 +4,7 @@ import com.typesafe.config.ConfigException;
 import io.github.devpulse.environment.BashShell;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulseExecutor;
+import io.github.devpulse.execution.RunHistory;
 import io.github.devpulse.execution.TaskPlan;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -72,8 +73,13 @@ public final class PulseCommand implements Callable<Integer> {
                 return 0;
             }
             var shell = BashShell.discover(bash);
-            return new PulseExecutor(shell, config.directory(), out)
-                    .execute(plan, concurrency);
+            try (var history = new RunHistory(config.directory())
+                    .begin(target, plan, concurrency)) {
+                out.println("Run ID: " + history.id());
+                out.flush();
+                return new PulseExecutor(shell, config.directory(), out,
+                        history).execute(plan, concurrency);
+            }
         } catch (ConfigException | IOException exception) {
             err.println("pulse: " + exception.getMessage());
             return 1;

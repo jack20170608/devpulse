@@ -17,6 +17,7 @@ import picocli.CommandLine.Spec;
                 GatherCommand.class,
                 InitCommand.class,
                 PulseCommand.class,
+                ReviewCommand.class,
                 StatusCommand.class
         }
 )

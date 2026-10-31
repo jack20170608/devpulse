@@ -21,7 +21,7 @@
 
 ### 二、核心架构设计
 
-系统包含命令入口、资产盘点模块、可复用的 Bash 基础组件、调度引擎与配置初始化模块，职责清晰，方便后续解耦和扩展：
+系统包含命令入口、资产盘点模块、可复用的 Bash 基础组件、调度引擎、配置初始化模块与执行计划审阅模块，职责清晰，方便后续解耦和扩展：
 
 ```text
 用户终端输入（CLI Input） -> devpulse 主入口类 -> 分发至对应子模块
@@ -81,15 +81,16 @@
 - **覆盖保护**：默认仅创建新文件，配置已存在时拒绝写入并返回非零退出码；仅显式 `--force` 时允许覆盖普通文件，不跟随配置文件的符号链接。
 - **结果反馈**：成功后打印配置路径和命令审核提醒；目录无效或文件写入失败时明确报错，不执行示例任务。
 
-#### 6. 本地任务执行状态持久化（待实现）
+#### 6. 本地任务执行状态持久化（`RunHistory.java`）
 
-**方案**：首期采用项目内文件持久化，不引入数据库。当前执行状态仅保存在内存中，日志仅输出到控制台；以下为计划实现的行为。
+**方案**：采用项目内文件持久化，不引入数据库。`pulse` 在启动任务前保存计划，持续保存任务状态与日志，支持多个独立运行同时执行。
 
 ```text
 .devpulse\
   runs\
     <run-id>\
       state.conf
+      run.lock
       logs\
         <task-id>.log
 ```
@@ -100,12 +101,24 @@
 - **写入时机与一致性**：执行前保存初始计划，启动任务前持久化 `RUNNING`，任务结束后保存结果，运行结束时写入整体结果；主动取消时尽力保存取消状态。同次运行的状态写入串行化，先写同目录临时文件，再通过原子替换更新 `state.conf`。文件系统不支持原子替换时明确报错，不退化为直接覆盖。初始化失败时不启动任务；执行中的持久化失败应明确报错、停止启动新任务、等待已启动任务结束并返回非零退出码。
 - **日志落盘**：持续读取合并后的标准输出和错误输出，在保留现有控制台日志的同时写入对应任务的 UTF-8 日志文件。日志独立于状态快照写入，不因每行输出重写 `state.conf`；异常退出可能丢失尚未刷新的日志尾部。
 - **异常退出识别**：记录执行器 PID 和进程启动时间（可获取时），并在执行期间持有运行目录内的独占文件锁；PID 本身不足以确认进程身份。后续状态读取若发现未结束的运行，应先核验文件锁及执行器身份，不能将其他仍在执行的运行标为中断。确认原执行器已退出后，将遗留的 `RUNNING` 任务标记为 `INTERRUPTED`、尚未启动的任务标记为 `SKIPPED`，并保存运行中断状态；无法确认时保留原记录并提示状态不确定。
-- **查询与恢复边界**：首期支持读取历史运行的状态和日志；现有 `status` 的工具健康检查职责保留，执行记录查询的具体 CLI 形式在实现时确定。不自动断点续跑，也不接管遗留进程。后续若增加恢复执行，需校验命令及依赖是否变化，并明确中断任务的幂等性与重跑策略，不能直接跳过历史成功任务或重跑中断任务。
+- **查询方式**：`status` 默认查看开始时间最新的运行，显示整体状态、任务状态、退出码、失败原因与运行起止时间；`--run <run-id>` 选择历史运行，`--list` 列出所有运行，`--log <任务名>` 读取选中运行的任务日志。按开始时间排序，不让较旧运行的晚完成覆盖较新记录；查询成功返回 `0`，不因历史任务失败而返回失败退出码。
+- **环境检查**：`status --tools` 保留 Bash 和工具可用性检查，可配合 `--bash`；不执行版本命令或探测 Docker 等守护进程。所有模式支持 `--directory`。工具模式不能与运行查询参数混用。
+- **查询与恢复边界**：读取运行记录不要求 Bash 或项目配置仍然存在；旧版本未保存的运行无法回填。状态文件不允许 include，也不从环境变量解析额外数据。不自动断点续跑，也不接管遗留进程。后续若增加恢复执行，需校验命令及依赖是否变化，并明确中断任务的幂等性与重跑策略，不能直接跳过历史成功任务或重跑中断任务。
 - **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；大量历史检索或跨进程事务需求出现后再考虑 SQLite。
+
+#### 7. 执行计划审阅模块（`ReviewCommand.java`）
+
+**职责**：在 CLI 中静态校验并展示任务或流水线的执行计划，供用户执行前审阅，不调用 AI。
+
+- **目标与校验**：`review` 默认选择 `dev`，`review <名称>` 支持流水线或单任务。复用 `PulseConfiguration.load` 和 `TaskPlan.create`，与 `pulse` 保持相同的完整配置校验、目标重名检查、循环依赖检测和传递依赖补齐规则。
+- **依赖关系展示**：使用 ASCII 形式 `[任务] <- [依赖一], [依赖二]`，箭头右侧为必须先成功的直接依赖，无依赖时显示 `(none)`。仅展示选中计划中的任务，保留共享依赖的全部连线，不将 DAG 简化为会丢失连线的树；任务及命令各展示一次。
+- **计划信息**：打印目标、项目目录、任务数量、有效并发上限，以及按拓扑顺序排列的完整命令。明确说明拓扑顺序不是固定的串行执行顺序；实际执行由依赖是否成功及并发上限决定。
+- **命令选项**：`--directory` 指定项目配置目录，`--jobs` 仅覆盖审阅时显示的并发上限，不修改配置；与 `pulse` 使用相同的正整数约束与优先级。不提供 `--bash`，因为审阅不依赖 Bash。
+- **执行边界与反馈**：不探测工具、不启动 Bash、不执行任务、不写入运行记录；有效计划返回 `0`，配置或目标无效时报告错误并返回非零退出码。静态校验成功不代表命令安全或工具可用。保留现有 `pulse --dry-run` 行为。
 
 ### 三、开发落地路线图
 
-首版范围包含 `init`、`pulse` 的并发调度、`gather` 和 `status`，不将并发或 AI 协同流推迟到后续版本。以下阶段为内部开发顺序，而不是对外版本的功能拆分。
+首版范围包含 `init`、`pulse` 的并发调度、`gather`、`review` 和 `status`，不将并发或 AI 协同流推迟到后续版本。以下阶段为内部开发顺序，而不是对外版本的功能拆分。
 
 #### 阶段一：建立脚手架与命令行骨架（MVP）
 
@@ -124,6 +137,7 @@
 - 手写基于 Kahn 的拓扑排序函数，确保能够处理复杂的相互依赖。
 - 实现依赖就绪任务的并发调度，落实默认 4 个任务的并发上限，以及 `parallelism`、`--jobs` 的覆盖规则。
 - 完善 `ProcessBuilder` 的异常处理，落实停止新任务、等待运行中任务结束的失败策略，不会引起系统崩溃。
+- 实现 `review` 静态计划审阅，展示完整依赖关系、拓扑顺序、命令和并发上限，不执行任务。
 - 实现基于文件的运行状态与日志持久化、异常退出识别及历史查询，不包含自动断点续跑。
 - 完成 `init` 默认配置生成与 `status` 本地工具健康状态展示，形成首版完整命令集合。
 
@@ -146,7 +160,7 @@ The technology stack, language conventions, build and packaging rules, resource 
 
 ### 2. Architecture
 
-The system contains a CLI entry point, an environment inventory module, a reusable Bash component, a scheduling engine, and a configuration initializer with separate responsibilities:
+The system contains a CLI entry point, an environment inventory module, a reusable Bash component, a scheduling engine, a configuration initializer, and a plan-review module with separate responsibilities:
 
 ```text
 CLI input -> devpulse entry point -> corresponding module
@@ -206,15 +220,16 @@ CLI input -> devpulse entry point -> corresponding module
 - **Overwrite protection**: Create new files only by default. Refuse existing configurations with a nonzero exit code. Allow overwriting regular files only with explicit `--force`; do not follow configuration-file symbolic links.
 - **Feedback**: Print the configuration path and a command-review reminder on success. Clearly report invalid directories or write failures without executing example tasks.
 
-#### 6. Local task execution persistence (planned)
+#### 6. Local task execution persistence (`RunHistory.java`)
 
-**Approach**: Initially persist files within the project without introducing a database. Execution state currently exists only in memory, and logs go only to the console; the following behavior is planned.
+**Approach**: Persist files within the project without introducing a database. `pulse` saves the plan before launching tasks and continuously persists task states and logs. Multiple independent runs may execute concurrently.
 
 ```text
 .devpulse\
   runs\
     <run-id>\
       state.conf
+      run.lock
       logs\
         <task-id>.log
 ```
@@ -225,12 +240,24 @@ CLI input -> devpulse entry point -> corresponding module
 - **Write timing and consistency**: Save the initial plan before execution, persist `RUNNING` before starting a task, save its result after completion, and write the overall result when the run ends. Attempt to save cancellation state on explicit cancellation. Serialize state writes within each run, writing a temporary file in the same directory before atomically replacing `state.conf`. Report filesystems without atomic replacement support instead of falling back to direct overwrite. Do not start tasks if initialization fails. Persistence failures during execution must be reported, stop new task launches, wait for started tasks to finish, and return a nonzero exit code.
 - **Log persistence**: Continuously read merged standard output and error, retaining existing console output while writing each task's UTF-8 log file. Write logs independently of state snapshots rather than rewriting `state.conf` for every output line. Unexpected exits may lose an unflushed log tail.
 - **Unexpected exit detection**: Record the executor PID and process start time when available, and hold an exclusive file lock in the run directory during execution; PID alone cannot establish process identity. When a later state read finds an unfinished run, check the file lock and executor identity before marking it interrupted, without modifying another live run. Once the original executor is confirmed to have exited, mark remaining `RUNNING` tasks as `INTERRUPTED`, unstarted tasks as `SKIPPED`, and persist the interrupted run state. If identity cannot be confirmed, retain the record and report uncertainty.
-- **Query and recovery boundaries**: Initially support reading historical run states and logs. Retain the existing tool-health responsibility of `status`; determine the exact CLI form for execution-record queries during implementation. Do not automatically resume runs or take over orphaned processes. Future resume support must check for changed commands and dependencies and define idempotency and retry policies for interrupted tasks, rather than blindly skipping historically successful tasks or rerunning interrupted ones.
+- **Queries**: `status` defaults to the most recently started run and shows overall state, task states, exit codes, failure reasons, and run start/end times. `--run <run-id>` selects a historical run, `--list` lists all runs, and `--log <task-name>` reads a task log from the selected run. Sort by start time so an older run finishing later does not overwrite a newer record. Successful queries return `0`, even when the recorded execution failed.
+- **Environment checks**: `status --tools` retains Bash and tool availability checks with optional `--bash`. Do not run version commands or probe daemons such as Docker. All modes support `--directory`; do not combine tool mode with run-query options.
+- **Query and recovery boundaries**: Reading records does not require Bash or the project configuration to remain available. Executions not recorded by older versions cannot be backfilled. State files cannot include resources or resolve additional data from environment variables. Do not automatically resume runs or take over orphaned processes. Future resume support must check for changed commands and dependencies and define idempotency and retry policies for interrupted tasks, rather than blindly skipping historically successful tasks or rerunning interrupted ones.
 - **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; consider SQLite later if extensive historical queries or cross-process transactions become necessary.
+
+#### 7. Execution plan review (`ReviewCommand.java`)
+
+**Responsibility**: Statically validate and display a task or pipeline execution plan in the CLI for user review before execution, without calling AI.
+
+- **Targets and validation**: `review` defaults to `dev`; `review <name>` accepts a pipeline or a single task. Reuse `PulseConfiguration.load` and `TaskPlan.create` for the same full configuration validation, target collision checks, cycle detection, and transitive dependency expansion as `pulse`.
+- **Dependency display**: Use ASCII `[task] <- [dependency-one], [dependency-two]`, with the right-hand tasks being direct prerequisites that must succeed first; display `(none)` for tasks without dependencies. Show only tasks in the selected plan and retain all shared-dependency edges rather than simplifying the DAG into a tree that loses edges. Display each task and its command once.
+- **Plan information**: Print the target, project directory, task count, effective concurrency limit, and complete commands in topological order. State that this is not a fixed sequential execution order; actual scheduling depends on successful prerequisites and the concurrency limit.
+- **Options**: `--directory` selects the project configuration directory. `--jobs` only overrides the displayed concurrency limit without modifying configuration, using the same positive-integer constraints and precedence as `pulse`. Do not provide `--bash`, since review does not require Bash.
+- **Execution boundaries and feedback**: Do not probe tools, start Bash, execute tasks, or write run records. Return `0` for valid plans; report invalid configuration or targets with a nonzero exit code. Successful static validation does not guarantee command safety or tool availability. Retain existing `pulse --dry-run` behavior.
 
 ### 3. Development roadmap
 
-The first release includes `init`, concurrent `pulse`, `gather`, and `status`. Concurrency and AI collaboration are not deferred to later releases. These stages describe internal implementation order, not separate release scopes.
+The first release includes `init`, concurrent `pulse`, `gather`, `review`, and `status`. Concurrency and AI collaboration are not deferred to later releases. These stages describe internal implementation order, not separate release scopes.
 
 #### Stage 1: Project scaffold and CLI skeleton (MVP)
 
@@ -249,5 +276,6 @@ The first release includes `init`, concurrent `pulse`, `gather`, and `status`. C
 - Implement Kahn-based dependency ordering for complex graphs.
 - Implement dependency-ready concurrent scheduling with the default limit of 4 and `parallelism`/`--jobs` overrides.
 - Handle `ProcessBuilder` failures by stopping new tasks and waiting for started tasks without crashing the application.
+- Implement static `review` with complete dependencies, topological order, commands, and concurrency limits without executing tasks.
 - Implement file-based run-state and log persistence, unexpected exit detection, and historical queries without automatic resume.
 - Complete init configuration generation and status health reporting for the first release's full command set.
