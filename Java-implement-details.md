@@ -102,20 +102,22 @@
 - **日志落盘**：持续读取合并后的标准输出和错误输出，在保留现有控制台日志的同时写入对应任务的 UTF-8 日志文件。日志独立于状态快照写入，不因每行输出重写 `state.conf`；异常退出可能丢失尚未刷新的日志尾部。
 - **异常退出识别**：记录执行器 PID 和进程启动时间（可获取时），并在执行期间持有运行目录内的独占文件锁；PID 本身不足以确认进程身份。后续状态读取若发现未结束的运行，应先核验文件锁及执行器身份，不能将其他仍在执行的运行标为中断。确认原执行器已退出后，将遗留的 `RUNNING` 任务标记为 `INTERRUPTED`、尚未启动的任务标记为 `SKIPPED`，并保存运行中断状态；无法确认时保留原记录并提示状态不确定。
 - **并发读取**：先完整读取并关闭状态文件，再解析 HOCON。Windows 读取句柄可能短暂阻止替换，允许最多 200 ms 的原子替换重试；不降级为非原子写入，持续失败仍明确报错。
-- **查询方式**：`status` 默认查看开始时间最新的运行，显示整体状态、任务状态、退出码、失败原因与运行起止时间；`--run <run-id>` 选择历史运行，`--list` 列出所有运行，`--log <任务名>` 读取选中运行的任务日志。按开始时间排序，不让较旧运行的晚完成覆盖较新记录；查询成功返回 `0`，不因历史任务失败而返回失败退出码。
+- **查询方式**：`status` 默认查看开始时间最新的运行，显示整体状态、任务状态、退出码、失败原因，以及运行和每个任务的开始时间、结束时间与耗时；`--run <run-id>` 选择历史运行，`--list` 列出所有运行及其起止时间、耗时，`--log <任务名>` 读取选中运行的任务日志。按开始时间排序，不让较旧运行的晚完成覆盖较新记录；查询成功返回 `0`，不因历史任务失败而返回失败退出码。
+- **时间展示**：起止时间使用 UTC ISO 8601，耗时按 `HH:mm:ss.SSS` 展示，小时不在 24 小时处回绕。运行中按查询时刻计算已耗时并标注 `(running)`；未启动任务的起止时间与耗时显示 `-`。取消或中断记录中的结束时间可能是取消或恢复时刻，不能视为实际进程退出时间，其耗时加 `~` 标记为估计值；缺少时间或系统时钟倒退导致无法计算时显示 `-`。耗时由现有时间戳计算，不额外持久化。
 - **环境检查**：`status --tools` 保留 Bash 和工具可用性检查，可配合 `--bash`；不执行版本命令或探测 Docker 等守护进程。所有模式支持 `--directory`。工具模式不能与运行查询参数混用。
 - **查询与恢复边界**：读取运行记录不要求 Bash 或项目配置仍然存在；旧版本未保存的运行无法回填。状态文件不允许 include，也不从环境变量解析额外数据。不自动断点续跑，也不接管遗留进程。后续若增加恢复执行，需校验命令及依赖是否变化，并明确中断任务的幂等性与重跑策略，不能直接跳过历史成功任务或重跑中断任务。
 - **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；大量历史检索或跨进程事务需求出现后再考虑 SQLite。
 
-#### 7. 执行计划审阅模块（`ReviewCommand.java`）
+#### 7. 执行计划审阅模块（`ReviewCommand.java`、`ReviewTui.java`）
 
-**职责**：在 CLI 中静态校验并展示任务或流水线的执行计划，供用户执行前审阅，不调用 AI。
+**职责**：静态校验任务或流水线的执行计划，在交互式 TUI 中供用户执行前审阅，不调用 AI。
 
 - **目标与校验**：`review` 默认选择 `dev`，`review <名称>` 支持流水线或单任务。复用 `PulseConfiguration.load` 和 `TaskPlan.create`，与 `pulse` 保持相同的完整配置校验、目标重名检查、循环依赖检测和传递依赖补齐规则。
-- **依赖关系展示**：使用 ASCII 形式 `[任务] <- [依赖一], [依赖二]`，箭头右侧为必须先成功的直接依赖，无依赖时显示 `(none)`。仅展示选中计划中的任务，保留共享依赖的全部连线，不将 DAG 简化为会丢失连线的树；任务及命令各展示一次。
-- **计划信息**：打印目标、项目目录、任务数量、有效并发上限，以及按拓扑顺序排列的完整命令。明确说明拓扑顺序不是固定的串行执行顺序；实际执行由依赖是否成功及并发上限决定。
-- **命令选项**：`--directory` 指定项目配置目录，`--jobs` 仅覆盖审阅时显示的并发上限，不修改配置；与 `pulse` 使用相同的正整数约束与优先级。不提供 `--bash`，因为审阅不依赖 Bash。
-- **执行边界与反馈**：不探测工具、不启动 Bash、不执行任务、不写入运行记录；有效计划返回 `0`，配置或目标无效时报告错误并返回非零退出码。静态校验成功不代表命令安全或工具可用。保留现有 `pulse --dry-run` 行为。
+- **TUI 与依赖展示**：使用 TamboUI `0.6.0`（本次接入时 Maven Central 最新正式版）的 `tamboui-tui` 与 `tamboui-jline3-backend`，版本统一定义在 `pom.xml`，不使用快照版本。左侧按拓扑顺序显示可滚动的任务列表及依赖深度 `L`；右侧显示选中任务的直接前置依赖、计划内后继任务和完整 Bash 命令。连线使用 `前置任务 --> 后继任务`，逐任务查看保留共享依赖的全部连线，不将 DAG 简化为树。
+- **计划信息与交互**：顶部显示目标、项目目录、任务数量和有效并发上限。上／下方向键选择任务，`Home`／`End` 选择首／末任务，`PageUp`／`PageDown` 滚动右侧详情，`q` 退出。切换任务时重置详情滚动位置；长命令按终端显示宽度换行，控制字符以可见文本展示而不作为终端指令解释。依赖深度和拓扑顺序不代表固定执行批次或串行顺序，实际调度仍由依赖成功情况及并发上限决定。
+- **终端生命周期与降级**：通过 JLine 检测标准输出终端；没有可用的交互终端（如重定向或管道）时自动保留纯文本计划，不读取交互按键。`--plain` 显式选择原有 ASCII 依赖列表及命令输出。交互模式使用备用屏幕和原始输入模式，通过 try-with-resources 及 TamboUI 的退出清理恢复屏幕、光标和终端输入状态。终端缩小时重新排版，小于 `60 × 16` 时提示放大窗口且仍允许退出。
+- **命令选项**：`--directory` 指定项目配置目录，`--jobs` 仅覆盖审阅时显示的并发上限，不修改配置；与 `pulse` 使用相同的正整数约束与优先级。`--plain` 禁用 TUI。不提供 `--bash`，因为审阅不依赖 Bash。
+- **执行边界与反馈**：不探测工具、不启动 Bash、不执行任务、不写入运行记录；有效计划及正常退出返回 `0`，配置、目标或 TUI 初始化／渲染无效时报告错误并返回非零退出码。静态校验成功不代表命令安全或工具可用。保留现有 `pulse --dry-run` 行为。
 
 ### 三、开发落地路线图
 
@@ -138,7 +140,7 @@
 - 手写基于 Kahn 的拓扑排序函数，确保能够处理复杂的相互依赖。
 - 实现依赖就绪任务的并发调度，落实默认 4 个任务的并发上限，以及 `parallelism`、`--jobs` 的覆盖规则。
 - 完善 `ProcessBuilder` 的异常处理，落实停止新任务、等待运行中任务结束的失败策略，不会引起系统崩溃。
-- 实现 `review` 静态计划审阅，展示完整依赖关系、拓扑顺序、命令和并发上限，不执行任务。
+- 使用 TamboUI 实现 `review` 交互式静态计划审阅，展示依赖关系、拓扑顺序、命令和并发上限，支持键盘导航与纯文本降级，不执行任务。
 - 实现基于文件的运行状态与日志持久化、异常退出识别及历史查询，不包含自动断点续跑。
 - 完成 `init` 默认配置生成与 `status` 本地工具健康状态展示，形成首版完整命令集合。
 
@@ -242,20 +244,22 @@ CLI input -> devpulse entry point -> corresponding module
 - **Log persistence**: Continuously read merged standard output and error, retaining existing console output while writing each task's UTF-8 log file. Write logs independently of state snapshots rather than rewriting `state.conf` for every output line. Unexpected exits may lose an unflushed log tail.
 - **Unexpected exit detection**: Record the executor PID and process start time when available, and hold an exclusive file lock in the run directory during execution; PID alone cannot establish process identity. When a later state read finds an unfinished run, check the file lock and executor identity before marking it interrupted, without modifying another live run. Once the original executor is confirmed to have exited, mark remaining `RUNNING` tasks as `INTERRUPTED`, unstarted tasks as `SKIPPED`, and persist the interrupted run state. If identity cannot be confirmed, retain the record and report uncertainty.
 - **Concurrent reads**: Read the complete state file and close it before parsing HOCON. Windows read handles can briefly block replacement; allow up to 200 ms of atomic replacement retries. Never fall back to non-atomic writes, and report persistent failures explicitly.
-- **Queries**: `status` defaults to the most recently started run and shows overall state, task states, exit codes, failure reasons, and run start/end times. `--run <run-id>` selects a historical run, `--list` lists all runs, and `--log <task-name>` reads a task log from the selected run. Sort by start time so an older run finishing later does not overwrite a newer record. Successful queries return `0`, even when the recorded execution failed.
+- **Queries**: `status` defaults to the most recently started run and shows overall state, task states, exit codes, failure reasons, and start times, end times, and durations for both the run and every task. `--run <run-id>` selects a historical run, `--list` lists all runs with their start/end times and durations, and `--log <task-name>` reads a task log from the selected run. Sort by start time so an older run finishing later does not overwrite a newer record. Successful queries return `0`, even when the recorded execution failed.
+- **Timing display**: Use UTC ISO 8601 timestamps and `HH:mm:ss.SSS` durations, without wrapping hours at 24. For running work, calculate elapsed time at query time and append `(running)`. Show `-` for all timing fields of unstarted tasks. Cancellation or interruption end times may represent cancellation or recovery rather than actual process exit; prefix their estimated durations with `~`. Show `-` when missing timestamps or backward system-clock changes prevent calculation. Derive durations from existing timestamps without persisting additional fields.
 - **Environment checks**: `status --tools` retains Bash and tool availability checks with optional `--bash`. Do not run version commands or probe daemons such as Docker. All modes support `--directory`; do not combine tool mode with run-query options.
 - **Query and recovery boundaries**: Reading records does not require Bash or the project configuration to remain available. Executions not recorded by older versions cannot be backfilled. State files cannot include resources or resolve additional data from environment variables. Do not automatically resume runs or take over orphaned processes. Future resume support must check for changed commands and dependencies and define idempotency and retry policies for interrupted tasks, rather than blindly skipping historically successful tasks or rerunning interrupted ones.
 - **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; consider SQLite later if extensive historical queries or cross-process transactions become necessary.
 
-#### 7. Execution plan review (`ReviewCommand.java`)
+#### 7. Execution plan review (`ReviewCommand.java`, `ReviewTui.java`)
 
-**Responsibility**: Statically validate and display a task or pipeline execution plan in the CLI for user review before execution, without calling AI.
+**Responsibility**: Statically validate a task or pipeline execution plan and provide an interactive TUI for user review before execution, without calling AI.
 
 - **Targets and validation**: `review` defaults to `dev`; `review <name>` accepts a pipeline or a single task. Reuse `PulseConfiguration.load` and `TaskPlan.create` for the same full configuration validation, target collision checks, cycle detection, and transitive dependency expansion as `pulse`.
-- **Dependency display**: Use ASCII `[task] <- [dependency-one], [dependency-two]`, with the right-hand tasks being direct prerequisites that must succeed first; display `(none)` for tasks without dependencies. Show only tasks in the selected plan and retain all shared-dependency edges rather than simplifying the DAG into a tree that loses edges. Display each task and its command once.
-- **Plan information**: Print the target, project directory, task count, effective concurrency limit, and complete commands in topological order. State that this is not a fixed sequential execution order; actual scheduling depends on successful prerequisites and the concurrency limit.
-- **Options**: `--directory` selects the project configuration directory. `--jobs` only overrides the displayed concurrency limit without modifying configuration, using the same positive-integer constraints and precedence as `pulse`. Do not provide `--bash`, since review does not require Bash.
-- **Execution boundaries and feedback**: Do not probe tools, start Bash, execute tasks, or write run records. Return `0` for valid plans; report invalid configuration or targets with a nonzero exit code. Successful static validation does not guarantee command safety or tool availability. Retain existing `pulse --dry-run` behavior.
+- **TUI and dependencies**: Use TamboUI `0.6.0` (the latest Maven Central release when integrated), with `tamboui-tui` and `tamboui-jline3-backend`. Define the version centrally in `pom.xml` and do not use snapshots. The left pane displays a scrollable task list in topological order with dependency depth `L`; the right pane shows the selected task's direct prerequisites, downstream tasks within the plan, and complete Bash command. Use `prerequisite --> dependent` edges and retain all shared-dependency edges through per-task inspection rather than simplifying the DAG into a tree.
+- **Plan information and interaction**: Show the target, project directory, task count, and effective concurrency limit at the top. Up/Down selects tasks; `Home`/`End` selects the first/last task; `PageUp`/`PageDown` scrolls right-pane details; `q` quits. Reset detail scrolling when selection changes. Wrap long commands by terminal display width and display control characters as visible text rather than terminal instructions. Dependency depth and topological order are not fixed execution batches or a sequential schedule; actual scheduling still depends on successful prerequisites and the concurrency limit.
+- **Terminal lifecycle and fallback**: Use JLine to detect the standard-output terminal. When no interactive terminal is available, such as with redirection or pipes, automatically retain plain-text output without reading interactive keys. `--plain` explicitly selects the original ASCII dependency list and command output. Interactive mode uses an alternate screen and raw input, with try-with-resources and TamboUI cleanup restoring the screen, cursor, and input state. Reflow on terminal resize; below `60 x 16`, prompt users to enlarge the window while still allowing quit.
+- **Options**: `--directory` selects the project configuration directory. `--jobs` only overrides the displayed concurrency limit without modifying configuration, using the same positive-integer constraints and precedence as `pulse`. `--plain` disables the TUI. Do not provide `--bash`, since review does not require Bash.
+- **Execution boundaries and feedback**: Do not probe tools, start Bash, execute tasks, or write run records. Return `0` for valid plans and normal quit; report invalid configuration, targets, or TUI initialization/rendering with a nonzero exit code. Successful static validation does not guarantee command safety or tool availability. Retain existing `pulse --dry-run` behavior.
 
 ### 3. Development roadmap
 
@@ -278,6 +282,6 @@ The first release includes `init`, concurrent `pulse`, `gather`, `review`, and `
 - Implement Kahn-based dependency ordering for complex graphs.
 - Implement dependency-ready concurrent scheduling with the default limit of 4 and `parallelism`/`--jobs` overrides.
 - Handle `ProcessBuilder` failures by stopping new tasks and waiting for started tasks without crashing the application.
-- Implement static `review` with complete dependencies, topological order, commands, and concurrency limits without executing tasks.
+- Implement interactive static `review` using TamboUI, with dependencies, topological order, commands, concurrency limits, keyboard navigation, and plain-text fallback without executing tasks.
 - Implement file-based run-state and log persistence, unexpected exit detection, and historical queries without automatic resume.
 - Complete init configuration generation and status health reporting for the first release's full command set.

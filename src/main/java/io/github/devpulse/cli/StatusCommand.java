@@ -6,6 +6,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.Command;
@@ -85,16 +88,27 @@ public final class StatusCommand implements Callable<Integer> {
                 return 0;
             }
             if (list) {
-                out.printf("%-36s %-12s %-20s %s%n",
-                        "RUN_ID", "STATE", "TARGET", "STARTED");
+                var now = Instant.now();
+                out.printf("%-36s %-12s %-20s %-30s %-30s %s%n",
+                        "RUN_ID", "STATE", "TARGET", "STARTED", "FINISHED",
+                        "DURATION");
                 for (var item : records) {
                     var snapshot = item.snapshot();
-                    out.printf("%-36s %-12s %-20s %s%n", snapshot.id(),
+                    out.printf("%-36s %-12s %-20s %-30s %-30s %s%n",
+                            snapshot.id(),
                             snapshot.state(), snapshot.target(),
-                            snapshot.startedAt());
+                            time(snapshot.startedAt()),
+                            time(snapshot.finishedAt()),
+                            duration(snapshot.startedAt(),
+                                    snapshot.finishedAt(), snapshot.state(),
+                                    now));
                     if (item.warning() != null) {
                         err.println(snapshot.id() + ": " + item.warning());
                     }
+                }
+                if (records.stream().anyMatch(item ->
+                        estimated(item.snapshot().state()))) {
+                    timingNote();
                 }
                 return 0;
             }
@@ -136,21 +150,65 @@ public final class StatusCommand implements Callable<Integer> {
             }
             return 0;
         }
+        var now = Instant.now();
         out.println("Run ID: " + snapshot.id());
         out.println("Target: " + snapshot.target());
         out.println("State: " + snapshot.state());
-        out.println("Started: " + snapshot.startedAt());
-        out.println("Finished: " + (snapshot.finishedAt() == null
-                ? "-" : snapshot.finishedAt()));
+        out.println("Started: " + time(snapshot.startedAt()));
+        out.println("Finished: " + time(snapshot.finishedAt()));
+        out.println("Duration: " + duration(snapshot.startedAt(),
+                snapshot.finishedAt(), snapshot.state(), now));
         out.println("Parallelism: " + snapshot.parallelism());
-        out.printf("%-24s %-12s %s%n", "TASK", "STATE", "EXIT");
+        out.printf("%-24s %-12s %-5s %-30s %-30s %s%n",
+                "TASK", "STATE", "EXIT", "STARTED", "FINISHED", "DURATION");
         for (var task : snapshot.tasks()) {
-            out.printf("%-24s %-12s %s%n", task.name(), task.state(),
-                    task.exitCode() == null ? "-" : task.exitCode());
+            out.printf("%-24s %-12s %-5s %-30s %-30s %s%n",
+                    task.name(), task.state(),
+                    task.exitCode() == null ? "-" : task.exitCode(),
+                    time(task.startedAt()),
+                    time(task.startedAt() == null ? null : task.finishedAt()),
+                    duration(task.startedAt(), task.finishedAt(),
+                            task.state(), now));
             if (task.error() != null) {
                 out.println("  " + task.error());
             }
         }
+        if (estimated(snapshot.state()) || snapshot.tasks().stream()
+                .anyMatch(task -> estimated(task.state()))) {
+            timingNote();
+        }
         return 0;
+    }
+
+    private static String time(Instant value) {
+        return value == null ? "-" : value.toString();
+    }
+
+    private static String duration(Instant start, Instant finish,
+            RunHistory.State state, Instant now) {
+        if (start == null
+                || (finish == null && state != RunHistory.State.RUNNING)) {
+            return "-";
+        }
+        var elapsed = Duration.between(start, finish == null ? now : finish);
+        if (elapsed.isNegative()) {
+            return "-";
+        }
+        var value = String.format(Locale.ROOT, "%02d:%02d:%02d.%03d",
+                elapsed.toHours(), elapsed.toMinutesPart(),
+                elapsed.toSecondsPart(), elapsed.toMillisPart());
+        return (estimated(state) ? "~" : "") + value
+                + (finish == null ? " (running)" : "");
+    }
+
+    private static boolean estimated(RunHistory.State state) {
+        return state == RunHistory.State.INTERRUPTED
+                || state == RunHistory.State.CANCELLED;
+    }
+
+    private void timingNote() {
+        spec.commandLine().getOut().println(
+                "~ marks estimated timing; finish may be cancellation "
+                        + "or recovery time, not the actual process exit.");
     }
 }

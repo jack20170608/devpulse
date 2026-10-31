@@ -3,6 +3,7 @@ package io.github.devpulse.cli;
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.review.ReviewTui;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
@@ -40,6 +41,10 @@ public final class ReviewCommand implements Callable<Integer> {
                     + "overrides parallelism.")
     private Integer jobs;
 
+    @Option(names = "--plain",
+            description = "Print a plain-text plan instead of opening the TUI.")
+    private boolean plain;
+
     @Override
     public Integer call() {
         var out = spec.commandLine().getOut();
@@ -52,6 +57,9 @@ public final class ReviewCommand implements Callable<Integer> {
             var config = PulseConfiguration.load(directory);
             var plan = TaskPlan.create(config, target);
             var concurrency = jobs == null ? config.parallelism() : jobs;
+            if (!plain && ReviewTui.show(target, config, plan, concurrency)) {
+                return 0;
+            }
             out.println("Plan: " + target + " (" + plan.tasks().size()
                     + " tasks, parallelism " + concurrency + ")");
             out.println("Project directory: " + config.directory());
@@ -81,6 +89,10 @@ public final class ReviewCommand implements Callable<Integer> {
         } catch (ConfigException | IOException exception) {
             err.println("review: " + exception.getMessage());
             return 1;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            err.println("review: interrupted.");
+            return 130;
         }
     }
 }
