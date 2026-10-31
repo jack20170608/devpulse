@@ -200,27 +200,15 @@ public record PulseConfiguration(Path directory, int parallelism,
             var basename = name.substring(Math.max(name.lastIndexOf('/'),
                     name.lastIndexOf('\\')) + 1);
             var filename = basename.contains(".") ? name : name + ".conf";
-            var source = context.relativeTo(filename);
-            var key = source.origin().description();
-            enter(key);
-            try {
-                return source.parse(localOptions(context));
-            } finally {
-                active.removeLast();
-            }
+            return parseRelative(context, filename);
         }
 
         @Override
         public ConfigObject includeFile(ConfigIncludeContext context,
                 File file) {
+            rejectRemote(file.toString());
             if (!file.isAbsolute()) {
-                var source = context.relativeTo(file.toString());
-                enter(source.origin().description());
-                try {
-                    return source.parse(localOptions(context));
-                } finally {
-                    active.removeLast();
-                }
+                return parseRelative(context, file.toString());
             }
             var key = file.toPath().toAbsolutePath().normalize().toString();
             enter(key);
@@ -256,6 +244,24 @@ public record PulseConfiguration(Path directory, int parallelism,
                     .setIncluder(this);
         }
 
+        private ConfigObject parseRelative(ConfigIncludeContext context,
+                String filename) {
+            var source = context.relativeTo(filename);
+            if (source == null) {
+                if (context.parseOptions().getAllowMissing()) {
+                    return ConfigFactory.empty().root();
+                }
+                throw new ConfigException.Generic(
+                        "Cannot locate required include: " + filename);
+            }
+            enter(source.origin().description());
+            try {
+                return source.parse(localOptions(context));
+            } finally {
+                active.removeLast();
+            }
+        }
+
         private void enter(String key) {
             if (active.contains(key) || active.size() >= 32) {
                 throw new ConfigException.Generic(
@@ -265,6 +271,11 @@ public record PulseConfiguration(Path directory, int parallelism,
         }
 
         private static void rejectRemote(String name) {
+            if (name.startsWith("\\\\") || name.startsWith("//")) {
+                throw new ConfigException.Generic(
+                        "Network filesystem includes are not allowed: "
+                                + name);
+            }
             if (name.matches("^[A-Za-z][A-Za-z0-9+.-]*:.*")
                     && !name.matches("^[A-Za-z]:[\\\\/].*")) {
                 throw new ConfigException.Generic(

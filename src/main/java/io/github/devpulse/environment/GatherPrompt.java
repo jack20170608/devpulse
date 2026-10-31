@@ -3,9 +3,12 @@ package io.github.devpulse.environment;
 import java.util.stream.Collectors;
 
 public final class GatherPrompt {
+    public enum Language { zh, en, both }
+
     private GatherPrompt() {}
 
-    public static String render(EnvironmentGatherer.Facts facts) {
+    public static String render(EnvironmentGatherer.Facts facts,
+            Language language) {
         var files = facts.projectFiles().isEmpty()
                 ? "(none)" : String.join(", ", facts.projectFiles());
         var tools = facts.tools().stream()
@@ -50,11 +53,7 @@ public final class GatherPrompt {
                 }
                 ```
                 """;
-        return """
-                # devpulse 配置生成 / Configuration generation
-
-                [中文](#中文) | [English](#english)
-
+        var chinese = """
                 ## 中文
 
                 根据以下本地事实，为 devpulse 生成 `.devpulse.conf`。
@@ -85,6 +84,8 @@ public final class GatherPrompt {
                 ### 格式示例（占位命令，并非已发现的项目任务）
 
                 %s
+                """.formatted(context, example);
+        var english = """
                 ## English
 
                 Generate `.devpulse.conf` for devpulse using the local facts
@@ -121,6 +122,16 @@ public final class GatherPrompt {
                 ### Format example (placeholders, not discovered project tasks)
 
                 %s
-                """.formatted(context, example, context, example);
+                """.formatted(context, example);
+        return switch (language) {
+            case zh -> "# devpulse 配置生成\n\n" + chinese;
+            case en -> "# devpulse Configuration generation\n\n" + english;
+            case both -> """
+                    # devpulse 配置生成 / Configuration generation
+
+                    [中文](#中文) | [English](#english)
+
+                    """ + chinese + english;
+        };
     }
 }

@@ -34,6 +34,12 @@ public final class GatherCommand implements Callable<Integer> {
             description = "Explicit path to Bash (Git Bash on Windows).")
     private Path bash;
 
+    @Option(names = "--language", defaultValue = "both",
+            paramLabel = "zh|en|both",
+            description = "Prompt language: ${COMPLETION-CANDIDATES} "
+                    + "(default: ${DEFAULT-VALUE}).")
+    private GatherPrompt.Language language;
+
     @Option(names = "--no-clipboard",
             description = "Print the prompt without changing the clipboard.")
     private boolean noClipboard;
@@ -44,7 +50,7 @@ public final class GatherCommand implements Callable<Integer> {
         var err = spec.commandLine().getErr();
         try {
             var facts = new EnvironmentGatherer().gather(directory, bash);
-            var prompt = GatherPrompt.render(facts);
+            var prompt = GatherPrompt.render(facts, language);
             out.print(prompt);
             out.flush();
             if (!noClipboard) {

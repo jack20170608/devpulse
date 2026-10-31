@@ -14,7 +14,9 @@
 - 显式解析项目的 `.devpulse.conf`，通过 `withFallback` 合并内置 `reference.conf` 默认值，再调用 `resolve` 解析变量引用；不自动加载无关的 JVM 系统属性。
 - 使用 Typesafe Config 的类型化读取 API 构造配置模型。
 - `include` 仅允许本地文件或 classpath 资源，不允许远程 URL；实现时需限制包含资源的加载行为，而不是仅约定用户不写远程地址。
+- 支持相对文件和显式 `file`、`classpath` include；可选缺失 include 被忽略，`required` 缺失时报错。拒绝 URL 和 UNC 网络路径，并检测 include 循环。
 - 配置错误应报告文件来源及可用的行号信息；字段类型、重复任务名、未知依赖和循环依赖均需在执行任何命令之前校验。
+- 工具和流水线的未知字段应报错，防止拼写错误被静默忽略；根级可定义用于 HOCON 变量引用的辅助字段。
 - `gather` 生成的 Prompt 与 `init` 生成的默认配置统一使用 HOCON 示例。
 
 ### 二、核心架构设计
@@ -31,16 +33,16 @@
 
 #### 2. 资产自动盘点模块（`GatherCommand.java`）
 
-**职责**：收集本地系统的客观环境事实，组装中英文对照的 AI 提示词，输出到终端并默认复制到剪贴板。
+**职责**：收集本地系统的客观环境事实，按所选语言组装 AI 提示词（默认中英文对照），输出到终端并默认复制到剪贴板。
 
 **实现步骤**：
 
 - **环境与工具盘点**：记录 OS、架构、Java 版本、Bash 路径，通过 Bash 的 `command -v` 检查固定工具清单，不执行工具版本或健康检查。
 - **项目特征嗅探**：仅检查项目根目录中关键指纹是否存在（如 `package.json`、`pom.xml`、`Dockerfile`、`.git`），不读取文件内容、不递归扫描目录。
 - **采集边界**：环境变量仅用于 Bash 定位及工具查找，不将环境变量值或凭据加入提示词。提示词包含项目路径和工具位置，用户发送给外部 AI 前应审核。
-- **提示词输出**：生成包含本地事实、HOCON 示例、Bash 执行约束和命令审核提醒的中英文 Markdown；信息不足时要求 AI 声明假设，不捏造任务。
+- **提示词输出**：生成包含本地事实、HOCON 示例、Bash 执行约束和命令审核提醒的 Markdown；支持中文、英文或中英双语，双语模式保留同页面语言导航，单语言模式仅包含对应语言章节，不显示双语导航。本地事实中的路径、工具名等数据及 HOCON 示例保持原样；信息不足时要求 AI 声明假设，不捏造任务。
 - **剪贴板控制**：默认通过 AWT 写入剪贴板；无图形环境、剪贴板忙或不可访问时提示警告，保留标准输出，盘点仍成功。
-- **命令选项**：`gather --directory <目录>` 指定盘点位置，`--bash <路径>` 指定 Bash，`--no-clipboard` 禁用剪贴板复制。目录无效、Bash 缺失或扫描失败时返回非零退出码。
+- **命令选项**：`gather --directory <目录>` 指定盘点位置，`--bash <路径>` 指定 Bash，`--no-clipboard` 禁用剪贴板复制；`--language zh|en|both` 同时控制终端与剪贴板中的提示词语言，默认 `both`，不支持的取值在盘点前拒绝。目录无效、Bash 缺失或扫描失败时返回非零退出码。遇到中文终端显示乱码时可使用 `gather --language en` 避开提示词中的中文；该选项不修复终端编码，也不翻译本地事实数据。
 
 #### 3. Bash 基础组件（`BashShell.java`）
 
@@ -136,7 +138,9 @@ The technology stack, language conventions, build and packaging rules, resource 
 - Explicitly parse the project configuration, merge built-in `reference.conf` defaults with `withFallback`, and call `resolve` for substitutions. Do not automatically load unrelated JVM system properties.
 - Construct configuration models using the typed Typesafe Config API.
 - Allow only local file or classpath includes, not remote URLs. Enforce this in resource loading rather than relying on user conventions.
+- Support relative files and explicit `file` or `classpath` includes. Ignore absent optional includes and report absent `required` includes. Reject URLs and UNC network paths, and detect include cycles.
 - Report configuration origins and line numbers when available. Validate field types, duplicate task names, unknown dependencies, and cycles before executing any command.
+- Reject unknown tool or pipeline fields to avoid silently ignoring typos. Root-level helper fields may be defined for HOCON substitutions.
 - Use HOCON examples consistently in generated gather prompts and init configurations.
 
 ### 2. Architecture
@@ -153,16 +157,16 @@ CLI input -> devpulse entry point -> corresponding module
 
 #### 2. Environment inventory (`GatherCommand.java`)
 
-**Responsibility**: Collect local environment facts, generate a Chinese/English AI prompt, print it, and copy it to the clipboard by default.
+**Responsibility**: Collect local environment facts, generate an AI prompt in the selected language (Chinese/English by default), print it, and copy it to the clipboard by default.
 
 **Implementation steps**:
 
 - **Environment and tool inventory**: Record OS, architecture, Java version, and Bash location. Check a fixed tool list using Bash `command -v`; do not execute version commands or health checks.
 - **Project detection**: Check only the presence of root-level markers such as `package.json`, `pom.xml`, `Dockerfile`, and `.git`. Do not read file contents or recursively scan directories.
 - **Collection boundaries**: Use environment variables only for Bash discovery and tool lookup; do not include their values or credentials in the prompt. Prompts contain project and tool locations, which users must review before sharing with external AI services.
-- **Prompt output**: Generate bilingual Markdown containing facts, a HOCON example, Bash constraints, and command-review reminders. Require AI to state assumptions instead of inventing tasks when facts are insufficient.
+- **Prompt output**: Generate Markdown containing facts, a HOCON example, Bash constraints, and command-review reminders. Support Chinese, English, or both. Bilingual mode retains same-page language navigation; single-language modes include only the corresponding language section without bilingual navigation. Keep local fact data such as paths and tool names, and the HOCON example, unchanged. Require AI to state assumptions instead of inventing tasks when facts are insufficient.
 - **Clipboard**: Copy through AWT by default. In headless environments or when the clipboard is busy or inaccessible, warn and retain standard output; inventory still succeeds.
-- **Options**: `gather --directory <directory>` selects the project, `--bash <path>` selects Bash, and `--no-clipboard` disables clipboard writes. Invalid directories, missing Bash, and scan failures return nonzero exit codes.
+- **Options**: `gather --directory <directory>` selects the project, `--bash <path>` selects Bash, and `--no-clipboard` disables clipboard writes. `--language zh|en|both` controls the prompt language for both terminal and clipboard output, defaults to `both`, and rejects unsupported values before inventory. Invalid directories, missing Bash, and scan failures return nonzero exit codes. Use `gather --language en` to avoid Chinese prompt text when the terminal displays it incorrectly; this option does not fix terminal encoding or translate local fact data.
 
 #### 3. Bash component (`BashShell.java`)
 
