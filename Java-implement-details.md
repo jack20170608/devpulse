@@ -1,10 +1,14 @@
 # devpulse Java 实现基本思路与架构方案
 
+[中文](#中文) | [English](#english)
+
+## 中文
+
 本项目旨在构建一个轻量、高效、具备 AI 协同能力的本地 DevOps 智能调度工具箱。
 
 技术栈、语言使用原则、构建打包、资源管理和测试约束统一维护在 [Copilot 仓库指令](.github/copilot-instructions.md) 中；本文描述功能行为、核心架构与开发路线图。
 
-## 一、配置格式与加载
+### 一、配置格式与加载
 
 - 仅支持 HOCON 格式的 `.devpulse.conf`，不支持 YAML。
 - 显式解析项目的 `.devpulse.conf`，通过 `withFallback` 合并内置 `reference.conf` 默认值，再调用 `resolve` 解析变量引用；不自动加载无关的 JVM 系统属性。
@@ -13,29 +17,42 @@
 - 配置错误应报告文件来源及可用的行号信息；字段类型、重复任务名、未知依赖和循环依赖均需在执行任何命令之前校验。
 - `gather` 生成的 Prompt 与 `init` 生成的默认配置统一使用 HOCON 示例。
 
-## 二、核心架构设计（Architecture）
+### 二、核心架构设计
 
-整个 devpulse 系统由一个主入口和三大核心模块组成，职责清晰，方便后续解耦和扩展。它的文字流向结构如下：
+系统包含命令入口、资产盘点模块、可复用的 Bash 基础组件、调度引擎与配置初始化模块，职责清晰，方便后续解耦和扩展：
 
 ```text
 用户终端输入（CLI Input） -> devpulse 主入口类 -> 分发至对应子模块
 ```
 
-### 1. 主入口类（`DevPulseCLI.java`）
+#### 1. 主入口类（`DevPulseCLI.java`）
 
 **职责**：负责接收终端传入的参数（如 `gather`、`pulse`），进行基本的全局校验。
 
-### 2. 资产自动盘点模块（`GatherCommand.java`）
+#### 2. 资产自动盘点模块（`GatherCommand.java`）
 
-**职责**：收集本地系统的客观环境事实，并动态组装、复制 AI 提示词（Prompt）到剪贴板。
+**职责**：收集本地系统的客观环境事实，组装中英文对照的 AI 提示词，输出到终端并默认复制到剪贴板。
 
 **实现步骤**：
 
-- **环境变量扫描**：读取 `System.getenv("PATH")`，利用 `File.exists()` 智能判断 `git`、`docker`、`kubectl` 等全局工具是否存在。
-- **项目特征嗅探**：通过 `java.nio.file.Files.exists()` 检查当前工作目录下的关键指纹文件（如 `package.json`、`pom.xml`、`Dockerfile`、`.git`）。
-- **提示词包装与剪贴板控制**：将上述客观事实填入预设好的 Markdown Prompt 模板。通过 Java 原生的 `java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()` 强制将生成的 Prompt 写入用户的系统剪贴板。
+- **环境与工具盘点**：记录 OS、架构、Java 版本、Bash 路径，通过 Bash 的 `command -v` 检查固定工具清单，不执行工具版本或健康检查。
+- **项目特征嗅探**：仅检查项目根目录中关键指纹是否存在（如 `package.json`、`pom.xml`、`Dockerfile`、`.git`），不读取文件内容、不递归扫描目录。
+- **采集边界**：环境变量仅用于 Bash 定位及工具查找，不将环境变量值或凭据加入提示词。提示词包含项目路径和工具位置，用户发送给外部 AI 前应审核。
+- **提示词输出**：生成包含本地事实、HOCON 示例、Bash 执行约束和命令审核提醒的中英文 Markdown；信息不足时要求 AI 声明假设，不捏造任务。
+- **剪贴板控制**：默认通过 AWT 写入剪贴板；无图形环境、剪贴板忙或不可访问时提示警告，保留标准输出，盘点仍成功。
+- **命令选项**：`gather --directory <目录>` 指定盘点位置，`--bash <路径>` 指定 Bash，`--no-clipboard` 禁用剪贴板复制。目录无效、Bash 缺失或扫描失败时返回非零退出码。
 
-### 3. 图拓扑智能调度引擎（`PulseCommand.java`）
+#### 3. Bash 基础组件（`BashShell.java`）
+
+- **统一解释器**：所有 OS 均使用 Bash，Windows 使用 Git Bash；找不到可用 Bash 时明确报错，不回退到 `sh`、CMD、PowerShell 或 WSL。
+- **定位顺序**：显式 `--bash` 路径优先，其次探测 PATH；Windows 额外检查 Git 安装位置，自动探测只接受具有 Git 安装标记的 Bash，避免误选 WSL 入口。
+- **可用性验证**：通过短时子进程验证 Bash 能实际启动，而不是仅检查文件存在。
+- **启动方式**：使用 `ProcessBuilder` 启动 `bash --noprofile --norc -s --`，通过标准输入写入完整 UTF-8 脚本后关闭输入，不自行按空格拆分。避免 Windows 命令行参数转义改变引号和变量表达式；此模式不提供交互输入。
+- **环境与目录**：使用 `ProcessBuilder.directory()` 设置工作目录，继承父进程环境，但移除 `BASH_ENV`、`ENV` 和 `BASH_FUNC_*`，避免自动执行环境指定的启动文件或导入用户函数。不依赖 alias 或用户启动脚本。
+- **探测资源控制**：Bash 验证与环境扫描均设置超时，持续读取扫描输出，并清理探测进程。
+- **平台边界**：统一 Bash 语法不代表工具、路径、文件权限和操作系统能力完全一致；Git Bash 不是完整 Linux 环境。
+
+#### 4. 图拓扑智能调度引擎（`PulseCommand.java`）
 
 **职责**：读取用户存放的 `.devpulse.conf` 配置文件，智能计算依赖顺序，拉起本地系统进程执行。
 
@@ -44,28 +61,133 @@
 - **解析配置**：按配置加载规则读取 HOCON 配置，构造配置模型。
 - **构建有向无环图（DAG）**：将 `tools` 列表中的每个工具视作一个节点（Vertex），将它们之间的 `needs` 依赖关系视作有向边（Edge）。
 - **拓扑排序与循环依赖检测**：采用 Kahn 算法或 DFS 算法检查依赖图。如果发现循环依赖（例如 A 依赖 B，B 又依赖 A），在启动任何命令前报错；执行时仅将所有依赖均已成功的任务加入就绪队列，并在并发上限内调度。
-- **底层进程控制器**：使用 `java.lang.ProcessBuilder` 与 `sh`/`cmd` 动态适配，拉起本地命令。将底层工具的错误流和标准流合并（`redirectErrorStream(true)`），通过缓冲流（`BufferedReader`）实时输出到用户终端。
+- **底层进程控制器**：复用 Bash 基础组件拉起本地命令。将底层工具的错误流和标准流合并（`redirectErrorStream(true)`），持续读取并实时输出到终端。工具必须已安装且能被 Bash 找到；执行权限与当前用户相同，不提供沙箱。
 - **并发上限**：默认最多同时运行 4 个任务；支持配置 `parallelism` 与 `pulse --jobs` 覆盖，优先级为命令行参数高于项目配置、高于默认值。取值必须为正整数，并在执行前校验；该限制不控制外部任务内部的并发。
 - **失败处理**：任一任务失败后，停止启动新任务，等待所有已启动任务结束，最终返回非零退出码；不因该失败强制终止其他运行中任务。用户主动取消与任务超时的终止、进程清理规则另行定义。
 
-## 三、开发落地路线图（Roadmap）
+#### 5. 配置初始化模块（`InitCommand.java`）
+
+**职责**：在项目目录生成可修改的 `.devpulse.conf` 配置骨架，不扫描环境、不调用 AI、不执行任务，也不要求已安装 Bash。
+
+- **默认配置**：UTF-8 编码的 HOCON，包含 `version = 1`、`parallelism = 4`、两个仅使用 Bash `echo` 的示例工具，以及带有依赖关系的 `dev` 流水线。
+- **目录选择**：默认使用当前工作目录；`init --directory <目录>` 指定其他已存在的项目目录，不自动创建目录。
+- **覆盖保护**：默认仅创建新文件，配置已存在时拒绝写入并返回非零退出码；仅显式 `--force` 时允许覆盖普通文件，不跟随配置文件的符号链接。
+- **结果反馈**：成功后打印配置路径和命令审核提醒；目录无效或文件写入失败时明确报错，不执行示例任务。
+
+### 三、开发落地路线图
 
 首版范围包含 `init`、`pulse` 的并发调度、`gather` 和 `status`，不将并发或 AI 协同流推迟到后续版本。以下阶段为内部开发顺序，而不是对外版本的功能拆分。
 
-### 阶段一：建立脚手架与命令行骨架（MVP）
+#### 阶段一：建立脚手架与命令行骨架（MVP）
 
 - 按 Copilot 仓库指令建立构建与命令行骨架。
 - 确保打包后的可执行 JAR 能通过 `--help` 打印出规范的帮助说明。
 
-### 阶段二：攻克 gather 模块（打通 AI 协同流）
+#### 阶段二：攻克 gather 模块（打通 AI 协同流）
 
-- 编写本地文件和 `PATH` 环境变量的扫描逻辑。
-- 编写 AWT 剪贴板写入代码，确保敲击 `gather` 后，用户能直接在微信、浏览器或任何 AI 窗口中按 `Ctrl+V` 粘贴出完美的 Prompt。
+- 实现可复用的 Bash 探测与调用组件。
+- 实现工具查找、项目指纹检测和中英文提示词生成。
+- 实现 AWT 剪贴板写入及无图形环境降级，支持仅输出提示词。
 
-### 阶段三：攻克 pulse 模块（打通调度流）
+#### 阶段三：攻克 pulse 模块（打通调度流）
 
 - 引入 Typesafe Config 解析 HOCON 配置文件，完成默认值合并与执行前校验。
 - 手写基于 Kahn 的拓扑排序函数，确保能够处理复杂的相互依赖。
 - 实现依赖就绪任务的并发调度，落实默认 4 个任务的并发上限，以及 `parallelism`、`--jobs` 的覆盖规则。
 - 完善 `ProcessBuilder` 的异常处理，落实停止新任务、等待运行中任务结束的失败策略，不会引起系统崩溃。
 - 完成 `init` 默认配置生成与 `status` 本地工具健康状态展示，形成首版完整命令集合。
+
+## English
+
+This project aims to build a lightweight, efficient local DevOps orchestration toolbox with AI collaboration.
+
+The technology stack, language conventions, build and packaging rules, resource management, and testing constraints are maintained in the [Copilot repository instructions](.github/copilot-instructions.md). This document covers functional behavior, architecture, and the development roadmap.
+
+### 1. Configuration format and loading
+
+- Support only HOCON in `.devpulse.conf`, not YAML.
+- Explicitly parse the project configuration, merge built-in `reference.conf` defaults with `withFallback`, and call `resolve` for substitutions. Do not automatically load unrelated JVM system properties.
+- Construct configuration models using the typed Typesafe Config API.
+- Allow only local file or classpath includes, not remote URLs. Enforce this in resource loading rather than relying on user conventions.
+- Report configuration origins and line numbers when available. Validate field types, duplicate task names, unknown dependencies, and cycles before executing any command.
+- Use HOCON examples consistently in generated gather prompts and init configurations.
+
+### 2. Architecture
+
+The system contains a CLI entry point, an environment inventory module, a reusable Bash component, a scheduling engine, and a configuration initializer with separate responsibilities:
+
+```text
+CLI input -> devpulse entry point -> corresponding module
+```
+
+#### 1. CLI entry point (`DevPulseCLI.java`)
+
+**Responsibility**: Accept command-line arguments such as `gather` and `pulse`, and perform basic global validation.
+
+#### 2. Environment inventory (`GatherCommand.java`)
+
+**Responsibility**: Collect local environment facts, generate a Chinese/English AI prompt, print it, and copy it to the clipboard by default.
+
+**Implementation steps**:
+
+- **Environment and tool inventory**: Record OS, architecture, Java version, and Bash location. Check a fixed tool list using Bash `command -v`; do not execute version commands or health checks.
+- **Project detection**: Check only the presence of root-level markers such as `package.json`, `pom.xml`, `Dockerfile`, and `.git`. Do not read file contents or recursively scan directories.
+- **Collection boundaries**: Use environment variables only for Bash discovery and tool lookup; do not include their values or credentials in the prompt. Prompts contain project and tool locations, which users must review before sharing with external AI services.
+- **Prompt output**: Generate bilingual Markdown containing facts, a HOCON example, Bash constraints, and command-review reminders. Require AI to state assumptions instead of inventing tasks when facts are insufficient.
+- **Clipboard**: Copy through AWT by default. In headless environments or when the clipboard is busy or inaccessible, warn and retain standard output; inventory still succeeds.
+- **Options**: `gather --directory <directory>` selects the project, `--bash <path>` selects Bash, and `--no-clipboard` disables clipboard writes. Invalid directories, missing Bash, and scan failures return nonzero exit codes.
+
+#### 3. Bash component (`BashShell.java`)
+
+- **Unified interpreter**: Use Bash on every OS and Git Bash on Windows. Report missing Bash explicitly; never fall back to `sh`, CMD, PowerShell, or WSL.
+- **Discovery order**: An explicit `--bash` path takes priority, followed by PATH lookup. Also check Git installation locations on Windows and accept only Bash executables with Git installation markers to avoid WSL launchers.
+- **Verification**: Verify that Bash actually starts using a short-lived subprocess, rather than checking file presence alone.
+- **Invocation**: Use `ProcessBuilder` to run `bash --noprofile --norc -s --`, write the complete UTF-8 script to standard input, and close input. Do not split commands on spaces. This avoids Windows command-line quoting altering quotes and variable expressions; this mode does not provide interactive input.
+- **Environment and directory**: Set the working directory through `ProcessBuilder.directory()`. Inherit the parent environment, but remove `BASH_ENV`, `ENV`, and `BASH_FUNC_*` to avoid environment-selected startup files or imported user functions. Do not rely on aliases or user startup scripts.
+- **Probe resource control**: Apply timeouts to verification and inventory, continuously read inventory output, and clean up probe processes.
+- **Platform boundaries**: Shared Bash syntax does not make tools, paths, permissions, or OS capabilities identical. Git Bash is not a complete Linux environment.
+
+#### 4. Scheduling engine (`PulseCommand.java`)
+
+**Responsibility**: Read `.devpulse.conf`, determine dependency order, and execute local subprocesses.
+
+**Implementation steps**:
+
+- **Configuration**: Load HOCON according to the configuration rules and construct configuration models.
+- **DAG construction**: Treat each entry in `tools` as a vertex and each `needs` relationship as a directed edge.
+- **Ordering and cycle detection**: Validate the dependency graph using Kahn's algorithm or DFS. Report cycles before starting commands. Only enqueue tasks whose dependencies have all succeeded, and schedule within the concurrency limit.
+- **Process execution**: Reuse the Bash component. Merge standard error and output using `redirectErrorStream(true)` and continuously stream output to the terminal. Tools must be installed and discoverable by Bash. Commands run with the current user's permissions; no sandbox is provided.
+- **Concurrency**: Run at most 4 tasks by default. Support `parallelism` and `pulse --jobs`, with CLI options overriding project configuration and defaults. Validate positive integers before execution. This does not limit concurrency inside external tasks.
+- **Failure policy**: After any task fails, stop launching new tasks, wait for started tasks to finish, and return a nonzero exit code. Do not forcibly stop other running tasks because of that failure. Cancellation, task timeouts, and their process cleanup rules remain to be defined.
+
+#### 5. Configuration initializer (`InitCommand.java`)
+
+**Responsibility**: Generate an editable `.devpulse.conf` skeleton in the project directory. Do not scan the environment, call AI, execute tasks, or require an installed Bash.
+
+- **Defaults**: UTF-8 HOCON containing `version = 1`, `parallelism = 4`, two example tools using only Bash `echo`, and a `dev` pipeline with a dependency relationship.
+- **Directory selection**: Use the current working directory by default. `init --directory <directory>` selects another existing project directory; do not create directories automatically.
+- **Overwrite protection**: Create new files only by default. Refuse existing configurations with a nonzero exit code. Allow overwriting regular files only with explicit `--force`; do not follow configuration-file symbolic links.
+- **Feedback**: Print the configuration path and a command-review reminder on success. Clearly report invalid directories or write failures without executing example tasks.
+
+### 3. Development roadmap
+
+The first release includes `init`, concurrent `pulse`, `gather`, and `status`. Concurrency and AI collaboration are not deferred to later releases. These stages describe internal implementation order, not separate release scopes.
+
+#### Stage 1: Project scaffold and CLI skeleton (MVP)
+
+- Set up the build and CLI skeleton according to the Copilot repository instructions.
+- Ensure the executable JAR prints standard help with `--help`.
+
+#### Stage 2: Gather and AI collaboration
+
+- Implement reusable Bash discovery and invocation.
+- Implement tool lookup, project marker detection, and bilingual prompt generation.
+- Implement AWT clipboard writes with headless fallback and a print-only option.
+
+#### Stage 3: Pulse and scheduling
+
+- Parse HOCON with Typesafe Config, merge defaults, and validate before execution.
+- Implement Kahn-based dependency ordering for complex graphs.
+- Implement dependency-ready concurrent scheduling with the default limit of 4 and `parallelism`/`--jobs` overrides.
+- Handle `ProcessBuilder` failures by stopping new tasks and waiting for started tasks without crashing the application.
+- Complete init configuration generation and status health reporting for the first release's full command set.
