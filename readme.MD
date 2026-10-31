@@ -24,14 +24,14 @@
 +-----------------+       +---------------+       +---------------+       +------------------+
 
 | 1. 终端敲击       |       | 2. 自动复制    |       | 3. 粘贴给 AI   |       | 4. 完美落地       |
-| devpulse gather | ----> | 剪贴板(Prompt) | ----> |  任意本地/云端 | ----> | .devpulse.yaml   |
+| devpulse gather | ----> | 剪贴板(Prompt) | ----> |  任意本地/云端 | ----> | .devpulse.conf   |
 |                 |       |               |       |  大模型AI助手  |       |                  |
 +-----------------+       +---------------+       +---------------+       +------------------+
 ```
 
 1. **盘点**：在项目根目录运行 `devpulse gather`。
 2. **复制**：工具箱自动深度嗅探你当前的 OS、技术栈特征及环境变量，组装成结构化 Context 并**自动复制到系统剪贴板**。
-3. **编排**：把内容粘贴给你常用的 AI（DeepSeek、ChatGPT、Claude 等），AI 会根据你的技术栈最佳实践和个人黑话喜好，秒回一套编排好的 YAML。
+3. **编排**：把内容粘贴给你常用的 AI（DeepSeek、ChatGPT、Claude 等），AI 会根据你的技术栈最佳实践和个人黑话喜好，生成一套编排好的 HOCON 配置。
 4. **脉冲**：将配置保存，直接运行 `devpulse pulse` 启动本地调度！
 
 ---
@@ -47,23 +47,30 @@
 
 ---
 
-## 🛠️ 配置示例 (`.devpulse.yaml`)
+## 🛠️ 配置示例 (`.devpulse.conf`)
 
-通过简单的声明，即可让 `devpulse` 理解工具之间的依赖，从而实现智能调度：
+devpulse 仅支持 HOCON 配置，使用 Typesafe Config 解析，不支持 YAML。通过简单的声明，即可让 `devpulse` 理解工具之间的依赖，从而实现智能调度：
 
-```yaml
-version: "1"
-tools:
-  - name: linter
-    cmd: "eslint . --fix"
-  - name: docker-build
-    cmd: "docker build -t app:local ."
-    needs: [linter] # 智能调度：只有 linter 成功后才会触发打包
+```hocon
+version = 1
+tools = [
+  {
+    name = linter
+    cmd = "eslint . --fix"
+  },
+  {
+    name = docker-build
+    cmd = "docker build -t app:local ."
+    needs = [linter] # 智能调度：只有 linter 成功后才会触发打包
+  }
+]
 
-pipelines:
-  dev:
-    description: "本地开发快速智调"
-    tasks: ["linter", "docker-build"]
+pipelines {
+  dev {
+    description = "本地开发快速智调"
+    tasks = [linter, docker-build]
+  }
+}
 ```
 
 ---
@@ -71,4 +78,3 @@ pipelines:
 ## 📄 开源协议
 
 本项目基于 [MIT License](LICENSE) 协议开源。
-
