@@ -7,6 +7,7 @@ import java.awt.HeadlessException;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -50,6 +51,20 @@ public final class GatherCommand implements Callable<Integer> {
         var err = spec.commandLine().getErr();
         try {
             var facts = new EnvironmentGatherer().gather(directory, bash);
+            var console = System.console();
+            var encoding = console == null
+                    ? System.out.charset() : console.charset();
+            if (!StandardCharsets.UTF_8.equals(encoding)) {
+                err.println("gather: Warning: Java reports "
+                        + (console == null ? "standard output" : "console")
+                        + " encoding " + encoding.name()
+                        + ", but devpulse writes UTF-8. Chinese text may "
+                        + "appear garbled. Configure your terminal to use "
+                        + "UTF-8; in Git Bash, open Options > Text > "
+                        + "Character set and select UTF-8. The terminal's "
+                        + "actual display encoding cannot be verified.");
+                err.flush();
+            }
             var prompt = GatherPrompt.render(facts, language);
             out.print(prompt);
             out.flush();
