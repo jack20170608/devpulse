@@ -39,7 +39,7 @@ import java.util.UUID;
 
 public final class RunHistory {
     public enum State {
-        PENDING, RUNNING, SUCCESS, FAILED, SKIPPED, CANCELLED, INTERRUPTED
+        PENDING, RUNNING, READY, SUCCESS, FAILED, SKIPPED, CANCELLED, INTERRUPTED
     }
 
     public record TaskState(String id, String name, List<String> needs,
@@ -147,6 +147,10 @@ public final class RunHistory {
                 .resolve(task.id() + ".log");
     }
 
+    public Path runDirectory(Snapshot snapshot) {
+        return runs.resolve(snapshot.id());
+    }
+
     private Observation observe(Path directory) throws IOException {
         var snapshot = read(directory);
         if (snapshot.state() != State.RUNNING) {
@@ -219,13 +223,7 @@ public final class RunHistory {
     private static Snapshot read(Path directory) throws IOException {
         var file = directory.resolve("state.conf");
         try {
-            var config = ConfigFactory.parseString(
-                    Files.readString(file, StandardCharsets.UTF_8),
-                    ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
-                            .setOriginDescription(file.toString())
-                            .setAllowMissing(false)
-                            .setIncluder(new NoIncludes()))
-                    .resolve(ConfigResolveOptions.noSystem());
+            var config = readConfig(file);
             if (config.getInt("version") != 1
                     || !directory.getFileName().toString()
                     .equals(config.getString("id"))) {
@@ -254,6 +252,7 @@ public final class RunHistory {
             var ended = time(config, "finishedAt");
             if (pid <= 0 || parallelism <= 0
                     || state == State.PENDING || state == State.SKIPPED
+                    || state == State.READY
                     || (state != State.RUNNING && ended == null)) {
                 throw new IOException("Invalid run metadata: " + file);
             }
@@ -301,10 +300,24 @@ public final class RunHistory {
             put(item, "error", task.error());
             return item;
         }).toList());
+        writeData(directory.resolve("state.conf"), data);
+    }
+
+    static Config readConfig(Path file) throws IOException {
+        return ConfigFactory.parseString(
+                Files.readString(file, StandardCharsets.UTF_8),
+                ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
+                        .setOriginDescription(file.toString())
+                        .setAllowMissing(false).setIncluder(new NoIncludes()))
+                .resolve(ConfigResolveOptions.noSystem());
+    }
+
+    static void writeData(Path file, Map<String, Object> data)
+            throws IOException {
         var text = ConfigValueFactory.fromMap(data).render(
                 ConfigRenderOptions.defaults().setJson(false)
                         .setComments(false).setOriginComments(false)) + "\n";
-        var temporary = Files.createTempFile(directory, "state-", ".tmp");
+        var temporary = Files.createTempFile(file.getParent(), "state-", ".tmp");
         try {
             try (var channel = FileChannel.open(temporary,
                     StandardOpenOption.WRITE,
@@ -316,7 +329,7 @@ public final class RunHistory {
                 }
                 channel.force(true);
             }
-            replaceSnapshot(temporary, directory.resolve("state.conf"));
+            replaceSnapshot(temporary, file);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -377,6 +390,14 @@ public final class RunHistory {
 
         public String id() {
             return snapshot.id();
+        }
+
+        public Path directory() {
+            return directory;
+        }
+
+        public synchronized String taskId(String name) {
+            return task(name).id();
         }
 
         public synchronized void started(String name) throws IOException {

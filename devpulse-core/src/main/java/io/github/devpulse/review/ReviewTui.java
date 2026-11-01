@@ -188,7 +188,8 @@ public final class ReviewTui {
         var detailsBlock = block("Task: " + display(task.name()));
         var area = detailsBlock.inner(columns.get(1));
         var details = new ArrayList<Line>();
-        details.add(Line.styled("Prerequisites (must succeed first):", ACCENT));
+        details.add(Line.styled(
+                "Prerequisites (success / daemon readiness):", ACCENT));
         if (task.needs().isEmpty()) {
             details.add(Line.from("  (none / ready initially)"));
         } else {
@@ -210,6 +211,12 @@ public final class ReviewTui {
         details.add(Line.styled("Command / Bash:", ACCENT));
         display(task.command()).lines()
                 .forEach(line -> details.add(Line.from(line)));
+        if (task.daemon() != null) {
+            details.add(Line.empty());
+            details.add(Line.styled("Daemon lifecycle:", ACCENT));
+            task.daemonDetails().forEach(value -> display(value).lines()
+                    .forEach(line -> details.add(Line.from(line))));
+        }
         var wrapped = wrap(details, Math.max(1, area.width()));
         pageSize = Math.max(1, area.height());
         maxScroll = Math.max(0, wrapped.size() - pageSize);

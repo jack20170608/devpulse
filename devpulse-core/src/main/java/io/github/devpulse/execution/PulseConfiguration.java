@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -35,12 +36,35 @@ public record PulseConfiguration(Path directory, int parallelism,
     }
 
     public record Task(String name, String command, List<String> needs,
-            ConfigOrigin origin) {
+            Daemon daemon, ConfigOrigin origin) {
         public Task {
             command = command.replace("\r\n", "\n");
             needs = List.copyOf(needs);
         }
+
+        public List<String> daemonDetails() {
+            if (daemon == null) {
+                return List.of();
+            }
+            return List.of("Type: daemon; needs waits for readiness",
+                    "Readiness / Bash: " + daemon.ready().command(),
+                    "Readiness timeout: " + daemon.ready().timeout()
+                            + "; interval: " + daemon.ready().interval()
+                            + "; check timeout: "
+                            + daemon.ready().checkTimeout(),
+                    "shutdownHook: " + daemon.shutdownHook(),
+                    "Stop / Bash: " + (daemon.stopCommand() == null
+                            ? "(terminate owned process tree)"
+                            : daemon.stopCommand()),
+                    "Stop timeout: " + daemon.stopTimeout());
+        }
     }
+
+    public record Daemon(Readiness ready, boolean shutdownHook,
+            String stopCommand, Duration stopTimeout) {}
+
+    public record Readiness(String command, Duration interval,
+            Duration timeout, Duration checkTimeout) {}
 
     public record Pipeline(List<String> tasks, ConfigOrigin origin) {
         public Pipeline {
@@ -72,7 +96,8 @@ public record PulseConfiguration(Path directory, int parallelism,
         requireType(config, "tools", ConfigValueType.LIST);
         var tasks = new LinkedHashMap<String, Task>();
         for (var tool : config.getConfigList("tools")) {
-            rejectUnknownFields(tool, List.of("name", "cmd", "needs"));
+            rejectUnknownFields(tool, List.of("name", "cmd", "needs", "type",
+                    "ready", "shutdownHook", "stop", "stopTimeout"));
             var name = nonBlankString(tool, "name");
             if (!name.equals(name.strip())
                     || name.chars().anyMatch(Character::isISOControl)) {
@@ -83,7 +108,7 @@ public record PulseConfiguration(Path directory, int parallelism,
             var task = new Task(name, nonBlankString(tool, "cmd"),
                     tool.hasPathOrNull("needs")
                             ? stringList(tool, "needs") : List.of(),
-                    tool.origin());
+                    daemon(tool), tool.origin());
             if (tasks.putIfAbsent(name, task) != null) {
                 throw invalid(tool, "name", "Duplicate task: " + name);
             }
@@ -127,6 +152,58 @@ public record PulseConfiguration(Path directory, int parallelism,
             pipelines.put(name, new Pipeline(targets, pipeline.origin()));
         }
         return new PulseConfiguration(root, parallelism, tasks, pipelines);
+    }
+
+    private static Daemon daemon(Config tool) {
+        var type = tool.hasPathOrNull("type")
+                ? nonBlankString(tool, "type") : "task";
+        if (!List.of("task", "daemon").contains(type)) {
+            throw invalid(tool, "type", "Expected task or daemon.");
+        }
+        if (type.equals("task")) {
+            for (var field : List.of("ready", "shutdownHook", "stop",
+                    "stopTimeout")) {
+                if (tool.hasPathOrNull(field)) {
+                    throw invalid(tool, field,
+                            "Only daemon tasks support this field.");
+                }
+            }
+            return null;
+        }
+        requireType(tool, "ready", ConfigValueType.OBJECT);
+        var ready = tool.getConfig("ready");
+        rejectUnknownFields(ready,
+                List.of("cmd", "interval", "timeout", "checkTimeout"));
+        var readiness = new Readiness(nonBlankString(ready, "cmd"),
+                duration(ready, "interval", Duration.ofMillis(500)),
+                duration(ready, "timeout", Duration.ofSeconds(30)),
+                duration(ready, "checkTimeout", Duration.ofSeconds(2)));
+        if (tool.hasPathOrNull("shutdownHook")) {
+            requireType(tool, "shutdownHook", ConfigValueType.BOOLEAN);
+        }
+        return new Daemon(readiness,
+                tool.hasPath("shutdownHook")
+                        && tool.getBoolean("shutdownHook"),
+                tool.hasPathOrNull("stop")
+                        ? nonBlankString(tool, "stop") : null,
+                duration(tool, "stopTimeout", Duration.ofSeconds(5)));
+    }
+
+    private static Duration duration(Config config, String path,
+            Duration fallback) {
+        if (!config.hasPathOrNull(path)) {
+            return fallback;
+        }
+        requireType(config, path, ConfigValueType.STRING);
+        var value = config.getDuration(path);
+        try {
+            if (value.toNanos() <= 0) {
+                throw invalid(config, path, "Must be a positive duration.");
+            }
+        } catch (ArithmeticException exception) {
+            throw invalid(config, path, "Duration is too large.");
+        }
+        return value;
     }
 
     private static int positiveInteger(Config config, String path) {

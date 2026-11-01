@@ -68,6 +68,7 @@ public final class PulseCommand implements Callable<Integer> {
                     out.println("[" + task.name() + "] needs: "
                             + task.needs());
                     out.println(task.command());
+                    task.daemonDetails().forEach(out::println);
                 }
                 out.flush();
                 return 0;

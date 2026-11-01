@@ -18,7 +18,8 @@ import picocli.CommandLine.Spec;
                 InitCommand.class,
                 PulseCommand.class,
                 ReviewCommand.class,
-                StatusCommand.class
+                StatusCommand.class,
+                StopCommand.class
         }
 )
 public final class DevPulseCLI implements Runnable {

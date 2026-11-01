@@ -2,6 +2,7 @@ package io.github.devpulse.cli;
 
 import io.github.devpulse.environment.EnvironmentGatherer;
 import io.github.devpulse.execution.RunHistory;
+import io.github.devpulse.execution.DaemonManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -119,13 +120,13 @@ public final class StatusCommand implements Callable<Integer> {
             return 1;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            err.println("status: environment scan interrupted.");
+            err.println("status: interrupted.");
             return 130;
         }
     }
 
     private int display(RunHistory history, RunHistory.Observation item)
-            throws IOException {
+            throws IOException, InterruptedException {
         var snapshot = item.snapshot();
         var out = spec.commandLine().getOut();
         if (item.warning() != null) {
@@ -172,6 +173,27 @@ public final class StatusCommand implements Callable<Integer> {
                             task.state(), now));
             if (task.error() != null) {
                 out.println("  " + task.error());
+            }
+        }
+        var directory = history.runDirectory(snapshot);
+        var daemons = snapshot.tasks().stream()
+                .filter(task -> DaemonManager.recorded(directory, task.id()))
+                .toList();
+        if (!daemons.isEmpty()) {
+            out.println();
+            out.println("Daemon processes (live checks; "
+                    + "run state records the pipeline outcome):");
+            out.printf("%-24s %-12s %-10s %s%n",
+                    "TASK", "STATE", "PID", "SHUTDOWN_HOOK");
+            for (var daemon : daemons) {
+                var observation = DaemonManager.observe(directory,
+                        daemon.id());
+                out.printf("%-24s %-12s %-10s %s%n",
+                        daemon.name(), observation.state(), observation.pid(),
+                        observation.shutdownHook());
+                if (observation.detail() != null) {
+                    out.println("  " + observation.detail());
+                }
             }
         }
         if (estimated(snapshot.state()) || snapshot.tasks().stream()

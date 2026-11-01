@@ -1,12 +1,14 @@
-# devpulse Java 实现基本思路与架构方案
+# devpulse 架构与实现设计 / Architecture and implementation design
 
 [中文](#中文) | [English](#english)
 
 ## 中文
 
+[项目首页](../readme.MD)
+
 本项目旨在构建一个轻量、高效、具备 AI 协同能力的本地 DevOps 智能调度工具箱。
 
-技术栈、语言使用原则、构建打包、资源管理和测试约束统一维护在 [Copilot 仓库指令](.github/copilot-instructions.md) 中；本文描述功能行为、核心架构与开发路线图。
+技术栈、语言使用原则、构建打包、资源管理和测试约束统一维护在 [Copilot 仓库指令](../.github/copilot-instructions.md) 中；本文描述功能行为、核心架构与开发路线图。
 
 ### 一、配置格式与加载
 
@@ -120,6 +122,12 @@
 - **命令选项**：`--directory` 指定项目配置目录，`--jobs` 仅覆盖审阅时显示的并发上限，不修改配置；与 `pulse` 使用相同的正整数约束与优先级。`--plain` 禁用 TUI。不提供 `--bash`，因为审阅不依赖 Bash。
 - **执行边界与反馈**：不探测工具、不启动 Bash、不执行任务、不写入运行记录；有效计划及正常退出返回 `0`，配置、目标或 TUI 初始化／渲染无效时报告错误并返回非零退出码。静态校验成功不代表命令安全或工具可用。保留现有 `pulse --dry-run` 行为。
 
+#### 8. 预定义 CLI 集成：Jira（`JiraCommand.java`）
+
+**模块与接口**：根目录 `pom.xml` 是 Maven 聚合父项目；`devpulse-dependencies` 管理外部依赖版本，`devpulse-bom` 汇总可供消费者导入的内部产物版本（目前为核心与 Jira），两者均不生成可执行 JAR。构建插件版本由根父项目的 `pluginManagement` 管理。`devpulse-core` 和 `devpulse-plugins`（目前包含 `jira` 子模块）继承 `devpulse-dependencies`，内部 BOM 也继承它；使用本地相对父路径，允许直接构建子模块而不必预先安装兄弟 BOM。核心生成 `devpulse-core/target/devpulse.jar`，Jira 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`。两者不相互依赖；内部 BOM 只管理版本，不强制建立模块间依赖。核心不注册 Jira 子命令，不动态加载插件，也不通过 `pulse` 隐式调用 Jira。Jira 子模块自身以 `jira` 为命令入口，使用独立的 `run-jira.sh` 启动。后续预定义工具在 `devpulse-plugins` 下新增独立子模块和 JAR，同时将其版本登记到内部 BOM，不修改核心 CLI 的命令接口。
+
+**Jira 实现**：通过 Java HTTP 客户端访问 Cloud REST v3 或 Data Center REST v2；站点、部署类型和凭据仅从环境变量读取，拒绝远程明文 HTTP，不重定向含授权头的请求。`init` 创建 HOCON 字段模板及同名 Markdown 描述文件；`create`、`show`、`export`、`update`、`transitions`、`transition`、`comment`、`comment-export`、`comment-update` 和 `attach` 提供基本的 Issue 管理。导出使用 `/editmeta` 限制字段，保留其原始结构并记录字段基线及描述哈希；Issue 与评论的回写仅上传修改字段，并在上传前检查 `updated`，但不承诺原子冲突控制。Cloud 支持有限且严格的 ADF/Markdown 转换；Data Center 描述及评论暂限纯文本，无法安全转换的富文本拒绝往返。具体选项、安全边界与示例见 [Jira CLI](plugins/jira.md)。
+
 ### 三、开发落地路线图
 
 首版范围包含 `init`、`pulse` 的并发调度、`gather`、`review` 和 `status`，不将并发或 AI 协同流推迟到后续版本。以下阶段为内部开发顺序，而不是对外版本的功能拆分。
@@ -147,9 +155,11 @@
 
 ## English
 
+[Project home](../readme.MD)
+
 This project aims to build a lightweight, efficient local DevOps orchestration toolbox with AI collaboration.
 
-The technology stack, language conventions, build and packaging rules, resource management, and testing constraints are maintained in the [Copilot repository instructions](.github/copilot-instructions.md). This document covers functional behavior, architecture, and the development roadmap.
+The technology stack, language conventions, build and packaging rules, resource management, and testing constraints are maintained in the [Copilot repository instructions](../.github/copilot-instructions.md). This document covers functional behavior, architecture, and the development roadmap.
 
 ### 1. Configuration format and loading
 
@@ -262,6 +272,12 @@ CLI input -> devpulse entry point -> corresponding module
 - **Terminal lifecycle and fallback**: Use JLine to detect the standard-output terminal. When no interactive terminal is available, such as with redirection or pipes, automatically retain plain-text output without reading interactive keys. `--plain` explicitly selects the original ASCII dependency list and command output. Interactive mode uses an alternate screen and raw input, with try-with-resources and TamboUI cleanup restoring the screen, cursor, and input state. Reflow on terminal resize; below `60 x 16`, prompt users to enlarge the window while still allowing quit.
 - **Options**: `--directory` selects the project configuration directory. `--jobs` only overrides the displayed concurrency limit without modifying configuration, using the same positive-integer constraints and precedence as `pulse`. `--plain` disables the TUI. Do not provide `--bash`, since review does not require Bash.
 - **Execution boundaries and feedback**: Do not probe tools, start Bash, execute tasks, or write run records. Return `0` for valid plans and normal quit; report invalid configuration, targets, or TUI initialization/rendering with a nonzero exit code. Successful static validation does not guarantee command safety or tool availability. Retain existing `pulse --dry-run` behavior.
+
+#### 8. Built-in CLI integration: Jira (`JiraCommand.java`)
+
+**Module and interface**: The root `pom.xml` is a Maven parent reactor. `devpulse-dependencies` manages external dependency versions, while `devpulse-bom` lists the internal artifacts whose versions consumers can import (currently core and Jira); neither builds an executable JAR. The root parent's `pluginManagement` manages build plugin versions. `devpulse-core`, the `devpulse-plugins` aggregator (currently containing `jira`), and the internal BOM inherit `devpulse-dependencies` through local relative parent paths, allowing direct child-module builds without first installing a sibling BOM. Core builds `devpulse-core/target/devpulse.jar`; Jira builds the independently executable `devpulse-plugins/jira/target/devpulse-jira.jar`. They do not depend on one another; the internal BOM manages versions but does not create module dependencies. Core does not register a Jira subcommand, load plugins dynamically, or invoke Jira implicitly through `pulse`. Jira has its own `jira` command entry point and `run-jira.sh` launcher. Future tools should be independent child modules and JARs under `devpulse-plugins`, with versions recorded in the internal BOM, without changing the core CLI interface.
+
+**Jira implementation**: Java's HTTP client accesses Cloud REST v3 or Data Center REST v2; site, deployment type, and credentials come only from environment variables. Remote plaintext HTTP is rejected and requests with authorization headers are not redirected. `init` creates a HOCON field template and adjacent Markdown description; `create`, `show`, `export`, `update`, `transitions`, `transition`, `comment`, `comment-export`, `comment-update`, and `attach` provide basic issue management. Export uses `/editmeta` to limit fields, preserving their original structure with a field baseline and description hash; issue and comment updates send only changes and check `updated` before uploading, but do not promise atomic conflict control. Cloud supports a strict subset of ADF/Markdown conversion; Data Center descriptions and comments are currently plain text only, and unsafe rich-text round-trips are refused. See [Jira CLI](plugins/jira.md) for options, safety boundaries, and examples.
 
 ### 3. Development roadmap
 

@@ -17,17 +17,21 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public final class PulseExecutor {
     private final BashShell bash;
     private final Path directory;
     private final PrintWriter out;
     private final RunHistory.Writer history;
+    private final DaemonManager daemons;
     private final Object gate = new Object();
+    private final Object cleanupGate = new Object();
     private final Set<ProcessHandle> processes = ConcurrentHashMap.newKeySet();
     private volatile boolean failed;
+    private TaskPlan plan;
 
-    private enum State { SUCCESS, FAILED, SKIPPED }
+    private enum State { SUCCESS, READY, FAILED, SKIPPED }
 
     private record Result(String name, State state, Integer exitCode,
             String error, Instant finishedAt) {}
@@ -38,14 +42,17 @@ public final class PulseExecutor {
         this.directory = directory;
         this.out = out;
         this.history = history;
+        daemons = new DaemonManager(history, bash, directory);
     }
 
     public int execute(TaskPlan plan, int jobs)
             throws IOException, InterruptedException {
+        this.plan = plan;
         var pool = Executors.newVirtualThreadPerTaskExecutor();
         var completions = new ExecutorCompletionService<Result>(pool);
         var started = new HashSet<String>();
         var succeeded = new HashSet<String>();
+        var reportedDaemons = new HashSet<String>();
         var active = 0;
         var failures = 0;
         IOException persistenceFailure = null;
@@ -53,6 +60,7 @@ public final class PulseExecutor {
         Runtime.getRuntime().addShutdownHook(hook);
         try {
             while (true) {
+                failures += recordDaemonFailures(reportedDaemons, succeeded);
                 synchronized (gate) {
                     if (!failed) {
                         for (var task : plan.tasks()) {
@@ -73,7 +81,12 @@ public final class PulseExecutor {
                 }
                 Result result;
                 try {
-                    result = completions.take().get();
+                    var completion = completions.poll(200,
+                            TimeUnit.MILLISECONDS);
+                    if (completion == null) {
+                        continue;
+                    }
+                    result = completion.get();
                 } catch (ExecutionException exception) {
                     cancel();
                     throw new IllegalStateException(
@@ -83,14 +96,22 @@ public final class PulseExecutor {
                 active--;
                 switch (result.state()) {
                     case SUCCESS -> succeeded.add(result.name());
+                    case READY -> {
+                        if (!reportedDaemons.contains(result.name())) {
+                            succeeded.add(result.name());
+                        }
+                    }
                     case FAILED -> failures++;
                     case SKIPPED -> { }
                 }
                 try {
-                    history.completed(result.name(),
-                            RunHistory.State.valueOf(result.state().name()),
-                            result.exitCode(), result.error(),
-                            result.finishedAt());
+                    if (!reportedDaemons.contains(result.name())) {
+                        history.completed(result.name(),
+                                RunHistory.State.valueOf(
+                                        result.state().name()),
+                                result.exitCode(), result.error(),
+                                result.finishedAt());
+                    }
                 } catch (IOException exception) {
                     markFailed();
                     persistenceFailure = exception;
@@ -98,6 +119,9 @@ public final class PulseExecutor {
                             + exception.getMessage());
                 }
             }
+            daemons.finishMonitoring();
+            failures += recordDaemonFailures(reportedDaemons, succeeded);
+            cleanupHooks();
             var skipped = plan.tasks().size() - succeeded.size() - failures;
             history.ended(failed || skipped > 0
                     ? RunHistory.State.FAILED : RunHistory.State.SUCCESS);
@@ -113,11 +137,22 @@ public final class PulseExecutor {
             throw exception;
         } finally {
             pool.shutdownNow();
-            Runtime.getRuntime().removeShutdownHook(hook);
+            var interrupted = Thread.interrupted();
+            try {
+                cleanupHooks();
+            } finally {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                Runtime.getRuntime().removeShutdownHook(hook);
+            }
         }
     }
 
     private Result run(Task task, ExecutorService pool) {
+        if (task.daemon() != null) {
+            return runDaemon(task, pool);
+        }
         Process process = null;
         BufferedWriter taskLog = null;
         Integer exitCode = null;
@@ -231,6 +266,66 @@ public final class PulseExecutor {
         }
     }
 
+    private Result runDaemon(Task task, ExecutorService pool) {
+        try {
+            synchronized (gate) {
+                if (failed) {
+                    return new Result(task.name(), State.SKIPPED,
+                            null, null, Instant.now());
+                }
+                history.started(task.name());
+                daemons.start(task);
+                log(task.name(), "Daemon started; waiting for readiness.");
+            }
+            daemons.awaitReady(task.name(), pool);
+            log(task.name(), "Daemon ready. shutdownHook="
+                    + task.daemon().shutdownHook());
+            return new Result(task.name(), State.READY, null, null, null);
+        } catch (IOException exception) {
+            markFailed();
+            log(task.name(), "Daemon failed: " + exception.getMessage());
+            return new Result(task.name(), State.FAILED, null,
+                    exception.getMessage(), Instant.now());
+        } catch (InterruptedException exception) {
+            markFailed();
+            Thread.currentThread().interrupt();
+            return new Result(task.name(), State.FAILED, null,
+                    "Daemon startup interrupted.", Instant.now());
+        }
+    }
+
+    private int recordDaemonFailures(Set<String> reported,
+            Set<String> succeeded) throws IOException {
+        var count = 0;
+        for (var entry : daemons.failures().entrySet()) {
+            if (reported.add(entry.getKey())) {
+                markFailed();
+                succeeded.remove(entry.getKey());
+                log(entry.getKey(), entry.getValue());
+                history.completed(entry.getKey(), RunHistory.State.FAILED,
+                        null, entry.getValue(), Instant.now());
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private void cleanupHooks() {
+        synchronized (cleanupGate) {
+            try {
+                daemons.stopHooks(plan);
+            } catch (IOException exception) {
+                markFailed();
+                log("pulse", "Daemon cleanup failed: "
+                        + exception.getMessage());
+            } catch (InterruptedException exception) {
+                markFailed();
+                Thread.currentThread().interrupt();
+                log("pulse", "Daemon cleanup interrupted.");
+            }
+        }
+    }
+
     private void markFailed() {
         synchronized (gate) {
             failed = true;
@@ -246,6 +341,7 @@ public final class PulseExecutor {
                     + exception.getMessage());
         }
         processes.stream().toList().forEach(PulseExecutor::terminate);
+        cleanupHooks();
     }
 
     private static void terminate(ProcessHandle process) {
