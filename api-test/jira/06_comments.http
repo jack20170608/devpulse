@@ -1,0 +1,41 @@
+# A successful POST adds another comment on every execution; do not retry blindly.
+
+### Read comments on the test issue
+# @name jiraReadComments
+# @no-redirect
+# @no-log
+GET {{jiraBaseUrl}}/rest/api/2/issue/{{issueKey}}/comment?startAt={{startAt}}&maxResults={{maxResults}}
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+
+> {%
+    client.test("Comments are readable", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && Array.isArray(response.body.comments), "Expected a comments array");
+    });
+%}
+
+### Add one plain-text API v2 comment
+# @name jiraAddComment
+# @no-redirect
+# @no-log
+< {%
+    if (request.environment.get("allowWrites") !== true) {
+        throw new Error("Write requests are disabled. Confirm the test issue and set allowWrites to boolean true.");
+    }
+%}
+POST {{jiraBaseUrl}}/rest/api/2/issue/{{issueKey}}/comment
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "body": "[API TEST] Jira v2 automation verification completed."
+}
+
+> {%
+    client.test("Comment is created", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body && response.body.id, "Expected a comment ID");
+    });
+%}

@@ -1,0 +1,18 @@
+[INFO] Reactor Summary for devpulse reactor 0.1.0-SNAPSHOT:
+[INFO]
+[INFO] devpulse reactor ................................... SUCCESS [  0.002 s]
+[INFO] devpulse external dependency versions .............. SUCCESS [  0.001 s]
+[INFO] devpulse module versions ........................... SUCCESS [  0.000 s]
+[INFO] devpulse shared environment library ................ SUCCESS [  0.758 s]
+[INFO] devpulse plugins ................................... SUCCESS [  0.001 s]
+[INFO] devpulse Pulse CLI ................................. SUCCESS [  0.652 s]
+[INFO] devpulse Gather CLI ................................ SUCCESS [  0.244 s]
+[INFO] devpulse Jira CLI .................................. SUCCESS [  0.342 s]
+[INFO] devpulse compatibility CLI ......................... SUCCESS [  0.987 s]
+[INFO] devpulse release archives .......................... SUCCESS [  0.768 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.874 s
+[INFO] Finished at: 2026-11-01T16:31:16+08:00
+[INFO] ------------------------------------------------------------------------

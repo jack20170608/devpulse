@@ -1,0 +1,30 @@
+### Verify the authenticated account
+# @name jiraMyself
+# @no-redirect
+# @no-log
+< ../jira-auth.js
+GET {{JIRA_BASE_URL}}/rest/api/2/myself
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Authentication succeeds", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.self, "Expected a user resource, not an SSO login page");
+    });
+%}
+
+### Inspect the Jira version and deployment information
+# @name jiraServerInfo
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/serverInfo
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Server information is available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.version, "Expected Jira version information");
+    });
+%}

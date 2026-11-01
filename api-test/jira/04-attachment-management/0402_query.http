@@ -1,0 +1,89 @@
+# Jira Cloud REST API v2. Select the test environment and run jiraMyself first.
+# See ../docs/02-FEATURE-jira-issue-attachments.md for variables and permissions.
+# Run requests individually. Uploads are not idempotent; deletion is irreversible.
+
+### Inspect attachment support and the upload size limit
+# @name jiraAttachmentSettings
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/meta
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Attachment settings are available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && typeof response.body.enabled === "boolean",
+            "Expected attachment settings, not an SSO login page");
+        client.assert(typeof response.body.uploadLimit === "number", "Expected an upload limit in bytes");
+    });
+%}
+
+### List attachments on the explicitly selected issue
+# @name jiraListIssueAttachments
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}?fields=attachment
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Issue attachments are readable", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.key && response.body.fields
+            && Array.isArray(response.body.fields.attachment), "Expected an issue attachment array");
+    });
+%}
+
+### Inspect one manually selected attachment
+# @name jiraAttachmentMetadata
+# @no-redirect
+# @no-log
+< {%
+    client.global.clear("attachmentFilename");
+    client.global.clear("attachmentFilenameId");
+    const attachmentId = request.environment.get("ATTACHMENT_ID_1");
+    if (attachmentId === undefined || attachmentId === null || !/^[0-9]+$/.test(String(attachmentId))) {
+        throw new Error("Set ATTACHMENT_ID_1 to a numeric attachment ID from the selected issue.");
+    }
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/{{ATTACHMENT_ID_1}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    const validMetadata = response.status === 200 && response.body
+        && String(response.body.id) === String(request.environment.get("ATTACHMENT_ID_1"))
+        && typeof response.body.filename === "string" && response.body.filename.length > 0
+        && typeof response.body.size === "number";
+    client.test("Attachment metadata is available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(validMetadata, "Expected metadata for the selected attachment");
+    });
+    if (validMetadata) {
+        client.global.set("attachmentFilename", response.body.filename);
+        client.global.set("attachmentFilenameId", String(response.body.id));
+    }
+%}
+
+
+### Download one attachment without following redirects (Jira Cloud)
+# @name jiraDownloadAttachment
+# @no-redirect
+# @no-log
+< {%
+    const attachmentId = request.environment.get("ATTACHMENT_ID_1");
+    if (attachmentId === undefined || attachmentId === null || !/^[0-9]+$/.test(String(attachmentId))) {
+        throw new Error("Set ATTACHMENT_ID_1 to a numeric attachment ID from the selected issue.");
+    }
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/content/{{ATTACHMENT_ID_1}}?redirect=false
+Authorization: Basic {{JIRA_BASIC}}
+Accept: */*
+
+> {%
+    client.test("Attachment content is downloaded", function () {
+        client.assert(response.status === 200, "Expected HTTP 200 with file content, not a redirect");
+    });
+%}
+>> ./download/{{ISSUE_KEY}}-{{attachmentFilename}}

@@ -1,0 +1,76 @@
+# Run only the create-metadata variant supported by the deployed Jira version.
+# Legacy createmeta is deprecated on Cloud; paginated endpoints are version-dependent on Data Center.
+
+### Read the target project and its issue types
+# @name jiraProject
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/project/{{PROJECT_KEY}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Project is readable", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.key, "Expected a project key");
+    });
+%}
+
+### List field definitions; this does not identify project-specific required fields
+# @name jiraFields
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/field
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Field definitions are available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(Array.isArray(response.body), "Expected a field array");
+    });
+%}
+
+### Legacy create metadata: use only when supported by the deployed version
+# @name jiraLegacyCreateMetadata
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/createmeta?projectKeys={{PROJECT_KEY}}&issuetypeIds={{ISSUE_TYPE_ID}}&expand=projects.issuetypes.fields
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Legacy create metadata is available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; check endpoint compatibility if unavailable");
+        client.assert(response.body && Array.isArray(response.body.projects) && response.body.projects.length > 0,
+            "Expected a visible project; verify PROJECT_KEY, ISSUE_TYPE_ID, and permissions");
+    });
+%}
+
+### Paginated create metadata: list issue types, when supported
+# @name jiraCreateIssueTypes
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/createmeta/{{PROJECT_KEY}}/issuetypes?startAt={{START_AT}}&maxResults={{maxResults}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Paginated issue-type metadata is available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; check endpoint compatibility if unavailable");
+    });
+%}
+
+### Paginated create metadata: required fields and allowed values, when supported
+# @name jiraCreateFields
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/createmeta/{{PROJECT_KEY}}/issuetypes/{{ISSUE_TYPE_ID}}?startAt={{START_AT}}&maxResults={{MAX_RESULTS}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Paginated create-field metadata is available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; check endpoint compatibility if unavailable");
+    });
+%}

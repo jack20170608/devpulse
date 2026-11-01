@@ -4,12 +4,12 @@ import com.typesafe.config.ConfigException;
 import io.github.devpulse.environment.BashShell;
 import io.github.devpulse.execution.PulseConfiguration.Task;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,8 +42,7 @@ public final class DaemonManager {
     }
 
     private record Record(Path directory, String runId, String taskId,
-            String name,
-            Path project, Path bash, Owner owner,
+            String name, Path project, Path bash, Owner owner,
             PulseConfiguration.Daemon configuration,
             Instant readyAt, Instant stoppedAt) {
         Record ready() {
@@ -241,7 +240,13 @@ public final class DaemonManager {
                 try {
                     var code = check(record,
                             ready.checkTimeout(), null);
-                    if (record.owner().identity() != Identity.MATCH) {
+                    var identity = record.owner().identity();
+                    if (identity == Identity.UNKNOWN) {
+                        yield new Observation("UNKNOWN", record.owner().pid(),
+                                record.configuration().shutdownHook(),
+                                "Process identity cannot be confirmed.");
+                    }
+                    if (identity == Identity.GONE) {
                         yield new Observation("EXITED", record.owner().pid(),
                                 record.configuration().shutdownHook(),
                                 "Process exited during the readiness check.");
@@ -287,11 +292,24 @@ public final class DaemonManager {
                 return;
             }
             var owners = new ArrayList<Owner>();
-            var handle = ProcessHandle.of(record.owner().pid()).orElseThrow();
+            var handle = ProcessHandle.of(record.owner().pid()).orElse(null);
+            if (handle == null) {
+                save(directory, record.stopped());
+                return;
+            }
             handle.descendants().toList().reversed().forEach(child ->
                     child.info().startInstant().ifPresent(time ->
                             owners.add(new Owner(child.pid(), time))));
             owners.add(record.owner());
+            identity = record.owner().identity();
+            if (identity == Identity.GONE) {
+                save(directory, record.stopped());
+                return;
+            }
+            if (identity == Identity.UNKNOWN) {
+                throw new IOException(
+                        "Refusing to stop an unconfirmed process identity.");
+            }
             var deadline = System.nanoTime()
                     + record.configuration().stopTimeout().toNanos();
             IOException stopFailure = null;

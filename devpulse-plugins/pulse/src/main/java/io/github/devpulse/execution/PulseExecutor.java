@@ -60,7 +60,16 @@ public final class PulseExecutor {
         Runtime.getRuntime().addShutdownHook(hook);
         try {
             while (true) {
-                failures += recordDaemonFailures(reportedDaemons, succeeded);
+                var reportedBefore = reportedDaemons.size();
+                try {
+                    recordDaemonFailures(reportedDaemons, succeeded);
+                } catch (IOException exception) {
+                    markFailed();
+                    persistenceFailure = exception;
+                    log("pulse", "Could not persist daemon failure: "
+                            + exception.getMessage());
+                }
+                failures += reportedDaemons.size() - reportedBefore;
                 synchronized (gate) {
                     if (!failed) {
                         for (var task : plan.tasks()) {

@@ -1,0 +1,36 @@
+# Set issueKey manually to a confirmed test issue; createdIssueKey is not used automatically.
+# Read editmeta before writing and verify the fields and operations are supported.
+
+### Read the selected issue
+# @name jiraReadIssue
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}?fields=summary,description,status,labels,issuetype,projecttype,project
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Issue is readable", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.key && response.body.fields, "Expected an issue resource");
+    });
+%}
+
+### Inspect editable fields and supported operations
+# @name jiraEditMetadata
+# @no-redirect
+# @no-log
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}/editmeta
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Edit metadata is available", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.fields, "Expected editable field metadata");
+    });
+%}
+
+
+
+

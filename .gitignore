@@ -40,3 +40,6 @@ stats.html
 
 ### POM
 .flattened-pom.xml
+
+### Environment files
+http-client.private.env.json

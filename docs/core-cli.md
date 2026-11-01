@@ -178,6 +178,8 @@ pipelines { dev { tasks = [check] } }
 | `stop` | 可选 Bash 停止命令；未配置时终止已确认身份的进程及可见后代 |
 | `stopTimeout` | 停止命令和退出等待的宽限时间，默认 `5s`；随后尽力强制终止并再确认最多 `2s` |
 
+检查或停止命令超时后，回收该命令进程及可见后代可额外等待最多 `2s`；这段回收时间不包含在配置的命令时限内。
+
 长驻进程命令必须保持前台运行，不使用 `&`、`nohup` 或自行 fork/脱离进程树。达到就绪后释放普通执行槽，因此 `--jobs 1` 也能运行依赖服务器的检查。执行期间持续检查存活和就绪状态：意外退出（包括退出码 `0`）、检查失败或超时使本次运行失败，停止启动新任务，等待已经启动的批任务结束。不自动重启，也不接管已有实例或复用被占用的端口。
 
 开启 hook 的进程按计划的逆依赖顺序清理；未开启 hook 的进程即使启动检查失败或下游失败，也保留供手动清理。初始化元数据失败时，会尽力终止尚未可靠记录的进程，避免产生无法管理的实例。强制杀死 CLI、断电或已脱离进程树的进程不保证自动清理。
@@ -474,6 +476,8 @@ pipelines { dev { tasks = [check] } }
 | `shutdownHook` | Default `false` retains the process after CLI exit; `true` cleans up on completion, failure, or handled exit |
 | `stop` | Optional Bash stop command; otherwise terminate identity-confirmed processes and visible descendants |
 | `stopTimeout` | Stop-command and exit-wait grace period, default `5s`; followed by best-effort forced termination and up to `2s` confirmation |
+
+After a check or stop command times out, reclaiming that command and its visible descendants may take up to an additional `2s`, outside the configured command timeout.
 
 Daemon commands must remain foreground processes: do not use `&`, `nohup`, or fork/detach themselves. Readiness releases the normal execution slot, so `--jobs 1` can run a check depending on a server. While the pipeline executes, liveness and readiness are monitored. Unexpected exit, including code `0`, failed checks, or check timeouts fail the run and stop new tasks while already-started batch tasks finish. There is no automatic restart, existing-instance takeover, or reuse of occupied ports.
 

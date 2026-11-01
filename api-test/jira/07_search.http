@@ -1,0 +1,85 @@
+# Search requests are read-only, including POST. Choose the variant for your deployment.
+# Traditional /search is being removed on Cloud; use /search/jql where required.
+
+### Traditional search via GET: Data Center or a version that still supports it
+# @name jiraSearchGet
+# @no-redirect
+# @no-log
+GET {{jiraBaseUrl}}/rest/api/2/search?jql=project%20%3D%20%22{{projectKey}}%22%20ORDER%20BY%20created%20DESC&startAt={{startAt}}&maxResults={{maxResults}}&fields=summary,status,labels
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+
+> {%
+    client.test("Traditional GET search succeeds", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; check API compatibility on Cloud");
+        client.assert(response.body && Array.isArray(response.body.issues), "Expected an issues array");
+    });
+%}
+
+### Traditional search via POST: useful for longer JQL expressions
+# @name jiraSearchPost
+# @no-redirect
+# @no-log
+POST {{jiraBaseUrl}}/rest/api/2/search
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "jql": "project = \"{{projectKey}}\" AND labels = \"jira-api-test\" ORDER BY created DESC",
+  "startAt": {{startAt}},
+  "maxResults": {{maxResults}},
+  "fields": ["summary", "status", "labels"]
+}
+
+> {%
+    client.test("Traditional POST search succeeds", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; check API compatibility on Cloud");
+        client.assert(response.body && Array.isArray(response.body.issues), "Expected an issues array");
+    });
+%}
+
+### Cloud enhanced search: first page; not a general Data Center endpoint
+# @name jiraCloudSearchFirstPage
+# @no-redirect
+# @no-log
+POST {{jiraBaseUrl}}/rest/api/2/search/jql
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "jql": "project = \"{{projectKey}}\" AND labels = \"jira-api-test\" ORDER BY created DESC",
+  "maxResults": {{maxResults}},
+  "fields": ["summary", "status", "labels"]
+}
+
+> {%
+    client.test("Cloud enhanced search succeeds", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; this endpoint may not exist on Data Center");
+        client.assert(response.body && Array.isArray(response.body.issues), "Expected an issues array");
+    });
+%}
+
+### Cloud enhanced search: next page; copy nextPageToken from the previous response
+# @name jiraCloudSearchNextPage
+# @no-redirect
+# @no-log
+POST {{jiraBaseUrl}}/rest/api/2/search/jql
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "jql": "project = \"{{projectKey}}\" AND labels = \"jira-api-test\" ORDER BY created DESC",
+  "maxResults": {{maxResults}},
+  "nextPageToken": "{{nextPageToken}}",
+  "fields": ["summary", "status", "labels"]
+}
+
+> {%
+    client.test("Cloud enhanced search next page succeeds", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; use a token from the same query and stop at the last page");
+        client.assert(response.body && Array.isArray(response.body.issues), "Expected an issues array");
+    });
+%}

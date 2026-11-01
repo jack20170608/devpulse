@@ -1,0 +1,42 @@
+# A transition ID is NOT a status ID. Inspect the current transitions before every write.
+
+### List available transitions and their required fields
+# @name jiraListTransitions
+# @no-redirect
+# @no-log
+GET {{jiraBaseUrl}}/rest/api/2/issue/{{issueKey}}/transitions?expand=transitions.fields
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+
+> {%
+    client.test("Available transitions are returned", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && Array.isArray(response.body.transitions), "Expected a transitions array; an empty array is valid");
+    });
+%}
+
+### Execute a manually selected transition on the test issue
+# @name jiraTransitionIssue
+# @no-redirect
+# @no-log
+< {%
+    if (request.environment.get("allowWrites") !== true) {
+        throw new Error("Write requests are disabled. Confirm issueKey and transitionId before enabling writes.");
+    }
+%}
+POST {{jiraBaseUrl}}/rest/api/2/issue/{{issueKey}}/transitions
+Authorization: {{$env.JIRA_AUTHORIZATION}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "transition": {
+    "id": "{{transitionId}}"
+  }
+}
+
+> {%
+    client.test("Workflow transition succeeds", function () {
+        client.assert(response.status === 204, "Expected HTTP 204; supply transition-required fields if Jira rejects the request");
+    });
+%}

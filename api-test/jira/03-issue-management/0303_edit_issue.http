@@ -1,0 +1,62 @@
+
+### Replace only the test issue summary and description
+# @name jiraSetIssueFields
+# @no-redirect
+# @no-log
+< {%
+    const allowWrites = request.environment.get("ALLOW_WRITES");
+    if (allowWrites !== true && allowWrites !== "true") {
+        throw new Error("Write requests are disabled. Select the test-project environment and set ALLOW_WRITES to true. Received "
+            + JSON.stringify(allowWrites) + " (type: " + typeof allowWrites + ").");
+    }
+%}
+PUT {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+Content-Type: application/json
+
+{
+    "fields": {
+        "summary": "[API TEST] Updated through Jira REST API v2",
+        "description": "Updated manually from the JetBrains HTTP Client. Only explicitly supplied fields are replaced."
+    }
+}
+
+> {%
+    client.test("Issue fields are updated", function () {
+        client.assert(response.status === 204, "Expected HTTP 204 with no response body");
+    });
+%}
+
+
+### Add a label without replacing the existing label collection
+# @name jiraAddIssueLabel
+# @no-redirect
+# @no-log
+< {%
+    const allowWrites = request.environment.get("ALLOW_WRITES");
+    if (allowWrites !== true && allowWrites !== "true") {
+        throw new Error("Write requests are disabled. Select the test-project environment and set ALLOW_WRITES to true. Received "
+            + JSON.stringify(allowWrites) + " (type: " + typeof allowWrites + ").");
+    }
+%}
+PUT {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+Content-Type: application/json
+
+{
+    "update": {
+        "labels": [
+            {
+                "add": "jira-api-test-updated"
+            }
+        ]
+    }
+}
+
+> {%
+    client.test("Issue label is added", function () {
+        client.assert(response.status === 204, "Expected HTTP 204 with no response body");
+    });
+%}

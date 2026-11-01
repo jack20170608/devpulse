@@ -1,0 +1,43 @@
+### Upload multiple local files to the selected test issue
+# @name jiraUploadIssueAttachment
+# @no-redirect
+# @no-log
+< {%
+    const allowWrites = request.environment.get("ALLOW_WRITES");
+    if (allowWrites !== true && allowWrites !== "true") {
+        throw new Error("Write requests are disabled. Select the test-project environment and set ALLOW_WRITES to true.");
+    }
+%}
+POST {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}/attachments
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+X-Atlassian-Token: no-check
+Content-Type: multipart/form-data; boundary=jira-attachment-boundary
+
+--jira-attachment-boundary
+Content-Disposition: form-data; name="file"; filename="build-main.1.log"
+Content-Type: application/octet-stream
+
+< files/build.log
+--jira-attachment-boundary
+Content-Disposition: form-data; name="file"; filename="small-dog-main.1.png"
+Content-Type: image/png
+
+< files/small-dog.png
+--jira-attachment-boundary--
+
+> {%
+    client.test("All selected attachments are uploaded", function () {
+        const expectedFilenames = ["build-main.1.log", "small-dog.png"];
+        client.assert(response.status === 200, "Expected HTTP 200; do not blindly retry after a timeout");
+        client.assert(Array.isArray(response.body) && response.body.length === expectedFilenames.length,
+            "Expected metadata for every selected attachment");
+        expectedFilenames.forEach(function (filename) {
+            const matches = response.body.filter(function (attachment) {
+                return attachment && attachment.id && attachment.filename === filename;
+            });
+            client.assert(matches.length === 1, "Expected exactly one uploaded attachment named " + filename);
+        });
+    });
+%}
+
