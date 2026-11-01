@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.github.devpulse</groupId>
         <artifactId>devpulse-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>devpulse-dependencies</artifactId>
     <packaging>pom</packaging>

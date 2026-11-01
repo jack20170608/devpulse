@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# devpulse-managed-wrapper: jira
+set -euo pipefail
+
+bin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+prefix="$(cd -- "$bin_dir/.." && pwd -P)"
+if [[ -f "$prefix/devpulse-jira.jar" ]]; then
+    exec java -jar "$prefix/devpulse-jira.jar" "$@"
+fi
+tool_home="$prefix/lib/devpulse/jira"
+if [[ ! -f "$tool_home/current" ]]; then
+    echo "jira: no installed version found; run the installer first" >&2
+    exit 1
+fi
+IFS= read -r version < "$tool_home/current"
+if [[ ! "$version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ || "$version" == *..* ||
+      ! -f "$tool_home/$version/devpulse-jira.jar" ]]; then
+    echo "jira: invalid or missing installation" >&2
+    exit 1
+fi
+exec java -jar "$tool_home/$version/devpulse-jira.jar" "$@"

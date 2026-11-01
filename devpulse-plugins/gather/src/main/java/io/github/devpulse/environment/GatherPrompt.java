@@ -73,6 +73,10 @@ public final class GatherPrompt {
 
                 - 使用 `version = 1`、`tools` 和 `pipelines`。
                 - 工具包含唯一的 `name`、`cmd` 和可选的 `needs`。
+                - 仅用户明确需要时使用 `type = daemon`；必须配置
+                  `ready.cmd`，启动命令保持前台运行，不使用 `&` 或 `nohup`。
+                  `shutdownHook` 默认 false，保留进程供 `stop` 子命令清理；
+                  true 时退出自动清理。可选 `stop` 指定清理时的停止命令。
                 - 流水线包含 `description` 和 `tasks`。
                 - 默认 `parallelism = 4`；依赖不得未知或成环。
                 - 仅推荐已发现的工具，不捏造项目脚本或文件内容。
@@ -107,6 +111,11 @@ public final class GatherPrompt {
 
                 - Use `version = 1`, `tools`, and `pipelines`.
                 - Tools have a unique `name`, `cmd`, and optional `needs`.
+                - Use `type = daemon` only when explicitly requested; require
+                  `ready.cmd` and keep the command in the foreground without
+                  `&` or `nohup`. `shutdownHook` defaults to false, retaining
+                  processes for the `stop` subcommand; true enables cleanup
+                  on exit. An optional `stop` specifies the cleanup command.
                 - Pipelines have `description` and `tasks`.
                 - Default `parallelism = 4`; no unknown or cyclic dependencies.
                 - Recommend discovered tools only; do not invent project

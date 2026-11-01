@@ -21,7 +21,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "status",
         mixinStandardHelpOptions = true,
-        versionProvider = DevPulseCLI.VersionProvider.class,
+        versionProvider = PulseCLI.VersionProvider.class,
         description = "Show recorded execution status "
                 + "or local tool availability."
 )

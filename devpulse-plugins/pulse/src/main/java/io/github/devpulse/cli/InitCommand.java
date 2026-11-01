@@ -16,7 +16,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "init",
         mixinStandardHelpOptions = true,
-        versionProvider = DevPulseCLI.VersionProvider.class,
+        versionProvider = PulseCLI.VersionProvider.class,
         description = "Initialize a local .devpulse.conf HOCON configuration."
 )
 public final class InitCommand implements Callable<Integer> {

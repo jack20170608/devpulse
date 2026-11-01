@@ -18,7 +18,13 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "pulse",
         mixinStandardHelpOptions = true,
-        versionProvider = DevPulseCLI.VersionProvider.class,
+        versionProvider = PulseCLI.VersionProvider.class,
+        subcommands = {
+                InitCommand.class,
+                ReviewCommand.class,
+                StatusCommand.class,
+                StopCommand.class
+        },
         description = "Run a local task or pipeline "
                 + "according to its dependencies."
 )

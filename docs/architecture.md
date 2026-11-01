@@ -23,15 +23,15 @@
 
 ### 二、核心架构设计
 
-系统包含命令入口、资产盘点模块、可复用的 Bash 基础组件、调度引擎、配置初始化模块与执行计划审阅模块，职责清晰，方便后续解耦和扩展：
+系统包含命令入口、资产盘点模块、可复用的 Bash 基础组件、调度引擎、本地长驻进程管理模块、配置初始化模块与执行计划审阅模块，职责清晰，方便后续解耦和扩展：
 
 ```text
-用户终端输入（CLI Input） -> devpulse 主入口类 -> 分发至对应子模块
+用户终端输入 -> 各独立工具入口（或组合兼容入口） -> 对应命令实现
 ```
 
-#### 1. 主入口类（`DevPulseCLI.java`）
+#### 1. 工具入口（`PulseCLI.java`、`GatherCLI.java`、`JiraCommand.java`）
 
-**职责**：负责接收终端传入的参数（如 `gather`、`pulse`），进行基本的全局校验。
+**职责**：各自解析终端参数并执行所属工具命令；`devpulse-cli` 中的 `DevPulseCLI.java` 仅保留旧组合入口的参数分发。
 
 #### 2. 资产自动盘点模块（`GatherCommand.java`）
 
@@ -52,7 +52,7 @@
 - **统一解释器**：所有 OS 均使用 Bash，Windows 使用 Git Bash；找不到可用 Bash 时明确报错，不回退到 `sh`、CMD、PowerShell 或 WSL。
 - **定位顺序**：显式 `--bash` 路径优先，其次探测 PATH；Windows 额外检查 Git 安装位置，自动探测只接受具有 Git 安装标记的 Bash，避免误选 WSL 入口。
 - **可用性验证**：通过短时子进程验证 Bash 能实际启动，而不是仅检查文件存在。
-- **启动方式**：使用 `ProcessBuilder` 启动 `bash --noprofile --norc -s --`，通过标准输入写入完整 UTF-8 脚本后关闭输入，不自行按空格拆分。避免 Windows 命令行参数转义改变引号和变量表达式；此模式不提供交互输入。
+- **启动方式**：使用 `ProcessBuilder` 启动 `bash --noprofile --norc -s --`，普通任务通过标准输入写入完整 UTF-8 脚本后关闭输入；长驻进程、就绪和停止命令通过保存的脚本文件重定向标准输入。不自行按空格拆分，也不将命令文本放入 `-c` 参数，避免 Windows 命令行转义改变引号和变量表达式；不提供交互输入。
 - **环境与目录**：使用 `ProcessBuilder.directory()` 设置工作目录，继承父进程环境，但移除 `BASH_ENV`、`ENV` 和 `BASH_FUNC_*`，避免自动执行环境指定的启动文件或导入用户函数。不依赖 alias 或用户启动脚本。
 - **探测资源控制**：Bash 验证与环境扫描均设置超时，持续读取扫描输出，并清理探测进程。
 - **平台边界**：统一 Bash 语法不代表工具、路径、文件权限和操作系统能力完全一致；Git Bash 不是完整 Linux 环境。
@@ -72,7 +72,7 @@
 - **并发上限**：默认最多同时运行 4 个任务；支持配置 `parallelism` 与 `pulse --jobs` 覆盖，优先级为命令行参数高于项目配置、高于默认值。取值必须为正整数，并在执行前校验；该限制不控制外部任务内部的并发。
 - **失败处理**：以 Bash 退出码判断任务结果；`0` 成功，非零失败。长脚本提前成功退出时，允许输入管道因 Bash 关闭标准输入而产生的写入 I/O 异常，不误判为失败；日志读取和持久化失败仍需报错。不隐式启用 `errexit` 或 `pipefail`，需要时由任务命令显式设置。观察到失败后停止启动新任务，等待所有已启动任务结束，返回非零退出码并汇总成功、失败和跳过数量。
 - **命令选项**：`--directory` 指定项目目录，`--bash` 指定 Bash，`--jobs` 覆盖并发上限；`--dry-run` 校验完整配置并显示补齐依赖后的计划及命令，不探测 Bash、不启动任务。
-- **执行边界**：仅支持前台、非交互批处理任务，不提供后台服务生命周期管理或任务超时。取消时尽力终止已知进程及可见后代，不保证终止已脱离进程树的后台进程。
+- **执行边界**：支持非交互批任务与显式配置的本地长驻进程，不提供普通批任务超时、自动重启或常驻调度平台。取消时尽力终止批任务及可见后代；长驻进程是否清理由 `shutdownHook` 控制。不保证回收已脱离进程树的后台进程。
 
 #### 5. 配置初始化模块（`InitCommand.java`）
 
@@ -95,19 +95,25 @@
       run.lock
       logs\
         <task-id>.log
+      daemons\
+        <task-id>.conf
+        <task-id>-start.sh
+        <task-id>-ready.sh
+        <task-id>-stop.sh
+        <task-id>.lock
 ```
 
 - **存储布局**：每次实际执行生成唯一 `run-id`，在项目配置所在目录的 `.devpulse\runs` 下创建独立运行目录，避免多次或并发运行相互覆盖。使用生成的 `task-id` 作为日志文件名，不直接将任务名作为路径。`--dry-run` 不创建运行记录。
 - **状态格式**：`state.conf` 使用 UTF-8 HOCON，复用 Typesafe Config 读写。记录格式版本、运行 ID、目标、项目目录、实际并发上限、运行状态与起止时间，以及各任务的 ID、名称、依赖、状态、起止时间、退出码、失败原因和相对日志路径。尚未产生的结束时间、退出码等字段不写入。
-- **状态语义**：任务状态区分 `PENDING`、`RUNNING`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED`、`INTERRUPTED`；正常失败为 `FAILED`，因失败策略未启动的任务为 `SKIPPED`，主动取消导致终止的任务为 `CANCELLED`，执行器异常退出后无法确认结果的任务为 `INTERRUPTED`。运行记录也保存整体状态，不能将未完成记录视为成功。
+- **状态语义**：任务状态区分 `PENDING`、`RUNNING`、`READY`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED`、`INTERRUPTED`；`READY` 记录长驻进程在该次执行中通过就绪检查，并非最终退出结果。正常失败为 `FAILED`，因失败策略未启动的任务为 `SKIPPED`，主动取消导致终止的批任务为 `CANCELLED`，执行器异常退出后无法确认结果的任务为 `INTERRUPTED`。整体运行状态表示流水线结果，与长驻进程后续的实时状态分开。
 - **写入时机与一致性**：执行前保存初始计划，启动任务前持久化 `RUNNING`，任务结束后保存结果，运行结束时写入整体结果；主动取消时尽力保存取消状态。同次运行的状态写入串行化，先写同目录临时文件，再通过原子替换更新 `state.conf`。文件系统不支持原子替换时明确报错，不退化为直接覆盖。初始化失败时不启动任务；执行中的持久化失败应明确报错、停止启动新任务、等待已启动任务结束并返回非零退出码。
-- **日志落盘**：持续读取合并后的标准输出和错误输出，在保留现有控制台日志的同时写入对应任务的 UTF-8 日志文件。日志独立于状态快照写入，不因每行输出重写 `state.conf`；异常退出可能丢失尚未刷新的日志尾部。
+- **日志落盘**：普通任务持续读取合并后的标准输出和错误输出，在保留控制台日志的同时写入 UTF-8 日志；长驻进程直接重定向合并输出到文件，不依赖 CLI 的日志读取线程，也不实时转发到控制台。日志独立于状态快照写入，不因每行输出重写 `state.conf`；异常退出可能丢失尚未刷新的尾部，长驻程序本身需使用适当的输出编码和刷新策略。
 - **异常退出识别**：记录执行器 PID 和进程启动时间（可获取时），并在执行期间持有运行目录内的独占文件锁；PID 本身不足以确认进程身份。后续状态读取若发现未结束的运行，应先核验文件锁及执行器身份，不能将其他仍在执行的运行标为中断。确认原执行器已退出后，将遗留的 `RUNNING` 任务标记为 `INTERRUPTED`、尚未启动的任务标记为 `SKIPPED`，并保存运行中断状态；无法确认时保留原记录并提示状态不确定。
 - **并发读取**：先完整读取并关闭状态文件，再解析 HOCON。Windows 读取句柄可能短暂阻止替换，允许最多 200 ms 的原子替换重试；不降级为非原子写入，持续失败仍明确报错。
 - **查询方式**：`status` 默认查看开始时间最新的运行，显示整体状态、任务状态、退出码、失败原因，以及运行和每个任务的开始时间、结束时间与耗时；`--run <run-id>` 选择历史运行，`--list` 列出所有运行及其起止时间、耗时，`--log <任务名>` 读取选中运行的任务日志。按开始时间排序，不让较旧运行的晚完成覆盖较新记录；查询成功返回 `0`，不因历史任务失败而返回失败退出码。
 - **时间展示**：起止时间使用 UTC ISO 8601，仅显示到秒；持久化时间戳仍保留原始精度。耗时自动选择单位：小于 1 秒显示整数 `ms`，小于 1 分钟显示 `s`，小于 1 小时显示 `m`，其余显示 `h`；秒、分钟和小时最多保留两位小数并去除末尾零，例如 `303ms`、`2.76s`、`1.5m`、`27h`。运行中按查询时刻计算已耗时并标注 `(running)`；未启动任务的起止时间与耗时显示 `-`。取消或中断记录中的结束时间可能是取消或恢复时刻，不能视为实际进程退出时间，其耗时加 `~` 标记为估计值；缺少时间或系统时钟倒退导致无法计算时显示 `-`。耗时由现有时间戳计算，不额外持久化。
 - **环境检查**：`status --tools` 保留 Bash 和工具可用性检查，可配合 `--bash`；不执行版本命令或探测 Docker 等守护进程。所有模式支持 `--directory`。工具模式不能与运行查询参数混用。
-- **查询与恢复边界**：读取运行记录不要求 Bash 或项目配置仍然存在；旧版本未保存的运行无法回填。状态文件不允许 include，也不从环境变量解析额外数据。不自动断点续跑，也不接管遗留进程。后续若增加恢复执行，需校验命令及依赖是否变化，并明确中断任务的幂等性与重跑策略，不能直接跳过历史成功任务或重跑中断任务。
+- **查询与恢复边界**：读取历史、列表和日志不要求 Bash 或项目配置仍然存在；长驻进程的实时就绪检查与自定义停止命令使用启动时保存的 Bash 和脚本，Bash 不可用时不能确认就绪。旧版本未保存的运行无法回填。状态文件不允许 include，也不从环境变量解析额外数据。不自动断点续跑、接管或重启遗留进程；手动清理仅处理已记录且身份可确认的实例。后续若增加恢复执行，需校验命令及依赖是否变化，并明确幂等性与重跑策略。
 - **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；大量历史检索或跨进程事务需求出现后再考虑 SQLite。
 
 #### 7. 执行计划审阅模块（`ReviewCommand.java`、`ReviewTui.java`、`DagWidget.java`）
@@ -124,9 +130,19 @@
 
 #### 8. 预定义 CLI 集成：Jira（`JiraCommand.java`）
 
-**模块与接口**：根目录 `pom.xml` 是 Maven 聚合父项目；`devpulse-dependencies` 管理外部依赖版本，`devpulse-bom` 汇总可供消费者导入的内部产物版本（目前为核心与 Jira），两者均不生成可执行 JAR。构建插件版本由根父项目的 `pluginManagement` 管理。`devpulse-core` 和 `devpulse-plugins`（目前包含 `jira` 子模块）继承 `devpulse-dependencies`，内部 BOM 也继承它；使用本地相对父路径，允许直接构建子模块而不必预先安装兄弟 BOM。核心生成 `devpulse-core/target/devpulse.jar`，Jira 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`。两者不相互依赖；内部 BOM 只管理版本，不强制建立模块间依赖。核心不注册 Jira 子命令，不动态加载插件，也不通过 `pulse` 隐式调用 Jira。Jira 子模块自身以 `jira` 为命令入口，使用独立的 `run-jira.sh` 启动。后续预定义工具在 `devpulse-plugins` 下新增独立子模块和 JAR，同时将其版本登记到内部 BOM，不修改核心 CLI 的命令接口。
+**模块与接口**：根目录 `pom.xml` 聚合各模块。`devpulse-dependencies` 管理外部依赖，`devpulse-bom` 管理可消费的内部产物版本；构建插件版本在根 POM 的 `pluginManagement`。`devpulse-core` 仅提供 Bash 和环境盘点共享代码，不再生成可执行 JAR；`devpulse-plugins/pulse` 包含工作流命令 `pulse`、`init`、`review`、`status`、`stop` 和调度实现，`devpulse-plugins/gather` 包含提示词命令，`devpulse-plugins/jira` 独立访问 Jira。各工具 JAR 仅依赖所需模块，不相互依赖；共享库不注册命令，也不引入动态插件加载。`devpulse-cli` 是保留 `devpulse <子命令>` 用法的组合式兼容产物，不加入单工具发行包。`devpulse-dist` 依赖工具产物并组装独立归档，供用户按需安装，不被工具反向依赖。运行模块继承 `devpulse-dependencies` 的本地相对父路径，内部 BOM 不作为运行时依赖。安装和发行细节见 [发行与安装](distribution.md)。
+
+**版本来源**：根 `pom.xml` 的 `<revision>` 是唯一的项目版本值。Maven 3 要求各子模块写出 `<parent><version>`，这里统一引用 `${revision}`，不重复填写版本号；内部模块依赖和 BOM 使用 `${project.version}`。构建继承的 Flatten Maven Plugin 仅解析 CI-friendly 版本占位符，保证以后安装或发布的 POM 可被其他 Maven 项目消费。外部依赖、构建插件、HOCON 配置格式的版本各有独立语义，不跟随项目版本递增。
 
 **Jira 实现**：通过 Java HTTP 客户端访问 Cloud REST v3 或 Data Center REST v2；站点、部署类型和凭据仅从环境变量读取，拒绝远程明文 HTTP，不重定向含授权头的请求。`init` 创建 HOCON 字段模板及同名 Markdown 描述文件；`create`、`show`、`export`、`update`、`transitions`、`transition`、`comment`、`comment-export`、`comment-update` 和 `attach` 提供基本的 Issue 管理。导出使用 `/editmeta` 限制字段，保留其原始结构并记录字段基线及描述哈希；Issue 与评论的回写仅上传修改字段，并在上传前检查 `updated`，但不承诺原子冲突控制。Cloud 支持有限且严格的 ADF/Markdown 转换；Data Center 描述及评论暂限纯文本，无法安全转换的富文本拒绝往返。具体选项、安全边界与示例见 [Jira CLI](plugins/jira.md)。
+
+#### 9. 本地长驻进程管理（`DaemonManager.java`、`StopCommand.java`）
+
+- **配置与启动**：任务可声明 `type = daemon`、必填的 `ready.cmd`、检查间隔和超时；`shutdownHook` 默认 false，可选 `stop` 与 `stopTimeout`。启动、检查和停止脚本按任务 ID 保存，进程 PID、启动时间、Bash 路径及停止配置通过独立 HOCON 文件原子持久化。无法记录身份或元数据时尽力终止尚未受管的实例。
+- **依赖与并发**：普通依赖等待成功退出，长驻进程依赖等待就绪；就绪后释放执行槽，但继续持有进程及监控。`--jobs` 不限制已就绪进程的总数或探测进程。每个进程通过虚拟线程进行有时限的周期探测；意外退出或失去就绪状态使运行失败并停止启动新任务，不自动重启。
+- **生命周期**：运行结束或可处理的退出时，仅清理开启 hook 的实例，按计划逆依赖顺序处理。未开启 hook 的实例在 CLI 返回后继续运行，监控随 CLI 结束；后续 `status` 详情按需核验存活及就绪，不存在独立后台调度器。就绪状态不是跨进程的恢复点。
+- **清理与所有权**：`stop [TASK] --run <ID>` 使用已保存配置，默认选最新运行、可省略任务名清理全部实例。单实例清理使用独立锁，与运行状态写入分开；PID 和启动时间不匹配时不终止复用 PID 的其他进程，身份不确定时拒绝操作。停止命令接收实例身份环境变量，先执行有时限的停止，再尽力强制回收已确认的进程及可见后代；不按名称批量清理，不删除业务数据。
+- **审阅与诊断**：静态审阅显示全部生命周期命令和时限，不执行探测。`status` 将历史启动结果和实时 `STARTING` / `READY` / `NOT_READY` / `EXITED` / `STOPPED` / `UNKNOWN` 分开显示；历史列表与日志读取不执行检查。日志、元数据与脚本属于本地生成数据，可能包含敏感内容，不能提交或未经审核共享。
 
 ### 三、开发落地路线图
 
@@ -177,12 +193,12 @@ The technology stack, language conventions, build and packaging rules, resource 
 The system contains a CLI entry point, an environment inventory module, a reusable Bash component, a scheduling engine, a configuration initializer, and a plan-review module with separate responsibilities:
 
 ```text
-CLI input -> devpulse entry point -> corresponding module
+CLI input -> standalone tool (or combined compatibility entry point) -> corresponding command implementation
 ```
 
-#### 1. CLI entry point (`DevPulseCLI.java`)
+#### 1. Tool entry points (`PulseCLI.java`, `GatherCLI.java`, `JiraCommand.java`)
 
-**Responsibility**: Accept command-line arguments such as `gather` and `pulse`, and perform basic global validation.
+**Responsibility**: Parse arguments and execute the commands owned by each tool. `DevPulseCLI.java` in `devpulse-cli` only preserves dispatch through the old combined entry point.
 
 #### 2. Environment inventory (`GatherCommand.java`)
 
@@ -223,7 +239,7 @@ CLI input -> devpulse entry point -> corresponding module
 - **Concurrency**: Run at most 4 tasks by default. Support `parallelism` and `pulse --jobs`, with CLI options overriding project configuration and defaults. Validate positive integers before execution. This does not limit concurrency inside external tasks.
 - **Failure policy**: Use the Bash exit code: zero means success, nonzero means failure. When a long script exits successfully before consuming all input, tolerate input-write I/O errors caused by Bash closing stdin rather than misclassifying the task as failed; output reading and persistence failures must still be reported. Do not implicitly enable `errexit` or `pipefail`; commands may set them explicitly. Once failure is observed, stop launching new tasks, wait for started tasks to finish, return a nonzero exit code, and summarize succeeded, failed, and skipped counts.
 - **Options**: `--directory` selects the project, `--bash` selects Bash, and `--jobs` overrides concurrency. `--dry-run` validates the whole configuration and prints the expanded plan and commands without discovering Bash or starting tasks.
-- **Execution boundaries**: Support foreground, non-interactive batch tasks only. Background-service lifecycle management and task timeouts are not provided. On cancellation, attempt to terminate known processes and visible descendants; detached background processes are not guaranteed to be terminated.
+- **Execution boundaries**: Support non-interactive batch tasks and explicitly configured local daemons, not ordinary batch timeouts, automatic restart, or a persistent scheduling platform. Cancellation attempts to terminate batches and visible descendants; daemon cleanup follows `shutdownHook`. Detached descendants are not guaranteed to be reclaimed.
 
 #### 5. Configuration initializer (`InitCommand.java`)
 
@@ -246,19 +262,25 @@ CLI input -> devpulse entry point -> corresponding module
       run.lock
       logs\
         <task-id>.log
+      daemons\
+        <task-id>.conf
+        <task-id>-start.sh
+        <task-id>-ready.sh
+        <task-id>-stop.sh
+        <task-id>.lock
 ```
 
 - **Storage layout**: Generate a unique `run-id` for each actual execution and create a separate run directory under `.devpulse\runs` in the project configuration directory, preventing repeated or concurrent runs from overwriting each other. Use generated `task-id` values for log filenames rather than using task names as paths. `--dry-run` creates no run records.
 - **State format**: Use UTF-8 HOCON for `state.conf`, reusing Typesafe Config for reading and writing. Record the format version, run ID, target, project directory, effective concurrency limit, overall state and start/end times, plus each task's ID, name, dependencies, state, start/end times, exit code, failure reason, and relative log path. Omit fields such as end time and exit code until available.
-- **State semantics**: Distinguish task states `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. Ordinary failures are `FAILED`; tasks not started due to the failure policy are `SKIPPED`; tasks terminated by explicit cancellation are `CANCELLED`; tasks whose results cannot be confirmed after an unexpected executor exit are `INTERRUPTED`. Also persist the overall run state; unfinished records must not imply success.
+- **State semantics**: Distinguish task states `PENDING`, `RUNNING`, `READY`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. `READY` records daemon readiness during that execution, not its eventual exit. Ordinary failures are `FAILED`; unstarted tasks are `SKIPPED`; explicitly cancelled batches are `CANCELLED`; unconfirmed results after executor exit are `INTERRUPTED`. Overall pipeline outcome is separate from subsequent live daemon state.
 - **Write timing and consistency**: Save the initial plan before execution, persist `RUNNING` before starting a task, save its result after completion, and write the overall result when the run ends. Attempt to save cancellation state on explicit cancellation. Serialize state writes within each run, writing a temporary file in the same directory before atomically replacing `state.conf`. Report filesystems without atomic replacement support instead of falling back to direct overwrite. Do not start tasks if initialization fails. Persistence failures during execution must be reported, stop new task launches, wait for started tasks to finish, and return a nonzero exit code.
-- **Log persistence**: Continuously read merged standard output and error, retaining existing console output while writing each task's UTF-8 log file. Write logs independently of state snapshots rather than rewriting `state.conf` for every output line. Unexpected exits may lose an unflushed log tail.
+- **Log persistence**: Batch output is continuously read, printed, and saved as UTF-8. Daemon output is merged and redirected directly to a file without depending on CLI reader threads or live console forwarding. Logs are independent of snapshots rather than rewriting `state.conf` per line. Unexpected exits may lose buffered tails; daemon programs must select suitable output encoding and flushing.
 - **Unexpected exit detection**: Record the executor PID and process start time when available, and hold an exclusive file lock in the run directory during execution; PID alone cannot establish process identity. When a later state read finds an unfinished run, check the file lock and executor identity before marking it interrupted, without modifying another live run. Once the original executor is confirmed to have exited, mark remaining `RUNNING` tasks as `INTERRUPTED`, unstarted tasks as `SKIPPED`, and persist the interrupted run state. If identity cannot be confirmed, retain the record and report uncertainty.
 - **Concurrent reads**: Read the complete state file and close it before parsing HOCON. Windows read handles can briefly block replacement; allow up to 200 ms of atomic replacement retries. Never fall back to non-atomic writes, and report persistent failures explicitly.
 - **Queries**: `status` defaults to the most recently started run and shows overall state, task states, exit codes, failure reasons, and start times, end times, and durations for both the run and every task. `--run <run-id>` selects a historical run, `--list` lists all runs with their start/end times and durations, and `--log <task-name>` reads a task log from the selected run. Sort by start time so an older run finishing later does not overwrite a newer record. Successful queries return `0`, even when the recorded execution failed.
 - **Timing display**: Use UTC ISO 8601 timestamps displayed to seconds, preserving the original precision in persisted timestamps. Select duration units automatically: integer `ms` below one second, `s` below one minute, `m` below one hour, and `h` otherwise. Seconds, minutes, and hours use at most two decimal places with trailing zeros removed, for example `303ms`, `2.76s`, `1.5m`, and `27h`. For running work, calculate elapsed time at query time and append `(running)`. Show `-` for all timing fields of unstarted tasks. Cancellation or interruption end times may represent cancellation or recovery rather than actual process exit; prefix their estimated durations with `~`. Show `-` when missing timestamps or backward system-clock changes prevent calculation. Derive durations from existing timestamps without persisting additional fields.
 - **Environment checks**: `status --tools` retains Bash and tool availability checks with optional `--bash`. Do not run version commands or probe daemons such as Docker. All modes support `--directory`; do not combine tool mode with run-query options.
-- **Query and recovery boundaries**: Reading records does not require Bash or the project configuration to remain available. Executions not recorded by older versions cannot be backfilled. State files cannot include resources or resolve additional data from environment variables. Do not automatically resume runs or take over orphaned processes. Future resume support must check for changed commands and dependencies and define idempotency and retry policies for interrupted tasks, rather than blindly skipping historically successful tasks or rerunning interrupted ones.
+- **Query and recovery boundaries**: Reading history, lists, and logs needs no Bash or project configuration. Live daemon readiness and custom stopping use recorded Bash and scripts; missing Bash prevents confirming readiness. Older unrecorded runs cannot be backfilled. State files cannot include resources or resolve additional environment data. Do not resume, take over, or restart orphaned processes; manual cleanup targets only recorded, identity-confirmed instances. Future resumption must validate definitions and establish idempotency/retry policies.
 - **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; consider SQLite later if extensive historical queries or cross-process transactions become necessary.
 
 #### 7. Execution plan review (`ReviewCommand.java`, `ReviewTui.java`, `DagWidget.java`)
@@ -275,7 +297,9 @@ CLI input -> devpulse entry point -> corresponding module
 
 #### 8. Built-in CLI integration: Jira (`JiraCommand.java`)
 
-**Module and interface**: The root `pom.xml` is a Maven parent reactor. `devpulse-dependencies` manages external dependency versions, while `devpulse-bom` lists the internal artifacts whose versions consumers can import (currently core and Jira); neither builds an executable JAR. The root parent's `pluginManagement` manages build plugin versions. `devpulse-core`, the `devpulse-plugins` aggregator (currently containing `jira`), and the internal BOM inherit `devpulse-dependencies` through local relative parent paths, allowing direct child-module builds without first installing a sibling BOM. Core builds `devpulse-core/target/devpulse.jar`; Jira builds the independently executable `devpulse-plugins/jira/target/devpulse-jira.jar`. They do not depend on one another; the internal BOM manages versions but does not create module dependencies. Core does not register a Jira subcommand, load plugins dynamically, or invoke Jira implicitly through `pulse`. Jira has its own `jira` command entry point and `run-jira.sh` launcher. Future tools should be independent child modules and JARs under `devpulse-plugins`, with versions recorded in the internal BOM, without changing the core CLI interface.
+**Module and interface**: The root `pom.xml` aggregates the modules. `devpulse-dependencies` manages external dependencies, `devpulse-bom` manages consumable internal artifact versions, and the root POM's `pluginManagement` manages build plugin versions. `devpulse-core` provides only shared Bash and environment inventory code and is no longer executable. `devpulse-plugins/pulse` contains the workflow commands `pulse`, `init`, `review`, `status`, and `stop` and their execution implementation; `devpulse-plugins/gather` contains prompt generation; `devpulse-plugins/jira` accesses Jira independently. Each tool JAR depends only on modules it needs, with no tool-to-tool dependency. The shared library does not register commands or load plugins dynamically. `devpulse-cli` preserves the combined `devpulse <subcommand>` entry point but is excluded from individual tool archives. `devpulse-dist` depends on tool artifacts and assembles selective archives; tools never depend on the distribution module. Runtime modules inherit `devpulse-dependencies` via local relative parent paths, and the internal BOM is not a runtime dependency. See [distribution and installation](distribution.md).
+
+**Version source**: The root `pom.xml`'s `<revision>` is the only project version value. Maven 3 still requires each child's `<parent><version>` element, so it references `${revision}` rather than repeating a literal version; internal module dependencies and the BOM use `${project.version}`. The inherited Flatten Maven Plugin resolves CI-friendly version placeholders so installed or deployed POMs remain consumable by other Maven projects. External dependency versions, build plugin versions, and the HOCON configuration schema version have separate meanings and do not advance with the project version.
 
 **Jira implementation**: Java's HTTP client accesses Cloud REST v3 or Data Center REST v2; site, deployment type, and credentials come only from environment variables. Remote plaintext HTTP is rejected and requests with authorization headers are not redirected. `init` creates a HOCON field template and adjacent Markdown description; `create`, `show`, `export`, `update`, `transitions`, `transition`, `comment`, `comment-export`, `comment-update`, and `attach` provide basic issue management. Export uses `/editmeta` to limit fields, preserving their original structure with a field baseline and description hash; issue and comment updates send only changes and check `updated` before uploading, but do not promise atomic conflict control. Cloud supports a strict subset of ADF/Markdown conversion; Data Center descriptions and comments are currently plain text only, and unsafe rich-text round-trips are refused. See [Jira CLI](plugins/jira.md) for options, safety boundaries, and examples.
 

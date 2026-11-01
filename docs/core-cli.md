@@ -10,20 +10,20 @@
 
 devpulse 是一个面向开发者和运维工程师的本地 DevOps 工具箱，目标是用 `.devpulse.conf` 中的 HOCON 配置描述脚本、CLI 任务、依赖和流水线，无需搭建远程 CI/CD 平台。
 
-**当前状态**：核心 CLI 实现了 `init`、`gather`、`pulse`、`review` 和 `status`；独立的 Jira 模块实现了 Issue 管理。核心不加载或依赖 Jira 模块，也不内置 AI 调用或检查 Docker 等守护进程的健康状态。
+**当前状态**：Pulse 独立工具实现 `init`、`pulse`、`review`、`status` 和 `stop`，支持普通任务和本地长驻进程。Gather 与 Jira 是独立工具；组合式 CLI 暂保留所有原有子命令。工具之间不相互依赖，也不内置 AI 调用；仅执行显式配置的长驻进程就绪检查，不自动探测 Docker 等工具的守护进程。
 
 ### 环境与构建
 
-开发、构建和运行均需要 JDK 25 或更高版本，构建使用 Maven。`gather`、实际执行的 `pulse` 和 `status --tools` 还需要可用的 Bash；Windows 使用 Git Bash，不使用 CMD、PowerShell 或 WSL 替代 Bash。`init`、`review`、`pulse --dry-run` 和运行历史查询不需要 Bash。
+开发、构建和运行均需要 JDK 25 或更高版本，构建使用 Maven。`gather`、实际执行的 `pulse` 和 `status --tools` 还需要可用的 Bash；Windows 使用 Git Bash，不使用 CMD、PowerShell 或 WSL 替代 Bash。`init`、`review`、`pulse --dry-run`、历史列表和日志读取不需要 Bash。长驻进程的就绪检查及自定义停止命令使用启动时记录的 Bash 路径，不重新加载项目配置。
 
 在仓库根目录构建并查看帮助：
 
 ```powershell
-mvn clean package
-java -jar devpulse-core\target\devpulse.jar --help
+bash build.sh --clean
+java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
-根目录 Maven 聚合项目包含外部依赖版本模块 `devpulse-dependencies`、内部产物版本模块 `devpulse-bom`、核心 `devpulse-core` 与插件聚合模块 `devpulse-plugins`（目前包含 `jira` 子模块）。前两个模块只生成 POM；构建产出两个各自包含运行依赖的可执行 JAR：核心 `devpulse-core\target\devpulse.jar` 和 Jira `devpulse-plugins\jira\target\devpulse-jira.jar`。以下示例用 PowerShell 启动 Java；工具盘点和任务执行内部仍使用 Bash。Git Bash 中使用 `bash run.sh --help` 启动核心，或 `bash run-jira.sh --help` 单独启动 Jira；各脚本只构建对应模块及必需的父模块，并仅在脚本及其子进程中移除 `JAVA_TOOL_OPTIONS`，不改变父终端或系统环境。
+根目录 Maven 项目包含外部依赖版本模块 `devpulse-dependencies`、内部 BOM `devpulse-bom`、共享环境库 `devpulse-core`、独立工具聚合模块 `devpulse-plugins`（`pulse`、`gather`、`jira`）、组合兼容入口 `devpulse-cli` 和发行模块 `devpulse-dist`。Pulse、Gather、Jira 分别生成独立可执行 JAR；组合入口生成 `devpulse-cli\target\devpulse.jar`，不进入单工具发行包。以下示例使用组合入口保持原有命令用法；单独运行 Pulse 请使用 `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`，相关命令通过 `pulse init|review|status|stop` 调用。安装说明见 [发行与安装](distribution.md)。Git Bash 中 `bash run.sh --help` 使用组合入口，`bash run-jira.sh --help` 只构建 Jira；脚本仅在其子进程中移除 `JAVA_TOOL_OPTIONS`。
 
 ### 命令概览与帮助
 
@@ -33,15 +33,16 @@ java -jar devpulse-core\target\devpulse.jar --help
 | `gather` | 盘点本地环境并生成提示词，供你交给 AI 辅助编写配置 | 已实现 |
 | `pulse` | 按依赖和并发上限执行任务或流水线 | 已实现 |
 | `review` | 静态校验并审阅执行计划，不运行任务 | 已实现 |
-| `status` | 查询运行历史和任务日志，或检查工具可用性 | 已实现 |
+| `status` | 查询运行历史、日志及长驻进程的存活与就绪状态，或检查工具可用性 | 已实现 |
+| `stop` | 手动停止指定运行中的长驻进程 | 已实现 |
 | 独立的 `devpulse-jira` | 从 HOCON/Markdown 模板创建 Jira Issue、导出与更新、流转、评论和附件；详见 [Jira CLI](plugins/jira.md) | 已实现 |
 
 不指定子命令时显示主命令帮助。主命令和所有子命令均支持 `-h` / `--help` 和 `-V` / `--version`。
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar
-java -jar devpulse-core\target\devpulse.jar --version
-java -jar devpulse-core\target\devpulse.jar gather --help
+java -jar devpulse-cli\target\devpulse.jar
+java -jar devpulse-cli\target\devpulse.jar --version
+java -jar devpulse-cli\target\devpulse.jar gather --help
 ```
 
 ### `init`：创建配置模板
@@ -59,13 +60,13 @@ java -jar devpulse-core\target\devpulse.jar gather --help
 
 ```powershell
 # 在当前目录创建配置模板
-java -jar devpulse-core\target\devpulse.jar init
+java -jar devpulse-cli\target\devpulse.jar init
 
 # 在已有项目目录创建配置模板
-java -jar devpulse-core\target\devpulse.jar init --directory "D:\your-project"
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project"
 
 # 覆盖已有配置，原内容将丢失
-java -jar devpulse-core\target\devpulse.jar init --directory "D:\your-project" --force
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project" --force
 ```
 
 成功时输出配置文件路径并返回退出码 `0`。目录不存在、配置已存在且未指定 `--force`，或文件无法写入时，输出错误并返回 `1`。
@@ -93,16 +94,16 @@ java -jar devpulse-core\target\devpulse.jar init --directory "D:\your-project" -
 
 ```powershell
 # 盘点当前目录，输出提示词并尝试复制到剪贴板
-java -jar devpulse-core\target\devpulse.jar gather
+java -jar devpulse-cli\target\devpulse.jar gather
 
 # 盘点指定项目，不修改剪贴板
-java -jar devpulse-core\target\devpulse.jar gather --directory "D:\your-project" --no-clipboard
+java -jar devpulse-cli\target\devpulse.jar gather --directory "D:\your-project" --no-clipboard
 
 # 显式指定 Git Bash
-java -jar devpulse-core\target\devpulse.jar gather --bash "C:\Program Files\Git\bin\bash.exe"
+java -jar devpulse-cli\target\devpulse.jar gather --bash "C:\Program Files\Git\bin\bash.exe"
 
 # 中文显示乱码时，仅输出英文提示词
-java -jar devpulse-core\target\devpulse.jar gather --language en --no-clipboard
+java -jar devpulse-cli\target\devpulse.jar gather --language en --no-clipboard
 ```
 
 成功时返回 `0`。剪贴板不可用时会输出警告，提示词仍保留在终端，不影响盘点成功。目录无效、找不到可用 Bash、扫描失败或被中断时返回 `1`。
@@ -111,7 +112,7 @@ java -jar devpulse-core\target\devpulse.jar gather --language en --no-clipboard
 
 ### `pulse`：执行任务或流水线
 
-`pulse [TARGET]` 从项目目录读取 `.devpulse.conf`，默认执行名为 `dev` 的流水线或任务。自动补齐传递依赖，共享依赖和重复目标只执行一次；只有全部依赖成功的任务才会启动，独立任务可在并发上限内同时执行。
+`pulse [TARGET]` 从项目目录读取 `.devpulse.conf`，默认执行名为 `dev` 的流水线或任务。自动补齐传递依赖，共享依赖和重复目标只执行一次；普通依赖必须成功退出，长驻进程依赖必须通过就绪检查，下游才会启动。独立任务可在并发上限内同时执行。
 
 执行前校验完整配置，包括字段类型、未知字段、重复任务名、未知依赖和循环依赖。目标同时是任务名和流水线名时拒绝执行。配置错误不会启动任务。
 
@@ -124,16 +125,81 @@ java -jar devpulse-core\target\devpulse.jar gather --language en --no-clipboard
 | `--dry-run` | 仅校验并打印计划和命令，不探测 Bash、不执行任务、不创建运行记录 |
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar pulse
-java -jar devpulse-core\target\devpulse.jar pulse build --jobs 2
-java -jar devpulse-core\target\devpulse.jar pulse dev --directory "D:\your-project" --dry-run
+java -jar devpulse-cli\target\devpulse.jar pulse
+java -jar devpulse-cli\target\devpulse.jar pulse build --jobs 2
+java -jar devpulse-cli\target\devpulse.jar pulse dev --directory "D:\your-project" --dry-run
 ```
 
-任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录；输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志。以 Bash 退出码判断任务结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
+任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录。普通任务的输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志；长驻进程的合并输出直接写入日志文件，不在控制台实时转发，以便 CLI 返回后仍能输出。普通任务以 Bash 退出码判断结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
 
 发现失败后不再启动新任务，等待已启动任务结束，并汇总成功、失败和跳过数量。全部成功返回 `0`；配置、任务或持久化失败返回 `1`；执行被中断时返回 `130`。取消时尽力清理已知任务进程及其可见后代。
 
-仅支持前台、非交互批处理任务，不管理后台服务，也不提供任务超时或沙箱。运行前必须审核命令；并发上限不限制任务内部自行启动的进程数量。
+支持非交互批任务和显式声明的本地长驻进程，不提供普通批任务超时或沙箱。运行前必须审核命令；并发上限限制批任务和长驻进程的启动等待阶段，不限制已就绪的长驻进程数量、探测进程或任务内部的并发。
+
+### 本地长驻进程
+
+在任务中声明 `type = daemon`，将依赖满足条件从“成功退出”改为“通过就绪检查”。省略 `type` 或使用 `type = task` 保持原有批任务行为；批任务不能配置长驻进程字段。
+
+以下配置以项目已有的 Node 测试服务器为例，命令和健康接口必须按实际项目调整；不会自动安装 Node 或创建服务器代码：
+
+```hocon
+version = 1
+parallelism = 1
+tools = [
+  {
+    name = server
+    type = daemon
+    cmd = "node server.js"
+    ready {
+      cmd = "curl --fail --silent --max-time 2 http://127.0.0.1:3000/health"
+      interval = 500ms
+      timeout = 30s
+      checkTimeout = 2s
+    }
+    shutdownHook = false
+    stopTimeout = 5s
+  },
+  {
+    name = check
+    cmd = "node check.js"
+    needs = [server]
+  }
+]
+pipelines { dev { tasks = [check] } }
+```
+
+| 字段 | 含义 |
+|------|------|
+| `ready.cmd` | 必填；退出码 `0` 表示就绪，命令必须是快速、只读检查 |
+| `ready.interval` | 检查间隔，默认 `500ms` |
+| `ready.timeout` | 初次启动等待总时限，默认 `30s` |
+| `ready.checkTimeout` | 每次检查的时限，默认 `2s`；启动阶段受剩余总时限约束 |
+| `shutdownHook` | 默认 `false`：CLI 返回后保留进程；`true`：运行结束、失败或可处理的退出时自动清理 |
+| `stop` | 可选 Bash 停止命令；未配置时终止已确认身份的进程及可见后代 |
+| `stopTimeout` | 停止命令和退出等待的宽限时间，默认 `5s`；随后尽力强制终止并再确认最多 `2s` |
+
+长驻进程命令必须保持前台运行，不使用 `&`、`nohup` 或自行 fork/脱离进程树。达到就绪后释放普通执行槽，因此 `--jobs 1` 也能运行依赖服务器的检查。执行期间持续检查存活和就绪状态：意外退出（包括退出码 `0`）、检查失败或超时使本次运行失败，停止启动新任务，等待已经启动的批任务结束。不自动重启，也不接管已有实例或复用被占用的端口。
+
+开启 hook 的进程按计划的逆依赖顺序清理；未开启 hook 的进程即使启动检查失败或下游失败，也保留供手动清理。初始化元数据失败时，会尽力终止尚未可靠记录的进程，避免产生无法管理的实例。强制杀死 CLI、断电或已脱离进程树的进程不保证自动清理。
+
+检查和停止命令可使用 `DEVPULSE_DAEMON_PID`、`DEVPULSE_RUN_ID` 和 `DEVPULSE_TASK_NAME`。停止命令应只操作对应实例；不要按名称批量终止进程，也不要自动删除数据库数据目录或 volume。停止命令失败或超时后仍尽力回收已记录进程，返回失败并保留诊断。
+
+### `stop`：手动清理长驻进程
+
+```powershell
+# 停止最新运行的所有长驻进程
+java -jar devpulse-cli\target\devpulse.jar stop
+
+# 停止指定运行中的单个长驻进程
+java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>"
+
+# 停止其他项目的指定运行
+java -jar devpulse-cli\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
+```
+
+`stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；省略任务名时按逆依赖顺序清理该运行的所有已记录长驻进程。它使用保存的停止配置，不依赖当前 `.devpulse.conf`；不会清理其他历史运行，也不会删除日志或业务数据。进程身份通过 PID 和启动时间核验，PID 已复用时不终止新进程，身份无法确认时拒绝清理。
+
+已退出实例重复清理返回 `0`；不存在任何运行或所选运行没有长驻进程也返回 `0`。指定任务未记录进程、停止命令失败或无法确认清理结果返回 `1`；中断返回 `130`。手动停止仍被执行中的 DAG 使用的长驻进程，会触发该运行的故障策略。
 
 ### `review`：执行前审阅计划
 
@@ -147,11 +213,11 @@ java -jar devpulse-core\target\devpulse.jar pulse dev --directory "D:\your-proje
 | `--plain` | 强制输出纯文本计划，不打开 TUI |
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar review
-java -jar devpulse-core\target\devpulse.jar review build --plain
+java -jar devpulse-cli\target\devpulse.jar review
+java -jar devpulse-cli\target\devpulse.jar review build --plain
 ```
 
-交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。
+交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、hook 和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `pulse --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
 
 成功返回 `0`，配置、目标或界面错误返回 `1`，中断返回 `130`。拓扑顺序和依赖深度不是固定执行批次；静态校验通过不代表命令安全或工具可用。
 
@@ -161,7 +227,7 @@ java -jar devpulse-core\target\devpulse.jar review build --plain
 
 | 参数 | 作用 |
 |------|------|
-| `--directory <目录>` | 项目目录，默认当前目录；历史查询不要求配置文件或 Bash 仍然存在 |
+| `--directory <目录>` | 项目目录，默认当前目录；记录读取不要求配置文件，长驻进程就绪检查使用已记录的 Bash |
 | `--run <ID>` | 查看指定历史运行，默认选择最新运行 |
 | `--list` | 按开始时间从新到旧列出全部运行 |
 | `--log <任务名>` | 输出选中运行的任务日志，可与 `--run` 配合 |
@@ -169,15 +235,17 @@ java -jar devpulse-core\target\devpulse.jar review build --plain
 | `--bash <路径>` | 仅与 `--tools` 配合，显式指定 Bash |
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar status
-java -jar devpulse-core\target\devpulse.jar status --list
-java -jar devpulse-core\target\devpulse.jar status --run "<run-id>" --log build
-java -jar devpulse-core\target\devpulse.jar status --tools
+java -jar devpulse-cli\target\devpulse.jar status
+java -jar devpulse-cli\target\devpulse.jar status --list
+java -jar devpulse-cli\target\devpulse.jar status --run "<run-id>" --log build
+java -jar devpulse-cli\target\devpulse.jar status --tools
 ```
 
 `--list` 不能与 `--run` 或 `--log` 混用；`--tools` 不能与历史查询选项混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `1`，参数冲突返回 `2`，工具盘点中断返回 `130`。
 
-任务状态区分 `PENDING`、`RUNNING`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED` 和 `INTERRUPTED`。读取遗留的未完成记录时，通过运行锁及执行器身份判断是否已退出；确认退出后保存中断状态，无法确认时保留记录并警告，不自动续跑或接管进程。
+任务历史状态区分 `PENDING`、`RUNNING`、`READY`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED` 和 `INTERRUPTED`。`READY` 表示长驻进程在执行时达到就绪，不代表后来始终存活。读取遗留的未完成记录时，通过运行锁及执行器身份判断是否已退出；确认退出后保存中断状态，无法确认时保留记录并警告，不自动续跑或接管进程。
+
+详情查询单独显示长驻进程的实时状态、PID 和 hook：`STARTING`、`READY`、`NOT_READY`、`EXITED`、`STOPPED` 或 `UNKNOWN`。仅在进程身份匹配时执行保存的就绪检查，Bash 不可用或身份无法确认时显示 `UNKNOWN`。整体运行状态仍表示该次流水线的结果，不因 CLI 返回后的变化追溯改写。`--list` 和 `--log` 只读取历史或日志，不执行就绪检查。
 
 时间以 UTC 显示到秒，耗时自动使用 `ms`、`s`、`m` 或 `h`；运行中标注 `(running)`，取消或中断的估计耗时以 `~` 标记。未启动或无法计算的时间显示 `-`。
 
@@ -239,20 +307,20 @@ pipelines {
 
 devpulse is a local DevOps toolbox for developers and operations engineers. It aims to describe scripts, CLI tasks, dependencies, and pipelines using HOCON in `.devpulse.conf`, without requiring a remote CI/CD platform.
 
-**Current status**: The core CLI implements `init`, `gather`, `pulse`, `review`, and `status`; the independent Jira module provides issue management. The core neither loads nor depends on Jira; there are no built-in AI calls or daemon health checks for tools such as Docker.
+**Current status**: The independent Pulse tool implements `init`, `pulse`, `review`, `status`, and `stop`, supporting batch tasks and local long-running processes. Gather and Jira are independent tools; the combined compatibility CLI retains all former subcommands. The tools do not depend on one another and have no built-in AI calls. Pulse runs explicitly configured daemon readiness checks, not automatic health checks for tool daemons such as Docker.
 
 ### Requirements and build
 
-Development, builds, and runtime require JDK 25 or later. Builds use Maven. `gather`, actual `pulse` execution, and `status --tools` also require working Bash; on Windows, use Git Bash rather than CMD, PowerShell, or WSL as a Bash replacement. `init`, `review`, `pulse --dry-run`, and run history queries do not require Bash.
+Development, builds, and runtime require JDK 25 or later. Builds use Maven. `gather`, actual `pulse` execution, and `status --tools` also require working Bash; on Windows, use Git Bash rather than CMD, PowerShell, or WSL as a Bash replacement. `init`, `review`, `pulse --dry-run`, history lists, and log reads do not require Bash. Daemon readiness checks and custom stop commands use the Bash path recorded at startup without reloading project configuration.
 
 Build and view help from the repository root:
 
 ```powershell
-mvn clean package
-java -jar devpulse-core\target\devpulse.jar --help
+bash build.sh --clean
+java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
-The root Maven reactor contains `devpulse-dependencies` for external library versions, `devpulse-bom` for internal artifact versions, `devpulse-core`, and a `devpulse-plugins` aggregator (currently with a `jira` child module). The first two produce POMs only. It builds two independently executable JARs with their own runtime dependencies: core `devpulse-core\target\devpulse.jar` and Jira `devpulse-plugins\jira\target\devpulse-jira.jar`. The examples below use PowerShell to launch Java; tool inventory and task execution still use Bash internally. In Git Bash, `bash run.sh --help` launches only core, while `bash run-jira.sh --help` launches Jira separately. Each script builds only its own module and required parent modules, removing `JAVA_TOOL_OPTIONS` only for itself and its child processes without changing the parent environment.
+The root Maven reactor contains `devpulse-dependencies` for external versions, `devpulse-bom` for internal versions, the shared environment library `devpulse-core`, independent tools in `devpulse-plugins` (`pulse`, `gather`, and `jira`), the combined compatibility entry point `devpulse-cli`, and `devpulse-dist` for selective archives. Pulse, Gather, and Jira produce separate executable JARs; the combined entry point produces `devpulse-cli\target\devpulse.jar` and is not included in individual tool archives. The examples below use that entry point to preserve existing command syntax. To run Pulse alone, use `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`; its related commands are `pulse init|review|status|stop`. See [distribution and installation](distribution.md). In Git Bash, `bash run.sh --help` launches the combined entry point, while `bash run-jira.sh --help` builds only Jira. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
 
 ### Command overview and help
 
@@ -262,15 +330,16 @@ The root Maven reactor contains `devpulse-dependencies` for external library ver
 | `gather` | Inventory the local environment and generate a prompt for you to share with AI for configuration assistance | Implemented |
 | `pulse` | Run tasks or pipelines with dependencies and a concurrency limit | Implemented |
 | `review` | Validate and review execution plans without running tasks | Implemented |
-| `status` | Query run history and task logs, or check tool availability | Implemented |
+| `status` | Query history, logs, daemon liveness/readiness, or tool availability | Implemented |
+| `stop` | Manually stop daemons in a selected run | Implemented |
 | Standalone `devpulse-jira` | Create Jira issues from HOCON/Markdown templates, export and update, transition, comment, and attach files; see [Jira CLI](plugins/jira.md) | Implemented |
 
 Running without a subcommand displays the main command help. The main command and all subcommands support `-h` / `--help` and `-V` / `--version`.
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar
-java -jar devpulse-core\target\devpulse.jar --version
-java -jar devpulse-core\target\devpulse.jar gather --help
+java -jar devpulse-cli\target\devpulse.jar
+java -jar devpulse-cli\target\devpulse.jar --version
+java -jar devpulse-cli\target\devpulse.jar gather --help
 ```
 
 ### `init`: create a configuration template
@@ -288,13 +357,13 @@ The template contains `version = 1`, `parallelism = 4`, two tasks named `check` 
 
 ```powershell
 # Create a configuration template in the current directory
-java -jar devpulse-core\target\devpulse.jar init
+java -jar devpulse-cli\target\devpulse.jar init
 
 # Create a configuration template in an existing project directory
-java -jar devpulse-core\target\devpulse.jar init --directory "D:\your-project"
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project"
 
 # Overwrite an existing configuration, losing its original contents
-java -jar devpulse-core\target\devpulse.jar init --directory "D:\your-project" --force
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project" --force
 ```
 
 On success, the command prints the configuration path and returns exit code `0`. A missing directory, an existing configuration without `--force`, or a write failure produces an error and returns `1`.
@@ -322,16 +391,16 @@ The prompt includes a HOCON example, task dependency requirements, Bash executio
 
 ```powershell
 # Inspect the current directory, print the prompt, and try to copy it to the clipboard
-java -jar devpulse-core\target\devpulse.jar gather
+java -jar devpulse-cli\target\devpulse.jar gather
 
 # Inspect a selected project without changing the clipboard
-java -jar devpulse-core\target\devpulse.jar gather --directory "D:\your-project" --no-clipboard
+java -jar devpulse-cli\target\devpulse.jar gather --directory "D:\your-project" --no-clipboard
 
 # Explicitly select Git Bash
-java -jar devpulse-core\target\devpulse.jar gather --bash "C:\Program Files\Git\bin\bash.exe"
+java -jar devpulse-cli\target\devpulse.jar gather --bash "C:\Program Files\Git\bin\bash.exe"
 
 # Print only the English prompt if Chinese text appears garbled
-java -jar devpulse-core\target\devpulse.jar gather --language en --no-clipboard
+java -jar devpulse-cli\target\devpulse.jar gather --language en --no-clipboard
 ```
 
 Success returns `0`. If the clipboard is unavailable, the command prints a warning and leaves the prompt in the terminal; the inventory still succeeds. An invalid directory, missing working Bash, failed scan, or interruption returns `1`.
@@ -340,7 +409,7 @@ The prompt contains local project paths and tool locations; review it before sha
 
 ### `pulse`: run tasks or pipelines
 
-`pulse [TARGET]` reads `.devpulse.conf` from the project directory and defaults to the pipeline or task named `dev`. It includes transitive dependencies automatically and runs shared dependencies and duplicate targets only once. Tasks start only after all dependencies succeed; independent tasks can run concurrently within the limit.
+`pulse [TARGET]` reads `.devpulse.conf` from the project directory and defaults to the pipeline or task named `dev`. It includes transitive dependencies automatically and runs shared dependencies and duplicate targets only once. Batch dependencies must exit successfully and daemon dependencies must pass readiness before downstream tasks start. Independent tasks can run concurrently within the limit.
 
 The entire configuration is validated before execution, including field types, unknown fields, duplicate task names, unknown dependencies, and dependency cycles. A target that names both a task and a pipeline is rejected. Configuration errors do not start tasks.
 
@@ -353,16 +422,81 @@ The entire configuration is validated before execution, including field types, u
 | `--dry-run` | Validate and print the plan and commands without discovering Bash, running tasks, or creating run records |
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar pulse
-java -jar devpulse-core\target\devpulse.jar pulse build --jobs 2
-java -jar devpulse-core\target\devpulse.jar pulse dev --directory "D:\your-project" --dry-run
+java -jar devpulse-cli\target\devpulse.jar pulse
+java -jar devpulse-cli\target\devpulse.jar pulse build --jobs 2
+java -jar devpulse-cli\target\devpulse.jar pulse dev --directory "D:\your-project" --dry-run
 ```
 
-Tasks run through non-login, non-interactive Bash in the project configuration directory. Standard output and errors are merged, prefixed with task names in the console, and saved as UTF-8 logs. Bash's exit code determines the task result; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly in commands when needed.
+Tasks run through non-login, non-interactive Bash in the project configuration directory. Batch output and errors are merged, prefixed in the console, and saved as UTF-8 logs. Daemon output is merged and redirected directly to its log, without live console forwarding, so output continues after CLI exit. Bash's exit code determines batch results; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly when needed.
 
 After observing a failure, no new tasks start. Already started tasks finish, and a summary reports successful, failed, and skipped counts. All tasks succeeding returns `0`; configuration, task, or persistence failures return `1`; execution interruption returns `130`. Cancellation makes a best-effort attempt to terminate known task processes and their visible descendants.
 
-Only foreground, non-interactive batch tasks are supported. There is no background service management, task timeout, or sandbox. Review commands before execution; the concurrency limit does not restrict processes started inside tasks.
+Non-interactive batch tasks and explicitly declared local daemons are supported. There is no ordinary batch-task timeout or sandbox. Review commands before execution. The concurrency limit covers batch tasks and daemon startup waits, not already-ready daemons, probe processes, or internal task concurrency.
+
+### Local long-running processes
+
+Declare `type = daemon` to satisfy dependencies through readiness instead of successful exit. Omitting `type` or using `type = task` preserves batch behavior; batch tasks cannot configure daemon fields.
+
+This example assumes an existing Node test server. Adjust commands and the health endpoint to the project; it does not install Node or create server code:
+
+```hocon
+version = 1
+parallelism = 1
+tools = [
+  {
+    name = server
+    type = daemon
+    cmd = "node server.js"
+    ready {
+      cmd = "curl --fail --silent --max-time 2 http://127.0.0.1:3000/health"
+      interval = 500ms
+      timeout = 30s
+      checkTimeout = 2s
+    }
+    shutdownHook = false
+    stopTimeout = 5s
+  },
+  {
+    name = check
+    cmd = "node check.js"
+    needs = [server]
+  }
+]
+pipelines { dev { tasks = [check] } }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `ready.cmd` | Required; exit code `0` means ready. Use a fast, read-only check |
+| `ready.interval` | Check interval, default `500ms` |
+| `ready.timeout` | Overall initial startup wait, default `30s` |
+| `ready.checkTimeout` | Individual check timeout, default `2s`, bounded by remaining startup time |
+| `shutdownHook` | Default `false` retains the process after CLI exit; `true` cleans up on completion, failure, or handled exit |
+| `stop` | Optional Bash stop command; otherwise terminate identity-confirmed processes and visible descendants |
+| `stopTimeout` | Stop-command and exit-wait grace period, default `5s`; followed by best-effort forced termination and up to `2s` confirmation |
+
+Daemon commands must remain foreground processes: do not use `&`, `nohup`, or fork/detach themselves. Readiness releases the normal execution slot, so `--jobs 1` can run a check depending on a server. While the pipeline executes, liveness and readiness are monitored. Unexpected exit, including code `0`, failed checks, or check timeouts fail the run and stop new tasks while already-started batch tasks finish. There is no automatic restart, existing-instance takeover, or reuse of occupied ports.
+
+Hook-enabled daemons are cleaned up in reverse plan dependency order. Daemons without hooks remain available for manual cleanup even after startup checks or downstream tasks fail. If initial metadata cannot be reliably recorded, startup attempts to terminate the untracked process. Forced CLI termination, power loss, and detached descendants are not guaranteed to be cleaned up.
+
+Checks and stop commands receive `DEVPULSE_DAEMON_PID`, `DEVPULSE_RUN_ID`, and `DEVPULSE_TASK_NAME`. Stop commands must target only the corresponding instance; do not kill processes by name or automatically delete database directories/volumes. Failed or timed-out stop commands still trigger best-effort process reclamation and return failure with diagnostics.
+
+### `stop`: manually clean up daemons
+
+```powershell
+# Stop all daemons in the latest run
+java -jar devpulse-cli\target\devpulse.jar stop
+
+# Stop one daemon in a selected run
+java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>"
+
+# Stop a selected run in another project
+java -jar devpulse-cli\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
+```
+
+`stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Without a task name, it stops all recorded daemons in that run in reverse dependency order. It uses recorded stop settings, not the current `.devpulse.conf`, and does not clean other historical runs or delete logs/business data. PID and start time confirm ownership; reused PIDs are not terminated, and uncertain identities are refused.
+
+Repeated cleanup of exited instances returns `0`, as do empty history or a selected run without daemons. A requested task without a recorded process, failed stop command, or unconfirmed cleanup returns `1`; interruption returns `130`. Manually stopping a daemon still used by an executing DAG triggers that run's failure policy.
 
 ### `review`: review plans before execution
 
@@ -376,11 +510,11 @@ Only foreground, non-interactive batch tasks are supported. There is no backgrou
 | `--plain` | Force a plain-text plan instead of opening the TUI |
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar review
-java -jar devpulse-core\target\devpulse.jar review build --plain
+java -jar devpulse-cli\target\devpulse.jar review
+java -jar devpulse-cli\target\devpulse.jar review build --plain
 ```
 
-An interactive terminal shows a layered DAG, dependency depth, prerequisite and dependent connections, and complete commands; `Tab` switches between the DAG and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans the graph horizontally, `w`/`s` pans vertically, `r` centers the selected task, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected output or an unavailable interactive terminal automatically uses a plain-text plan.
+An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, hooks, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `pulse --dry-run` also show all lifecycle commands without running checks or cleanup.
 
 Success returns `0`, configuration, target, or interface errors return `1`, and interruption returns `130`. Topological order and dependency depth are not fixed execution batches; valid configuration does not guarantee command safety or tool availability.
 
@@ -390,7 +524,7 @@ Every actual `pulse` execution creates an independent run ID, storing `state.con
 
 | Option | Effect |
 |--------|--------|
-| `--directory <directory>` | Project directory; defaults to the current directory. History queries do not require the configuration file or Bash to remain available |
+| `--directory <directory>` | Project directory; defaults to current directory. Reading records needs no configuration; daemon readiness uses recorded Bash |
 | `--run <ID>` | Select a historical run instead of the latest |
 | `--list` | List all runs by start time, newest first |
 | `--log <task>` | Print a task log from the selected run; can be combined with `--run` |
@@ -398,15 +532,17 @@ Every actual `pulse` execution creates an independent run ID, storing `state.con
 | `--bash <path>` | Explicit Bash path, used only with `--tools` |
 
 ```powershell
-java -jar devpulse-core\target\devpulse.jar status
-java -jar devpulse-core\target\devpulse.jar status --list
-java -jar devpulse-core\target\devpulse.jar status --run "<run-id>" --log build
-java -jar devpulse-core\target\devpulse.jar status --tools
+java -jar devpulse-cli\target\devpulse.jar status
+java -jar devpulse-cli\target\devpulse.jar status --list
+java -jar devpulse-cli\target\devpulse.jar status --run "<run-id>" --log build
+java -jar devpulse-cli\target\devpulse.jar status --tools
 ```
 
 `--list` cannot be combined with `--run` or `--log`; `--tools` cannot be combined with history query options. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `1`, conflicting options return `2`, and tool inventory interruption returns `130`.
 
-Task states distinguish `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. Reading unfinished records checks the run lock and executor identity before deciding whether the executor has exited. Confirmed exit persists an interrupted result; uncertainty preserves the record and prints a warning. There is no automatic resume or process takeover.
+Historical task states distinguish `PENDING`, `RUNNING`, `READY`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. `READY` records that a daemon became ready during execution, not that it remains alive later. Reading unfinished records checks the run lock and executor identity. Confirmed exit persists an interrupted result; uncertainty preserves the record and prints a warning. There is no automatic resume or process takeover.
+
+Detailed queries separately show live daemon state, PID, and hook: `STARTING`, `READY`, `NOT_READY`, `EXITED`, `STOPPED`, or `UNKNOWN`. Recorded checks run only for matching process identities; unavailable Bash or unconfirmed identity yields `UNKNOWN`. The overall run state remains the pipeline outcome and is not retroactively changed after CLI exit. `--list` and `--log` read only history/logs without readiness probes.
 
 Times are displayed in UTC to whole seconds, with durations using `ms`, `s`, `m`, or `h` automatically. Active runs show `(running)`; estimated durations for cancellation or interruption are marked `~`. Unstarted or unavailable times display `-`.
 

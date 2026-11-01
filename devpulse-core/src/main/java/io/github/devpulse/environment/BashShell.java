@@ -78,17 +78,6 @@ public record BashShell(Path executable) {
     public ProcessBuilder script(Path directory) {
         var builder = new ProcessBuilder(executable.toString(),
                 "--noprofile", "--norc", "-s", "--");
-        return configure(builder, directory);
-    }
-
-    public ProcessBuilder command(String command, Path directory) {
-        var builder = new ProcessBuilder(executable.toString(),
-                "--noprofile", "--norc", "-c", command, "--");
-        return configure(builder, directory);
-    }
-
-    private static ProcessBuilder configure(ProcessBuilder builder,
-            Path directory) {
         builder.directory(directory.toFile());
         builder.environment().remove("BASH_ENV");
         builder.environment().remove("ENV");

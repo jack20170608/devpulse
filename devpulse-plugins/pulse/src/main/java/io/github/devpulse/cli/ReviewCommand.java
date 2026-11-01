@@ -17,7 +17,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "review",
         mixinStandardHelpOptions = true,
-        versionProvider = DevPulseCLI.VersionProvider.class,
+        versionProvider = PulseCLI.VersionProvider.class,
         description = "Validate and review a task or pipeline plan "
                 + "without executing commands."
 )

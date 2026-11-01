@@ -6,8 +6,6 @@ unset JAVA_TOOL_OPTIONS
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-mvn --batch-mode --no-transfer-progress --quiet \
-	--file "$SCRIPT_DIR/pom.xml" --projects devpulse-core \
-	--also-make package
+bash "$SCRIPT_DIR/build.sh" cli --quiet
 
-exec java -jar "$SCRIPT_DIR/devpulse-core/target/devpulse.jar" "$@"
+exec java -jar "$SCRIPT_DIR/devpulse-cli/target/devpulse.jar" "$@"

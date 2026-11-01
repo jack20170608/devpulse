@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.github.devpulse</groupId>
         <artifactId>devpulse-dependencies</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>${revision}</version>
         <relativePath>../devpulse-dependencies/pom.xml</relativePath>
     </parent>
     <artifactId>devpulse-bom</artifactId>
@@ -24,6 +24,16 @@
             <dependency>
                 <groupId>io.github.devpulse</groupId>
                 <artifactId>jira</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.devpulse</groupId>
+                <artifactId>pulse</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.devpulse</groupId>
+                <artifactId>gather</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

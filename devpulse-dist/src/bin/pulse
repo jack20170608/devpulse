@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# devpulse-managed-wrapper: pulse
+set -euo pipefail
+
+bin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+prefix="$(cd -- "$bin_dir/.." && pwd -P)"
+if [[ -f "$prefix/devpulse-pulse.jar" ]]; then
+    exec java -jar "$prefix/devpulse-pulse.jar" "$@"
+fi
+tool_home="$prefix/lib/devpulse/pulse"
+if [[ ! -f "$tool_home/current" ]]; then
+    echo "pulse: no installed version found; run the installer first" >&2
+    exit 1
+fi
+IFS= read -r version < "$tool_home/current"
+if [[ ! "$version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ || "$version" == *..* ||
+      ! -f "$tool_home/$version/devpulse-pulse.jar" ]]; then
+    echo "pulse: invalid or missing installation" >&2
+    exit 1
+fi
+exec java -jar "$tool_home/$version/devpulse-pulse.jar" "$@"

@@ -18,7 +18,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "gather",
         mixinStandardHelpOptions = true,
-        versionProvider = DevPulseCLI.VersionProvider.class,
+        versionProvider = GatherCLI.VersionProvider.class,
         description = "Gather local environment facts "
                 + "and prepare an AI prompt."
 )

@@ -7,13 +7,15 @@
     <parent>
         <groupId>io.github.devpulse</groupId>
         <artifactId>devpulse-dependencies</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>${revision}</version>
         <relativePath>../devpulse-dependencies/pom.xml</relativePath>
     </parent>
     <artifactId>devpulse-plugins</artifactId>
     <packaging>pom</packaging>
     <name>devpulse plugins</name>
     <modules>
+        <module>pulse</module>
+        <module>gather</module>
         <module>jira</module>
     </modules>
 
