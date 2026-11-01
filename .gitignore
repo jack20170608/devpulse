@@ -43,3 +43,4 @@ stats.html
 
 ### Environment files
 http-client.private.env.json
+.env/
