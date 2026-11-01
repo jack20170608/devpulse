@@ -26,7 +26,6 @@ import io.github.devpulse.execution.TaskPlan;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
@@ -38,8 +37,9 @@ public final class ReviewTui {
     private final TaskPlan plan;
     private final int jobs;
     private final ListState selection = new ListState();
-    private final HashMap<String, Integer> depths = new HashMap<>();
+    private final DagWidget dag;
     private final String[] taskLabels;
+    private boolean graphView = true;
     private int scroll;
     private int maxScroll;
     private int pageSize = 1;
@@ -51,14 +51,13 @@ public final class ReviewTui {
         this.configuration = configuration;
         this.plan = plan;
         this.jobs = jobs;
+        dag = new DagWidget(plan);
         selection.selectFirst();
         taskLabels = new String[plan.tasks().size()];
         for (var index = 0; index < plan.tasks().size(); index++) {
             var task = plan.tasks().get(index);
-            var depth = task.needs().stream()
-                    .mapToInt(name -> depths.get(name) + 1).max().orElse(0);
-            depths.put(task.name(), depth);
-            taskLabels[index] = "%2d  L%d  %s".formatted(index + 1, depth,
+            taskLabels[index] = "%2d  L%d  %s".formatted(index + 1,
+                    dag.depth(task.name()),
                     display(task.name()));
         }
     }
@@ -114,9 +113,9 @@ public final class ReviewTui {
             return false;
         }
         var previous = selection.selected();
-        if (key.isUp()) {
+        if (key.isKey(KeyCode.UP)) {
             selection.selectPrevious();
-        } else if (key.isDown()) {
+        } else if (key.isKey(KeyCode.DOWN)) {
             selection.selectNext(plan.tasks().size());
         } else if (key.isKey(KeyCode.HOME)) {
             selection.selectFirst();
@@ -126,11 +125,25 @@ public final class ReviewTui {
             scroll = Math.max(0, scroll - pageSize);
         } else if (key.isKey(KeyCode.PAGE_DOWN)) {
             scroll = Math.min(maxScroll, scroll + pageSize);
+        } else if (key.isKey(KeyCode.TAB)) {
+            graphView = !graphView;
+            dag.center();
+        } else if (key.isKey(KeyCode.LEFT)) {
+            dag.pan(-8, 0);
+        } else if (key.isKey(KeyCode.RIGHT)) {
+            dag.pan(8, 0);
+        } else if (key.isChar('w')) {
+            dag.pan(0, -4);
+        } else if (key.isChar('s')) {
+            dag.pan(0, 4);
+        } else if (key.isChar('r')) {
+            dag.center();
         } else {
             return false;
         }
         if (!previous.equals(selection.selected())) {
             scroll = 0;
+            dag.select(plan.tasks().get(selection.selected()).name());
         }
         return true;
     }
@@ -142,8 +155,8 @@ public final class ReviewTui {
                     frame.area());
             return;
         }
-        var rows = Layout.vertical().constraints(Constraint.length(5),
-                Constraint.fill(), Constraint.length(2)).split(frame.area());
+        var rows = Layout.vertical().constraints(Constraint.length(6),
+                Constraint.fill(), Constraint.length(3)).split(frame.area());
         frame.renderWidget(Paragraph.builder()
                 .block(block("devpulse / review"))
                 .text(Text.from(
@@ -152,16 +165,24 @@ public final class ReviewTui {
                                 + "    Parallelism: " + jobs, ACCENT),
                         Line.from("Project: "
                                 + display(configuration.directory().toString())),
-                        Line.from("L = dependency depth, not an execution batch")))
+                        Line.from("L = dependency depth, not an execution batch"),
+                        Line.from("Yellow: selected  Green: prerequisites"
+                                + "  Magenta: unlocks")))
                 .build(), rows.get(0));
         var columns = Layout.horizontal().constraints(
-                Constraint.percentage(35), Constraint.fill()).split(rows.get(1));
-        frame.renderStatefulWidget(ListWidget.builder()
-                .items(taskLabels)
-                .block(block("Tasks / topological order"))
-                .highlightSymbol("> ")
-                .highlightStyle(Style.create().onBlue().white().bold())
-                .build(), columns.get(0), selection);
+                Constraint.percentage(65), Constraint.fill()).split(rows.get(1));
+        if (graphView) {
+            var graphBlock = block("DAG / left to right");
+            frame.renderWidget(graphBlock, columns.get(0));
+            frame.renderWidget(dag, graphBlock.inner(columns.get(0)));
+        } else {
+            frame.renderStatefulWidget(ListWidget.builder()
+                    .items(taskLabels)
+                    .block(block("Tasks / topological order"))
+                    .highlightSymbol("> ")
+                    .highlightStyle(Style.create().onBlue().white().bold())
+                    .build(), columns.get(0), selection);
+        }
 
         var task = plan.tasks().get(selection.selected());
         var detailsBlock = block("Task: " + display(task.name()));
@@ -196,11 +217,13 @@ public final class ReviewTui {
         frame.renderWidget(Paragraph.builder().block(detailsBlock)
                 .text(Text.from(wrapped)).scroll(scroll).build(), columns.get(1));
         frame.renderWidget(Paragraph.from(Text.from(
-                Line.from("Up/Down: select  Home/End: first/last"
-                        + "  PgUp/PgDn: details  q: quit"),
+                Line.from("Up/Down: task  Left/Right: pan X  w/s: pan Y"),
+                Line.from("PgUp/PgDn: details  Tab: graph/list  r: center  q: quit"),
                 Line.from("Static review only. No commands executed."
-                        + "  Details: " + (scroll + 1) + "/"
-                        + Math.max(1, wrapped.size())))), rows.get(2));
+                        + (graphView ? "  DAG: " + dag.position()
+                                : "  Details: " + (scroll + 1) + "/"
+                                        + Math.max(1, wrapped.size()))))),
+                rows.get(2));
     }
 
     private static Block block(String title) {

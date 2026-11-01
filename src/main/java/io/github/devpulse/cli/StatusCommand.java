@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.ParameterException;
@@ -89,12 +90,12 @@ public final class StatusCommand implements Callable<Integer> {
             }
             if (list) {
                 var now = Instant.now();
-                out.printf("%-36s %-12s %-20s %-30s %-30s %s%n",
+                out.printf("%-36s %-12s %-20s %-20s %-20s %s%n",
                         "RUN_ID", "STATE", "TARGET", "STARTED", "FINISHED",
                         "DURATION");
                 for (var item : records) {
                     var snapshot = item.snapshot();
-                    out.printf("%-36s %-12s %-20s %-30s %-30s %s%n",
+                    out.printf("%-36s %-12s %-20s %-20s %-20s %s%n",
                             snapshot.id(),
                             snapshot.state(), snapshot.target(),
                             time(snapshot.startedAt()),
@@ -159,10 +160,10 @@ public final class StatusCommand implements Callable<Integer> {
         out.println("Duration: " + duration(snapshot.startedAt(),
                 snapshot.finishedAt(), snapshot.state(), now));
         out.println("Parallelism: " + snapshot.parallelism());
-        out.printf("%-24s %-12s %-5s %-30s %-30s %s%n",
+        out.printf("%-24s %-12s %-5s %-20s %-20s %s%n",
                 "TASK", "STATE", "EXIT", "STARTED", "FINISHED", "DURATION");
         for (var task : snapshot.tasks()) {
-            out.printf("%-24s %-12s %-5s %-30s %-30s %s%n",
+            out.printf("%-24s %-12s %-5s %-20s %-20s %s%n",
                     task.name(), task.state(),
                     task.exitCode() == null ? "-" : task.exitCode(),
                     time(task.startedAt()),
@@ -181,7 +182,8 @@ public final class StatusCommand implements Callable<Integer> {
     }
 
     private static String time(Instant value) {
-        return value == null ? "-" : value.toString();
+        return value == null ? "-"
+                : value.truncatedTo(ChronoUnit.SECONDS).toString();
     }
 
     private static String duration(Instant start, Instant finish,
@@ -194,9 +196,22 @@ public final class StatusCommand implements Callable<Integer> {
         if (elapsed.isNegative()) {
             return "-";
         }
-        var value = String.format(Locale.ROOT, "%02d:%02d:%02d.%03d",
-                elapsed.toHours(), elapsed.toMinutesPart(),
-                elapsed.toSecondsPart(), elapsed.toMillisPart());
+        String value;
+        if (elapsed.getSeconds() == 0) {
+            value = elapsed.toMillis() + "ms";
+        } else {
+            var amount = elapsed.getSeconds() + elapsed.getNano() / 1e9;
+            var unit = "s";
+            if (elapsed.getSeconds() >= 3600) {
+                amount /= 3600;
+                unit = "h";
+            } else if (elapsed.getSeconds() >= 60) {
+                amount /= 60;
+                unit = "m";
+            }
+            value = String.format(Locale.ROOT, "%.2f", amount)
+                    .replaceAll("\\.?0+$", "") + unit;
+        }
         return (estimated(state) ? "~" : "") + value
                 + (finish == null ? " (running)" : "");
     }

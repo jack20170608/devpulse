@@ -185,7 +185,15 @@ public final class PulseExecutor {
             }
             output.get();
             if (code == 0) {
-                input.get();
+                try {
+                    input.get();
+                } catch (ExecutionException exception) {
+                    // A successful early exit may close stdin before the
+                    // complete script has been written.
+                    if (!(exception.getCause() instanceof IOException)) {
+                        throw exception;
+                    }
+                }
             }
             log(task.name(), "Finished with exit code " + code + ".");
             return new Result(task.name(),
