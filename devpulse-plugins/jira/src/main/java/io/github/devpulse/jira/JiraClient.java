@@ -28,7 +28,6 @@ public final class JiraClient {
 
     public JiraClient(JiraConfiguration configuration, String token)
             throws IOException {
-        var url = configuration.url();
         var mode = configuration.mode();
         if (token == null || token.isBlank()) {
             throw new IOException("Set JIRA_API_TOKEN "
@@ -38,20 +37,7 @@ public final class JiraClient {
             throw new IOException("JIRA_API_TOKEN must not "
                     + "contain control characters.");
         }
-        try {
-            base = URI.create(url.endsWith("/") ? url : url + "/");
-        } catch (IllegalArgumentException exception) {
-            throw new IOException("Invalid Jira configuration URL.");
-        }
-        if (base.getHost() == null || base.getUserInfo() != null
-                || base.getRawQuery() != null || base.getRawFragment() != null
-                || !("https".equalsIgnoreCase(base.getScheme())
-                || ("http".equalsIgnoreCase(base.getScheme())
-                && ("localhost".equalsIgnoreCase(base.getHost())
-                || "127.0.0.1".equals(base.getHost()))))) {
-            throw new IOException("Jira URL must use HTTPS "
-                    + "(HTTP is allowed only for loopback testing).");
-        }
+        base = JiraConfiguration.validateUrl(configuration.url());
         if (!mode.equals("cloud") && !mode.equals("dc")) {
             throw new IOException("Jira configuration mode must be cloud or dc.");
         }

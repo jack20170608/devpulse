@@ -41,7 +41,7 @@ import picocli.CommandLine.Spec;
         versionProvider = JiraCommand.VersionProvider.class,
         description = "Manage Jira issues using HOCON and Markdown.",
         subcommands = {JiraCommand.Issue.class,
-                JiraCommand.Init.class,
+                JiraInitCommand.class,
                 JiraCommand.Show.class, JiraCommand.Export.class,
                 JiraCommand.Update.class, JiraCommand.Transitions.class,
                 JiraCommand.Transition.class, JiraCommand.Comment.class,
@@ -52,10 +52,12 @@ public final class JiraCommand implements Runnable {
     @Spec
     private CommandSpec spec;
 
-    @Option(names = {"-c", "--config"}, defaultValue = ".jira.conf",
+    @Option(names = {"-c", "--config"},
             scope = ScopeType.INHERIT, paramLabel = "FILE",
-            description = "Jira connection HOCON file (default: .jira.conf "
-                    + "in the current directory). Token comes from "
+            description = "Jira connection HOCON file; otherwise read "
+                    + "local_jira_config.conf in the current directory, "
+                    + "then ~/.jira/local_jira_config.conf. "
+                    + "Token comes from "
                     + "JIRA_API_TOKEN only.")
     private Path configFile;
 
@@ -233,12 +235,24 @@ public final class JiraCommand implements Runnable {
     abstract static class Action implements Callable<Integer> {
         @Spec
         CommandSpec spec;
+        private JiraConfiguration configuration;
 
         protected abstract void execute() throws IOException;
 
+        Path explicitConfigFile() {
+            return ((JiraCommand) spec.root().userObject()).configFile;
+        }
+
+        JiraConfiguration configuration() throws IOException {
+            if (configuration == null) {
+                configuration = JiraConfiguration.load(
+                        JiraConfiguration.find(explicitConfigFile()));
+            }
+            return configuration;
+        }
+
         JiraClient client() throws IOException {
-            var root = (JiraCommand) spec.root().userObject();
-            return new JiraClient(JiraConfiguration.load(root.configFile),
+            return new JiraClient(configuration(),
                     System.getenv("JIRA_API_TOKEN"));
         }
 
@@ -265,9 +279,10 @@ public final class JiraCommand implements Runnable {
         }
     }
 
-    @Command(name = "init", description = "Create a HOCON/Markdown issue "
+    @Command(name = "template", mixinStandardHelpOptions = true,
+            description = "Create a HOCON/Markdown issue "
             + "template without contacting Jira.")
-    static final class Init extends Action {
+    static final class IssueTemplate extends Action {
         @Option(names = "--file", required = true, paramLabel = "ISSUE.conf")
         Path file;
 
@@ -299,7 +314,7 @@ public final class JiraCommand implements Runnable {
     @Command(name = "issue", mixinStandardHelpOptions = true,
             description = "Manage Jira issues.",
             subcommands = {JiraCreateCommand.class, JiraIssueListCommand.class,
-                    JiraIssueEditCommand.class})
+                    JiraIssueEditCommand.class, IssueTemplate.class})
     static final class Issue implements Runnable {
         @Spec
         CommandSpec spec;

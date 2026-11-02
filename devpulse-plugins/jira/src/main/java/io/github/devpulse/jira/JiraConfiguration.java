@@ -15,18 +15,39 @@ import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueType;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Set;
 
 public record JiraConfiguration(String url, String mode, String email,
-        int apiVersion) {
+        int apiVersion, String project) {
+    public static final String FILE_NAME = "local_jira_config.conf";
+
+    public static Path globalFile() {
+        return Path.of(System.getProperty("user.home"), ".jira", FILE_NAME);
+    }
+
+    public static Path find(Path explicit) {
+        if (explicit != null) {
+            return explicit;
+        }
+        var local = Path.of(FILE_NAME);
+        if (Files.exists(local, LinkOption.NOFOLLOW_LINKS)) {
+            return local;
+        }
+        var global = globalFile();
+        return Files.exists(global, LinkOption.NOFOLLOW_LINKS) ? global : local;
+    }
+
     public static JiraConfiguration load(Path file) throws IOException {
         if (!Files.isRegularFile(file)) {
             throw new IOException("Jira configuration not found: " + file
-                    + ". Create .jira.conf or specify --config FILE.");
+                    + ". Run jira init (or jira init -g), "
+                    + "or specify --config FILE.");
         }
         try {
             var config = ConfigFactory.parseString(
@@ -34,10 +55,10 @@ public record JiraConfiguration(String url, String mode, String email,
                     ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
                             .setIncluder(new NoIncludes()))
                     .resolve(ConfigResolveOptions.noSystem());
-            if (!Set.of("url", "mode", "email", "apiVersion")
+            if (!Set.of("url", "mode", "email", "apiVersion", "project")
                     .containsAll(config.root().keySet())) {
                 throw new IOException("Jira configuration supports only "
-                        + "url, mode, email, and apiVersion; "
+                        + "url, mode, email, apiVersion, and project; "
                         + "use JIRA_API_TOKEN "
                         + "for authentication.");
             }
@@ -46,16 +67,42 @@ public record JiraConfiguration(String url, String mode, String email,
                 throw new IOException("Jira configuration mode "
                         + "must be cloud or dc.");
             }
-            return new JiraConfiguration(required(config, "url"), mode,
+            var url = required(config, "url");
+            validateUrl(url);
+            return new JiraConfiguration(url, mode,
                     mode.equals("cloud") || config.hasPathOrNull("email")
                             ? required(config, "email") : null,
-                    apiVersion(config, mode));
+                    apiVersion(config, mode),
+                    config.hasPathOrNull("project")
+                            ? required(config, "project") : null);
         } catch (ConfigException exception) {
             // Parser messages may echo file contents or substituted values.
             throw new IOException("Invalid Jira connection configuration; "
                     + "check HOCON syntax and "
-                    + "url/mode/email/apiVersion fields.");
+                    + "url/mode/email/apiVersion/project fields.");
         }
+    }
+
+    public static URI validateUrl(String url) throws IOException {
+        final URI base;
+        try {
+            if (url == null || url.isBlank()) {
+                throw new IllegalArgumentException();
+            }
+            base = URI.create(url.endsWith("/") ? url : url + "/");
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("Invalid Jira configuration URL.");
+        }
+        if (base.getHost() == null || base.getUserInfo() != null
+                || base.getRawQuery() != null || base.getRawFragment() != null
+                || !("https".equalsIgnoreCase(base.getScheme())
+                || ("http".equalsIgnoreCase(base.getScheme())
+                && ("localhost".equalsIgnoreCase(base.getHost())
+                || "127.0.0.1".equals(base.getHost()))))) {
+            throw new IOException("Jira URL must use HTTPS "
+                    + "(HTTP is allowed only for loopback testing).");
+        }
+        return base;
     }
 
     private static int apiVersion(Config config, String mode)

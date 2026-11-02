@@ -15,7 +15,7 @@ import picocli.CommandLine.Option;
         description = "Search one page of Jira issues using filters or JQL.")
 public final class JiraIssueListCommand extends JiraCommand.Action {
     @Option(names = {"-p", "--project"}, paramLabel = "KEY",
-            description = "Project key.")
+            description = "Project key; defaults to connection configuration.")
     String project;
     @Option(names = {"-s", "--status"}, paramLabel = "NAME",
             description = "Status name; prefix with ~ to exclude.")
@@ -124,7 +124,9 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
 
     private String query() throws IOException {
         var clauses = new ArrayList<String>();
-        filter(clauses, "project", project, false);
+        var selectedProject = project == null && jql == null
+                ? configuration().project() : project;
+        filter(clauses, "project", selectedProject, false);
         filter(clauses, "status", status, false);
         filter(clauses, "issuetype", type, false);
         filter(clauses, "priority", priority, false);

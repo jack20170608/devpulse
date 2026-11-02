@@ -10,19 +10,20 @@
 
 ### 连接配置与认证
 
-连接信息默认从**当前工作目录**的 `.jira.conf` 读取，使用 UTF-8 HOCON；此文件与 `issue create --file` 等命令的 issue 模板完全独立：
+连接配置使用 UTF-8 HOCON，与 `issue create --file` 等命令的 issue 模板完全独立。读取优先级为：显式 `-c/--config` 指定的文件、**当前工作目录**的 `local_jira_config.conf`、用户 home 下 `.jira` 目录的 `local_jira_config.conf`。选择整份文件，不合并本地和全局配置；显式文件缺失或本地文件无效时直接报错，不跳过它改用全局配置。
 
 ```hocon
 url = "https://example.atlassian.net"
 mode = "cloud"                  # Data Center 使用 "dc"
 email = "user@example.com"       # Cloud 必填，Data Center 可省略
+project = "DEMO"                # create/list 的默认 project key
 # apiVersion = 3                # 可选：2 或 3；省略时 Cloud=3、Data Center=2
 ```
 
 仅认证令牌从环境变量读取，不在连接配置或 issue 模板中保存：
 
 ```bash
-export DEVPULSE_JIRA_TOKEN='your-api-token'     # Cloud API Token / Data Center PAT
+export JIRA_API_TOKEN='your-api-token'          # Cloud API Token / Data Center PAT
 ```
 
 使用全局 `-c/--config` 指定其他连接配置文件；该选项可以放在子命令前或后，相对路径仍以当前工作目录为基准：
@@ -32,16 +33,39 @@ bash run-jira.sh --config connection.conf issue list -p DEMO
 bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
 
-`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。不再读取 `DEVPULSE_JIRA_URL`、`DEVPULSE_JIRA_MODE` 或 `DEVPULSE_JIRA_EMAIL`，旧配置需迁移到文件；缺少文件或字段时会报错，不回退到这些环境变量。连接配置仅接受 `url`、`mode`、`email`、`apiVersion`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本及离线 issue 模板 `init` 命令不需要连接配置或 token；`init --file` 不生成连接配置。
+`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。仅 `JIRA_API_TOKEN` 从环境变量读取，旧的 `DEVPULSE_JIRA_*` 环境变量不再使用。连接配置仅接受 `url`、`mode`、`email`、`apiVersion`、`project`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本、连接初始化和离线 issue 模板生成不需要已有连接配置或 token。旧 `.jira.conf` 不再自动读取，可改名为 `local_jira_config.conf`，或通过 `--config` 显式指定。
+
+`project` 是默认项目 key，初始化向导要求设置；手写的旧配置可省略它以保留原行为。`issue create` 的项目优先级是显式 `-p/--project`、issue 模板中的 `fields.project`、连接配置中的 `project`；`issue list` 优先使用显式 `-p`，否则使用默认项目。完整 `--jql` 不会自动附加默认项目条件。
 
 `apiVersion` 为可选的数值 `2` 或 `3`；未配置时保留原规则：`mode = "cloud"` 使用 3，`mode = "dc"` 使用 2。显式值覆盖默认选择，请求路径使用 `/rest/api/{apiVersion}/`，描述与评论按 API v2 文本或 API v3 ADF 格式处理；认证、用户标识和搜索分页方式仍由 `mode` 决定。指定版本并不保证 Jira 部署提供相应接口，例如 Data Center 通常不提供 v3，需确认服务器实际支持。
 
 使用 HTTPS；仅本机测试允许 HTTP。请勿将包含凭据的 shell 历史、环境转储、导出的 Jira 数据或附件提交到版本库。访问失败只显示 HTTP 状态码，不输出 Jira 的错误正文。
 
+### 初始化连接：`init`
+
+```bash
+# 分步配置，保存到当前工作目录的 local_jira_config.conf
+bash run-jira.sh init
+
+# 分步配置，保存到用户 home 下 .jira/local_jira_config.conf
+bash run-jira.sh init -g
+
+# 脚本方式；省略 API 版本时仍按 mode 默认选择
+bash run-jira.sh init --no-input --url https://example.atlassian.net \
+  --mode cloud --email user@example.com --project DEMO
+bash run-jira.sh init -g --no-input --url https://jira.example.com \
+  --mode dc --api-version 2 --project DEMO
+```
+
+向导依次询问 URL、mode（默认 `cloud`）、可选 API 版本（按 Enter 使用 mode 默认值）、Cloud 邮箱和默认 project key；已通过参数提供的字段不再询问，输入无效会提示并重试。API 版本选择自动时不会写入 `apiVersion`，以后仍随 mode 推导。向导不请求 Jira、不读取或写入 token；在所有输入完成前取消，不会创建配置文件。没有终端时使用参数提供必填值；`--no-input` 显式禁止提示。
+
+`-g/--global` 自动创建 home 下的 `.jira` 目录；不带 `-g` 时默认在当前目录创建。也可用全局 `--config FILE` 指定初始化输出文件，但不能与 `-g` 同时使用。已有目标文件一律拒绝覆盖。原 `init --file ISSUE.conf` 已迁移到 `issue template --file ISSUE.conf`，仍生成同名 `.conf` 和 `.md` issue 模板。
+
 ### 命令
 
 ```bash
-bash run-jira.sh init --file issue.conf
+bash run-jira.sh init
+bash run-jira.sh issue template --file issue.conf
 # 编辑 issue.conf 中的 Jira REST fields 和相邻的 issue.md
 bash run-jira.sh issue create --file issue.conf
 bash run-jira.sh issue list -p DEMO
@@ -59,7 +83,7 @@ bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
 bash run-jira.sh attach DEMO-1 --file diagram.png
 ```
 
-`init` 和 `export` 只创建新文件，不覆盖已有文件。创建时 `fields` 必须包含 `project`、`issuetype`、`summary`；描述取同名 `.md`。导出仅保留 Jira `/editmeta` 返回的可编辑字段及描述，其他字段不会被回写；自定义字段保持原始 JSON/HOCON 结构，需按该 Jira 实例的 REST 字段格式修改。`update` 比较导出时的字段，只发送修改过的字段；修改描述时将 Markdown 转成 Jira 内容格式。更新成功后重新导出再编辑。
+`init`、`issue template` 和 `export` 只创建新文件，不覆盖已有文件。创建时需要项目、类型和标题，项目可由连接配置提供；使用文件模式时描述取同名 `.md`。导出仅保留 Jira `/editmeta` 返回的可编辑字段及描述，其他字段不会被回写；自定义字段保持原始 JSON/HOCON 结构，需按该 Jira 实例的 REST 字段格式修改。`update` 比较导出时的字段，只发送修改过的字段；修改描述时将 Markdown 转成 Jira 内容格式。更新成功后重新导出再编辑。
 
 `update` 和 `comment-update` 上传前比较导出时和当前 Jira 的 `updated` 值，发现变化默认拒绝；`--force` 显式跳过检查。评论导出创建 `.md` 与同名 `.conf` 元数据，成功更新后需要重新导出。**这是上传前检查，不是原子并发锁**：检查与更新之间若发生并发写入仍可能冲突。状态更改使用 `transitions` 查到的**转换 ID**，不是状态名；新评论、状态转换和附件不使用导出文件的并发检查。
 
@@ -67,7 +91,7 @@ bash run-jira.sh attach DEMO-1 --file diagram.png
 
 ### 创建问题：`issue create`
 
-借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。当前 `issue` 分组提供 `create`、`edit` 和 `list`，其余操作仍使用上面的顶层命令。
+借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。当前 `issue` 分组提供 `create`、`edit`、`list` 和 `template`，其余操作仍使用上面的顶层命令。
 
 ```bash
 # 在终端交互输入项目 key、问题类型、标题与可选的单行描述
@@ -95,7 +119,7 @@ bash run-jira.sh issue create --no-input \
 bash run-jira.sh issue create --file issue.conf -s "Updated summary"
 ```
 
-必填项为项目（`-p/--project`）、类型（`-t/--type`）和标题（`-s/--summary`）；也可由 `--file` 的 `fields` 提供，项目和类型支持原始 REST `id` 对象。终端中默认补问缺少的必填项；未指定描述来源时，再询问可选描述。`--no-input` 禁止所有提示；无终端时也不会等待交互，必填项缺失则在请求 Jira 前报错。创建会直接提交，不额外询问确认；脚本建议始终指定 `--no-input`。
+必填项为项目（`-p/--project`）、类型（`-t/--type`）和标题（`-s/--summary`）；也可由 `--file` 的 `fields` 提供，项目和类型支持原始 REST `id` 对象。未显式提供项目且模板中没有该字段时使用连接配置的默认项目。终端中默认补问仍缺少的必填项；未指定描述来源时，再询问可选描述。`--no-input` 禁止所有提示；无终端时也不会等待交互，必填项缺失则在请求 Jira 前报错。创建会直接提交，不额外询问确认；脚本建议始终指定 `--no-input`。
 
 `-y/--priority` 设置优先级名称；`-l/--label`、`-C/--component`、`--fix-version` 和 `--affects-version` 可重复，显式提供时**替换**模板中的整个对应列表，不按逗号拆分。`-P/--parent` 设置父问题 key，是否可用由 Jira 的项目类型和层级决定。`-a/--assignee` 在 Cloud 使用账户 `accountId`，在 Data Center 使用用户名；特殊值 `me` 查询当前用户，`x` 取消指派，`default` 使用项目默认经办人。不按显示名模糊查找用户。
 
@@ -150,7 +174,8 @@ bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
 ### 查询问题：`issue list`
 
 ```bash
-# 无筛选时默认查询最近 30 天创建的问题；每次最多返回一页
+# 默认查询配置的项目；无默认项目且无筛选时查询最近 30 天创建的问题
+# 每次最多返回一页
 bash run-jira.sh issue list
 bash run-jira.sh issue list -p DEMO -s "In Progress" -a me
 bash run-jira.sh issue list -p DEMO -t Bug -y High -l backend -l urgent
@@ -175,7 +200,7 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 `list` 由独立的 `JiraIssueListCommand` 实现。支持项目、状态、类型、优先级、经办人、报告人、标签，以及创建/更新时间下界筛选。多个条件以 `AND` 组合，重复 `-l/--label` 表示必须具备所有指定标签；状态、类型、优先级可用 `~` 前缀排除。经办人使用 Cloud `accountId` 或 Data Center 用户名；`me` 表示当前用户，`x` 表示未指派，`~x` 表示已指派；报告人也支持 `me`。字段名称和日期解释以 Jira 实例为准，普通筛选值会转义为 JQL 字符串，不能通过筛选值注入额外查询。
 
-默认按 `created DESC` 排序；`--order-by` 支持 `created`、`updated`、`priority`、`key`、`rank`、`summary`、`status`、`assignee`、`issuetype`，`--reverse` 改为升序。`--created` 与 `--updated` 接受 Jira 日期或相对时间，表示大于等于该值。**仅在没有任何筛选且未提供 JQL 时**默认添加 `created >= "-30d"`，以满足 Cloud 搜索必须具有查询限制的要求；指定项目等筛选后不再添加时间限制。`-q/--jql` 是完整查询，不能与筛选、`--order-by` 或 `--reverse` 混用，Cloud 的自定义 JQL 同样需要包含查询限制。
+默认按 `created DESC` 排序；`--order-by` 支持 `created`、`updated`、`priority`、`key`、`rank`、`summary`、`status`、`assignee`、`issuetype`，`--reverse` 改为升序。`--created` 与 `--updated` 接受 Jira 日期或相对时间，表示大于等于该值。**仅在没有默认项目、任何筛选及 JQL 时**默认添加 `created >= "-30d"`，以满足 Cloud 搜索必须具有查询限制的要求；默认或显式项目等筛选存在时不再添加时间限制。`-q/--jql` 是完整查询，不能与显式筛选、`--order-by` 或 `--reverse` 混用，也不注入默认项目，Cloud 的自定义 JQL 同样需要包含查询限制。
 
 默认表格列为问题 key、类型、状态、优先级、经办人、标题；缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出制表符分隔内容，`--no-headers` 移除表头。空结果仅输出表头，配合 `--no-headers` 时无输出。`--raw` 与 `--json` 等价，输出包含 `issues` 和分页元数据的原始 JSON 页，字段限定为标题、状态、类型、优先级、经办人和更新时间；不能与 `--plain` 或 `--no-headers` 混用。
 
@@ -193,19 +218,20 @@ API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单
 
 ### Connection configuration and authentication
 
-Connection settings default to `.jira.conf` in the **current working directory**, using UTF-8 HOCON. This file is separate from issue templates passed to commands such as `issue create --file`:
+Connection configuration uses UTF-8 HOCON and is separate from issue templates passed to commands such as `issue create --file`. Lookup order is: an explicit `-c/--config` file, `local_jira_config.conf` in the **current working directory**, then `local_jira_config.conf` in the user's home `.jira` directory. A whole file is selected, not merged with other files. A missing explicit file or invalid local file fails instead of being skipped in favor of global configuration.
 
 ```hocon
 url = "https://example.atlassian.net"
 mode = "cloud"                  # Use "dc" for Data Center
 email = "user@example.com"       # Required for Cloud; optional for Data Center
+project = "DEMO"                # Default project key for create/list
 # apiVersion = 3                # Optional: 2 or 3; defaults to Cloud=3, Data Center=2
 ```
 
 Only the authentication token comes from the environment; never put it in connection configuration or issue templates:
 
 ```bash
-export DEVPULSE_JIRA_TOKEN='your-api-token'     # Cloud API Token / Data Center PAT
+export JIRA_API_TOKEN='your-api-token'          # Cloud API Token / Data Center PAT
 ```
 
 Use global `-c/--config` to select another connection file. It can appear before or after subcommands; relative paths still resolve against the current working directory:
@@ -215,16 +241,39 @@ bash run-jira.sh --config connection.conf issue list -p DEMO
 bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
 
-`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. `DEVPULSE_JIRA_URL`, `DEVPULSE_JIRA_MODE`, and `DEVPULSE_JIRA_EMAIL` are no longer read; migrate them to the file. Missing files or fields fail rather than falling back to those environment variables. Connection configuration accepts only `url`, `mode`, `email`, and `apiVersion`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, and offline issue-template `init` commands need neither connection configuration nor a token; `init --file` does not generate connection configuration.
+`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. Only `JIRA_API_TOKEN` is read from the environment; the old `DEVPULSE_JIRA_*` variables are no longer used. Connection configuration accepts only `url`, `mode`, `email`, `apiVersion`, and `project`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, connection initialization, and offline issue-template generation need neither existing connection configuration nor a token. The old `.jira.conf` is no longer discovered automatically; rename it to `local_jira_config.conf` or select it explicitly with `--config`.
+
+`project` is the default project key and is required by the initialization wizard; older handwritten configurations can omit it to preserve prior behavior. For `issue create`, precedence is explicit `-p/--project`, issue-template `fields.project`, then connection-configuration `project`. `issue list` uses explicit `-p` when supplied, otherwise the default project. Complete `--jql` queries do not receive an implicit project condition.
 
 `apiVersion` optionally accepts the number `2` or `3`. Omission preserves the original rule: `mode = "cloud"` selects 3, and `mode = "dc"` selects 2. An explicit value overrides that default, using `/rest/api/{apiVersion}/` paths and API v2 text or API v3 ADF for descriptions/comments. Authentication, user identifiers, and search pagination still follow `mode`. Selecting a version does not guarantee server support; for example, Data Center typically does not expose v3, so verify the deployment's available APIs.
 
 Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history containing credentials, environment dumps, exported Jira data, or attachments. HTTP failures display only the status code, not the Jira response body.
 
+### Initializing a connection: `init`
+
+```bash
+# Configure step by step; save local_jira_config.conf in the current directory
+bash run-jira.sh init
+
+# Configure step by step; save .jira/local_jira_config.conf in the user's home
+bash run-jira.sh init -g
+
+# Scripted setup; omitting the API version retains mode-based defaults
+bash run-jira.sh init --no-input --url https://example.atlassian.net \
+  --mode cloud --email user@example.com --project DEMO
+bash run-jira.sh init -g --no-input --url https://jira.example.com \
+  --mode dc --api-version 2 --project DEMO
+```
+
+The wizard asks for URL, mode (default `cloud`), optional API version (Enter uses the mode default), Cloud email, and default project key, in that order. Supplied flags skip the corresponding prompts; invalid interactive input is reported and retried. Choosing automatic API selection omits `apiVersion` from the file so it continues to follow the mode. The wizard never contacts Jira or reads/writes a token; cancelling before completing all inputs creates no configuration file. Without a terminal, supply required values as flags; `--no-input` explicitly disables prompts.
+
+`-g/--global` creates the home `.jira` directory automatically; without `-g`, the default destination is the current directory. Global `--config FILE` can select an initialization output file, but cannot be combined with `-g`. Existing destinations are never overwritten. The old `init --file ISSUE.conf` workflow has moved to `issue template --file ISSUE.conf`, which still creates adjacent `.conf` and `.md` issue-template files.
+
 ### Commands
 
 ```bash
-bash run-jira.sh init --file issue.conf
+bash run-jira.sh init
+bash run-jira.sh issue template --file issue.conf
 # Edit Jira REST fields in issue.conf and the adjacent issue.md
 bash run-jira.sh issue create --file issue.conf
 bash run-jira.sh issue list -p DEMO
@@ -242,7 +291,7 @@ bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
 bash run-jira.sh attach DEMO-1 --file diagram.png
 ```
 
-`init` and `export` create new files only; neither overwrites existing files. For creation, `fields` must contain `project`, `issuetype`, and `summary`; the description comes from the adjacent `.md`. Export includes only fields reported editable by Jira `/editmeta`, plus the description; other fields are never uploaded. Custom fields retain their original JSON/HOCON structure and must follow the REST field format of the particular Jira instance. `update` compares fields with the exported baseline and sends only changes; edited descriptions are converted from Markdown to Jira content. Export again after a successful update.
+`init`, `issue template`, and `export` create new files only; none overwrites existing files. Creation requires project, type, and summary; the connection configuration can supply the project. File-mode descriptions come from adjacent `.md` files. Export includes only fields reported editable by Jira `/editmeta`, plus the description; other fields are never uploaded. Custom fields retain their original JSON/HOCON structure and must follow the REST field format of the particular Jira instance. `update` compares fields with the exported baseline and sends only changes; edited descriptions are converted from Markdown to Jira content. Export again after a successful update.
 
 Before upload, `update` and `comment-update` compare Jira's current `updated` value with its value at export, refusing stale changes by default; `--force` explicitly bypasses this check. Comment export creates a `.md` file and adjacent `.conf` metadata; re-export after a successful update. **This preflight check is not an atomic concurrency lock**: a write between checking and updating can still race. Change status by the **transition ID** returned by `transitions`, not a status name. New comments, transitions, and attachments do not use the export file's concurrency check.
 
@@ -250,7 +299,7 @@ Issue and comment exports record the effective `apiVersion`, which must match th
 
 ### Creating issues: `issue create`
 
-Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group currently exposes `create`, `edit`, and `list`; other operations still use the top-level commands above.
+Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group currently exposes `create`, `edit`, `list`, and `template`; other operations still use the top-level commands above.
 
 ```bash
 # Interactively enter project key, issue type, summary, and optional single-line description
@@ -278,7 +327,7 @@ bash run-jira.sh issue create --no-input \
 bash run-jira.sh issue create --file issue.conf -s "Updated summary"
 ```
 
-Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are required. They may also come from `--file`'s `fields`; project and type accept raw REST `id` objects. In a terminal, missing required values are prompted by default, followed by an optional description if no description source was supplied. `--no-input` disables all prompts; without a terminal, creation never waits for interactive input either, and missing required fields fail before contacting Jira. Creation submits directly without an additional confirmation; scripts should always specify `--no-input`.
+Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are required. They may also come from `--file`'s `fields`; project and type accept raw REST `id` objects. If no project flag or template field is supplied, the connection configuration's default project is used. In a terminal, remaining missing required values are prompted by default, followed by an optional description if no description source was supplied. `--no-input` disables all prompts; without a terminal, creation never waits for interactive input either, and missing required fields fail before contacting Jira. Creation submits directly without an additional confirmation; scripts should always specify `--no-input`.
 
 `-y/--priority` sets the priority name. Repeat `-l/--label`, `-C/--component`, `--fix-version`, and `--affects-version` for multiple values; explicit lists **replace** the entire corresponding template list and are not comma-separated. `-P/--parent` sets the parent issue key, subject to Jira's project type and hierarchy. `-a/--assignee` accepts a Cloud `accountId` or Data Center username; special values are `me` to look up the current user, `x` to unassign, and `default` for the project's default assignee. Display-name fuzzy lookup is not supported.
 
@@ -333,7 +382,8 @@ Direct editing reads the current issue, sends only explicit changes, and skips r
 ### Listing issues: `issue list`
 
 ```bash
-# With no filters, search issues created in the last 30 days; return at most one page
+# Use the configured project; without a default project or filters, search the last 30 days
+# Return at most one page
 bash run-jira.sh issue list
 bash run-jira.sh issue list -p DEMO -s "In Progress" -a me
 bash run-jira.sh issue list -p DEMO -t Bug -y High -l backend -l urgent
@@ -358,7 +408,7 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 `list` is implemented in the separate `JiraIssueListCommand` class. Filters cover project, status, type, priority, assignee, reporter, labels, and lower bounds on creation/update times. Conditions are combined with `AND`; repeating `-l/--label` requires every specified label. Prefix status, type, or priority with `~` to exclude it. Assignees use Cloud `accountId` or Data Center usernames; `me` means the current user, `x` means unassigned, and `~x` means assigned. Reporters also support `me`. Jira determines field names and date interpretation. Ordinary filter values are escaped as JQL strings and cannot inject additional query clauses.
 
-Sorting defaults to `created DESC`. `--order-by` accepts `created`, `updated`, `priority`, `key`, `rank`, `summary`, `status`, `assignee`, or `issuetype`; `--reverse` switches to ascending order. `--created` and `--updated` accept Jira dates or relative times and mean greater than or equal to that value. **Only when no filters or JQL are supplied**, the command adds `created >= "-30d"` to satisfy Cloud's requirement for a restricted query; supplying a project or another filter removes this default time restriction. `-q/--jql` is a complete query and cannot be combined with filters, `--order-by`, or `--reverse`; custom Cloud JQL must also contain a search restriction.
+Sorting defaults to `created DESC`. `--order-by` accepts `created`, `updated`, `priority`, `key`, `rank`, `summary`, `status`, `assignee`, or `issuetype`; `--reverse` switches to ascending order. `--created` and `--updated` accept Jira dates or relative times and mean greater than or equal to that value. **Only when no default project, filters, or JQL are supplied**, the command adds `created >= "-30d"` to satisfy Cloud's requirement for a restricted query; a default or explicit project or other filter removes this time restriction. `-q/--jql` is a complete query and cannot be combined with explicit filters, `--order-by`, or `--reverse`; it does not receive an implicit default project either. Custom Cloud JQL must also contain a search restriction.
 
 Default table columns are issue key, type, status, priority, assignee, and summary. Missing or inaccessible optional fields display `-`; control characters are replaced with spaces in table/TSV output. `--plain` emits tab-separated values, and `--no-headers` removes headers. Empty results print only headers, or nothing with `--no-headers`. `--raw` and `--json` are equivalent: they emit the original JSON page containing `issues` and pagination metadata, with issue fields limited to summary, status, type, priority, assignee, and update time. They cannot be combined with `--plain` or `--no-headers`.
 

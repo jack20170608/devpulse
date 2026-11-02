@@ -30,7 +30,7 @@ public final class JiraCreateCommand extends JiraCommand.Action {
                     + "explicit flags override template fields.")
     Path file;
     @Option(names = {"-p", "--project"}, paramLabel = "KEY",
-            description = "Project key.")
+            description = "Project key; defaults to template or connection configuration.")
     String project;
     @Option(names = {"-t", "--type"}, paramLabel = "NAME",
             description = "Issue type name, e.g. Task or Bug.")
@@ -98,6 +98,9 @@ public final class JiraCreateCommand extends JiraCommand.Action {
         setList(issue, "fixVersions", fixVersions, true);
         setList(issue, "versions", affectsVersions, true);
         customFields(issue, custom);
+        if (!issue.has("project")) {
+            setNamed(issue, "project", "key", configuration().project());
+        }
         requiredField(issue, "project", "key", "Project key", "--project");
         requiredField(issue, "issuetype", "name", "Issue type", "--type");
         requiredField(issue, "summary", null, "Summary", "--summary");
