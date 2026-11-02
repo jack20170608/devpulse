@@ -38,7 +38,6 @@ Accept: application/json
 ### Inspect one manually selected attachment
 # @name jiraAttachmentMetadata
 # @no-redirect
-# @no-log
 < {%
     client.global.clear("attachmentFilename");
     client.global.clear("attachmentFilenameId");
@@ -70,20 +69,19 @@ Accept: application/json
 ### Download one attachment without following redirects (Jira Cloud)
 # @name jiraDownloadAttachment
 # @no-redirect
-# @no-log
 < {%
-    const attachmentId = request.environment.get("ATTACHMENT_ID_1");
-    if (attachmentId === undefined || attachmentId === null || !/^[0-9]+$/.test(String(attachmentId))) {
-        throw new Error("Set ATTACHMENT_ID_1 to a numeric attachment ID from the selected issue.");
-    }
+  const attachmentId = request.environment.get("ATTACHMENT_ID_1");
+  if (attachmentId === undefined || attachmentId === null || !/^[0-9]+$/.test(String(attachmentId))) {
+    throw new Error("Set ATTACHMENT_ID_1 to a numeric attachment ID from the selected issue.");
+  }
 %}
 GET {{JIRA_BASE_URL}}/rest/api/2/attachment/content/{{ATTACHMENT_ID_1}}?redirect=false
 Authorization: Basic {{JIRA_BASIC}}
 Accept: */*
 
 > {%
-    client.test("Attachment content is downloaded", function () {
-        client.assert(response.status === 200, "Expected HTTP 200 with file content, not a redirect");
-    });
+  client.test("Attachment content is downloaded", function () {
+    client.assert(response.status === 200, "Expected HTTP 200 with file content, not a redirect");
+  });
 %}
 >> ./download/{{ISSUE_KEY}}-{{attachmentFilename}}

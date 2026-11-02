@@ -15,7 +15,7 @@
 
 附件列表位于工单响应的 `fields.attachment` 数组中；空数组表示当前没有附件。元数据包含附件 ID、文件名、大小、作者和下载地址等信息。
 
-`0402_query.http` 中的 `jiraAttachmentMetadata` 使用 `ATTACHMENT_ID_1` 查询附件。响应成功且元数据校验通过后，将原始文件名保存到 HTTP Client 会话全局变量 `attachmentFilename`，并将对应附件 ID 保存到 `attachmentFilenameId`。后续请求可通过 `{{attachmentFilename}}` 引用文件名，脚本中可通过 `client.global.get("attachmentFilename")` 读取，不需要增加环境变量。
+`0402_query_download.http` 中的 `jiraAttachmentMetadata` 使用 `ATTACHMENT_ID_1` 查询附件。响应成功且元数据校验通过后，将原始文件名保存到 HTTP Client 会话全局变量 `attachmentFilename`，并将对应附件 ID 保存到 `attachmentFilenameId`。后续请求可通过 `{{attachmentFilename}}` 引用文件名，脚本中可通过 `client.global.get("attachmentFilename")` 读取，不需要增加环境变量。
 
 每次元数据查询前会清除这两个全局变量，避免查询失败后误用旧值。切换附件或环境后应重新查询；将文件名用于本地保存路径前，必须确认 `attachmentFilenameId` 与当前附件 ID 一致，并校验文件名符合本地文件系统规则。这一步只保存变量，不会自动修改下载请求的保存路径。
 
