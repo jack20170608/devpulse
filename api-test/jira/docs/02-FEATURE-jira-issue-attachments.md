@@ -73,6 +73,8 @@
 
 ### 完整生命周期示例
 
+目标工单由文件顶部的 `@fullLifecycleIssueKey` 指定，独立于环境变量 `ISSUE_KEY`。脚本使用 `client.variables.file.get("fullLifecycleIssueKey")` 读取文件变量，不能用仅访问环境配置的 `request.environment.get(...)`。修改该值后应重新开始生命周期；已有附件须先人工核实并清理。
+
 [`0404_full_lifecycle.http`](../04-attachment-management/0404_full_lifecycle.http) 提供七步闭环：上传 → 工单列表核验 → 元数据核验 → 下载 → 删除 → 元数据 `404` 核验 → 工单列表缺失核验。
 
 先运行 `jiraMyself`，选择测试环境并设置 `ALLOW_WRITES: true`，然后按文件中的 1–7 顺序执行。上传使用 `files\build.log`，显示名称为 `lifecycle-build.log`，下载仅在响应视图查看，不另存本地文件。运行示例即表示允许删除其新建的测试附件；不需要填写 `ATTACHMENT_ID_1` 或 `CONFIRM_ATTACHMENT_DELETE_ID`，也不会删除已有附件。
@@ -166,6 +168,8 @@ Every deletion attempt clears the previous success record to prevent reuse after
 A `404` can also mean lack of visibility and cannot independently prove deletion. Verification must follow a successful `204`; do not change accounts or permissions between requests, and also confirm against the issue list.
 
 ### Full lifecycle example
+
+The target issue is specified by `@fullLifecycleIssueKey` at the top of the file, independently of environment variable `ISSUE_KEY`. Scripts read this file variable with `client.variables.file.get("fullLifecycleIssueKey")`, not `request.environment.get(...)`, which only accesses environment configuration. Restart the lifecycle after changing this value; manually verify and clean up any existing lifecycle attachment first.
 
 [`0404_full_lifecycle.http`](../04-attachment-management/0404_full_lifecycle.http) provides seven steps: upload → issue-list verification → metadata verification → download → delete → metadata `404` verification → issue-list absence verification.
 

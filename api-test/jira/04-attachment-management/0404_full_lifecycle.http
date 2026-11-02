@@ -13,11 +13,15 @@
     if (allowWrites !== true && allowWrites !== "true") {
         throw new Error("Set ALLOW_WRITES to true only for the selected test issue.");
     }
+    const issueKey = client.variables.file.get("fullLifecycleIssueKey");
+    if (typeof issueKey !== "string" || issueKey.trim().length === 0) {
+        throw new Error("Set the file variable @fullLifecycleIssueKey to the selected test issue key.");
+    }
     client.global.clear("jiraAttachmentLifecycle");
     client.global.clear("lifecycleAttachmentId");
     client.global.set("jiraAttachmentLifecycle", JSON.stringify({
         baseUrl: request.environment.get("JIRA_BASE_URL"),
-        issueKey: request.environment.get("fullLifecycleIssueKey"),
+        issueKey: issueKey,
         filename: "lifecycle-build.log",
         phase: "uploadPending"
     }));
@@ -63,7 +67,7 @@ Content-Type: text/plain
     }
     const state = JSON.parse(saved);
     if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
-        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "uploaded") {
+        || state.issueKey !== client.variables.file.get("fullLifecycleIssueKey") || state.phase !== "uploaded") {
         throw new Error("Expected the uploaded lifecycle attachment in the original environment. Run steps in order.");
     }
 %}
@@ -75,8 +79,10 @@ Accept: application/json
     client.test("Uploaded attachment is listed on the selected issue", function () {
         const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
         client.assert(response.status === 200, "Expected HTTP 200");
-        client.assert(response.body && response.body.key === state.issueKey && response.body.fields
-            && Array.isArray(response.body.fields.attachment), "Expected the selected issue's attachment list");
+        client.assert(response.body && response.body.key === state.issueKey,
+            "Expected issue " + state.issueKey + "; received " + (response.body && response.body.key));
+        client.assert(response.body.fields && Array.isArray(response.body.fields.attachment),
+            "Expected fields.attachment to be an array");
         const matches = response.body.fields.attachment.filter(function (attachment) {
             return attachment && String(attachment.id) === state.id;
         });
@@ -97,7 +103,7 @@ Accept: application/json
     }
     const state = JSON.parse(saved);
     if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
-        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "listed") {
+        || state.issueKey !== client.variables.file.get("fullLifecycleIssueKey") || state.phase !== "listed") {
         throw new Error("Expected a successful issue-list check in the original environment. Run steps in order.");
     }
     request.variables.set("lifecycleAttachmentId", state.id);
@@ -128,7 +134,7 @@ Accept: application/json
     }
     const state = JSON.parse(saved);
     if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
-        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "metadataRead") {
+        || state.issueKey !== client.variables.file.get("fullLifecycleIssueKey") || state.phase !== "metadataRead") {
         throw new Error("Expected a successful metadata check in the original environment. Run steps in order.");
     }
     request.variables.set("lifecycleAttachmentId", state.id);
@@ -161,7 +167,7 @@ Accept: */*
     }
     const state = JSON.parse(saved);
     if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
-        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "downloaded"
+        || state.issueKey !== client.variables.file.get("fullLifecycleIssueKey") || state.phase !== "downloaded"
         || !/^[0-9]+$/.test(state.id)) {
         throw new Error("Expected this lifecycle's downloaded attachment in the original environment. Run steps in order.");
     }
@@ -196,7 +202,7 @@ Accept: application/json
     }
     const state = JSON.parse(saved);
     if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
-        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "deleted") {
+        || state.issueKey !== client.variables.file.get("fullLifecycleIssueKey") || state.phase !== "deleted") {
         throw new Error("Expected a successful lifecycle deletion in the original environment. Run steps in order.");
     }
     request.variables.set("lifecycleAttachmentId", state.id);
@@ -225,7 +231,7 @@ Accept: application/json
     }
     const state = JSON.parse(saved);
     if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
-        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "notFound") {
+        || state.issueKey !== client.variables.file.get("fullLifecycleIssueKey") || state.phase !== "notFound") {
         throw new Error("Expected the post-deletion HTTP 404 check in the original environment. Run steps in order.");
     }
 %}
@@ -237,8 +243,10 @@ Accept: application/json
     client.test("Lifecycle attachment is absent from the issue", function () {
         const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
         client.assert(response.status === 200, "Expected HTTP 200");
-        client.assert(response.body && response.body.key === state.issueKey && response.body.fields
-            && Array.isArray(response.body.fields.attachment), "Expected the selected issue's attachment list");
+        client.assert(response.body && response.body.key === state.issueKey,
+            "Expected issue " + state.issueKey + "; received " + (response.body && response.body.key));
+        client.assert(response.body.fields && Array.isArray(response.body.fields.attachment),
+            "Expected fields.attachment to be an array");
         client.assert(response.body.fields.attachment.every(function (attachment) {
             return attachment && String(attachment.id) !== state.id;
         }), "The deleted attachment must no longer appear; unrelated attachments may remain");

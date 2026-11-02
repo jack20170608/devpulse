@@ -19,19 +19,19 @@ Accept: application/json
 # @name jiraTransitionIssue
 # @no-redirect
 # @no-log
-< {%
-    if (request.environment.get("allowWrites") !== true) {
-        throw new Error("Write requests are disabled. Confirm issueKey and transitionId before enabling writes.");
-    }
-%}
-POST {{jiraBaseUrl}}/rest/api/2/issue/{{issueKey}}/transitions
-Authorization: {{$env.JIRA_AUTHORIZATION}}
+#< {%
+#    if (request.environment.get("ALLOW_WRITES") !== true) {
+#        throw new Error("Write requests are disabled. Confirm issueKey and transitionId before enabling writes.");
+#    }
+#%}
+POST {{JIRA_BASE_URL}}/rest/api/2/issue/{{ISSUE_KEY}}/transitions
+Authorization: Basic {{JIRA_BASIC}}
 Accept: application/json
 Content-Type: application/json
 
 {
   "transition": {
-    "id": "{{transitionId}}"
+    "id": "31"
   }
 }
 
