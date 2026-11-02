@@ -21,7 +21,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 
-public record JiraConfiguration(String url, String mode, String email) {
+public record JiraConfiguration(String url, String mode, String email,
+        int apiVersion) {
     public static JiraConfiguration load(Path file) throws IOException {
         if (!Files.isRegularFile(file)) {
             throw new IOException("Jira configuration not found: " + file
@@ -33,10 +34,11 @@ public record JiraConfiguration(String url, String mode, String email) {
                     ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
                             .setIncluder(new NoIncludes()))
                     .resolve(ConfigResolveOptions.noSystem());
-            if (!Set.of("url", "mode", "email")
+            if (!Set.of("url", "mode", "email", "apiVersion")
                     .containsAll(config.root().keySet())) {
                 throw new IOException("Jira configuration supports only "
-                        + "url, mode, and email; use DEVPULSE_JIRA_TOKEN "
+                        + "url, mode, email, and apiVersion; "
+                        + "use DEVPULSE_JIRA_TOKEN "
                         + "for authentication.");
             }
             var mode = required(config, "mode");
@@ -46,12 +48,33 @@ public record JiraConfiguration(String url, String mode, String email) {
             }
             return new JiraConfiguration(required(config, "url"), mode,
                     mode.equals("cloud") || config.hasPathOrNull("email")
-                            ? required(config, "email") : null);
+                            ? required(config, "email") : null,
+                    apiVersion(config, mode));
         } catch (ConfigException exception) {
             // Parser messages may echo file contents or substituted values.
             throw new IOException("Invalid Jira connection configuration; "
-                    + "check HOCON syntax and url/mode/email fields.");
+                    + "check HOCON syntax and "
+                    + "url/mode/email/apiVersion fields.");
         }
+    }
+
+    private static int apiVersion(Config config, String mode)
+            throws IOException {
+        if (!config.hasPathOrNull("apiVersion")) {
+            return mode.equals("cloud") ? 3 : 2;
+        }
+        if (!config.hasPath("apiVersion")
+                || config.getValue("apiVersion").valueType()
+                != ConfigValueType.NUMBER) {
+            throw new IOException("Jira configuration apiVersion "
+                    + "must be the number 2 or 3.");
+        }
+        var value = config.getNumber("apiVersion").doubleValue();
+        if (value != 2 && value != 3) {
+            throw new IOException("Jira configuration apiVersion "
+                    + "must be the number 2 or 3.");
+        }
+        return (int) value;
     }
 
     private static String required(Config config, String field)

@@ -23,12 +23,12 @@ import org.commonmark.parser.Parser;
 public final class JiraMarkdown {
     private JiraMarkdown() {}
 
-    public static JsonElement toJira(String markdown, boolean cloud)
+    public static JsonElement toJira(String markdown, boolean adf)
             throws IOException {
-        if (!cloud) {
-            // Jira Data Center uses its own wiki renderer, not ADF.
+        if (!adf) {
+            // REST v2 uses Jira wiki text rather than ADF.
             if (!plain(markdown)) {
-                throw new IOException("Data Center supports plain-text "
+                throw new IOException("REST API v2 supports plain-text "
                         + "descriptions/comments only; rich Markdown "
                         + "cannot be converted without losing formatting.");
             }
@@ -47,16 +47,16 @@ public final class JiraMarkdown {
         return doc;
     }
 
-    public static String fromJira(JsonElement value, boolean cloud)
+    public static String fromJira(JsonElement value, boolean adf)
             throws IOException {
         if (value == null || value.isJsonNull()) {
             return "";
         }
-        if (!cloud) {
+        if (!adf) {
             if (!value.isJsonPrimitive()
                     || !value.getAsJsonPrimitive().isString()
                     || !plain(value.getAsString())) {
-                throw new IOException("Data Center description contains "
+                throw new IOException("REST API v2 description contains "
                         + "wiki markup or unsupported content; refusing "
                         + "lossy Markdown export.");
             }

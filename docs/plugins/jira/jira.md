@@ -6,7 +6,7 @@
 
 [项目首页](../../readme.MD)
 
-`devpulse-jira` 是 `devpulse-plugins` Maven 聚合模块下独立可运行的 `jira` 子模块与 Jira REST 客户端，支持 Jira Cloud（REST v3）和 Data Center（REST v2）。核心 `devpulse` 不加载或依赖它，也不需要 Bash 来执行 Jira JAR。根目录 `mvn clean package` 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`；`bash run-jira.sh` 仅构建该模块并启动。**未连接真实 Jira 实例验证**；先在测试项目中检查字段格式、权限与工作流。
+`devpulse-jira` 是 `devpulse-plugins` Maven 聚合模块下独立可运行的 `jira` 子模块与 Jira REST 客户端，支持 Jira Cloud（默认 REST v3）和 Data Center（默认 REST v2），可显式配置 API 版本。核心 `devpulse` 不加载或依赖它，也不需要 Bash 来执行 Jira JAR。根目录 `mvn clean package` 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`；`bash run-jira.sh` 仅构建该模块并启动。**未连接真实 Jira 实例验证**；先在测试项目中检查字段格式、权限与工作流。
 
 ### 连接配置与认证
 
@@ -16,6 +16,7 @@
 url = "https://example.atlassian.net"
 mode = "cloud"                  # Data Center 使用 "dc"
 email = "user@example.com"       # Cloud 必填，Data Center 可省略
+# apiVersion = 3                # 可选：2 或 3；省略时 Cloud=3、Data Center=2
 ```
 
 仅认证令牌从环境变量读取，不在连接配置或 issue 模板中保存：
@@ -31,7 +32,9 @@ bash run-jira.sh --config connection.conf issue list -p DEMO
 bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
 
-`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。不再读取 `DEVPULSE_JIRA_URL`、`DEVPULSE_JIRA_MODE` 或 `DEVPULSE_JIRA_EMAIL`，旧配置需迁移到文件；缺少文件或字段时会报错，不回退到这些环境变量。连接配置仅接受 `url`、`mode`、`email`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本及离线 issue 模板 `init` 命令不需要连接配置或 token；`init --file` 不生成连接配置。
+`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。不再读取 `DEVPULSE_JIRA_URL`、`DEVPULSE_JIRA_MODE` 或 `DEVPULSE_JIRA_EMAIL`，旧配置需迁移到文件；缺少文件或字段时会报错，不回退到这些环境变量。连接配置仅接受 `url`、`mode`、`email`、`apiVersion`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本及离线 issue 模板 `init` 命令不需要连接配置或 token；`init --file` 不生成连接配置。
+
+`apiVersion` 为可选的数值 `2` 或 `3`；未配置时保留原规则：`mode = "cloud"` 使用 3，`mode = "dc"` 使用 2。显式值覆盖默认选择，请求路径使用 `/rest/api/{apiVersion}/`，描述与评论按 API v2 文本或 API v3 ADF 格式处理；认证、用户标识和搜索分页方式仍由 `mode` 决定。指定版本并不保证 Jira 部署提供相应接口，例如 Data Center 通常不提供 v3，需确认服务器实际支持。
 
 使用 HTTPS；仅本机测试允许 HTTP。请勿将包含凭据的 shell 历史、环境转储、导出的 Jira 数据或附件提交到版本库。访问失败只显示 HTTP 状态码，不输出 Jira 的错误正文。
 
@@ -59,6 +62,8 @@ bash run-jira.sh attach DEMO-1 --file diagram.png
 `init` 和 `export` 只创建新文件，不覆盖已有文件。创建时 `fields` 必须包含 `project`、`issuetype`、`summary`；描述取同名 `.md`。导出仅保留 Jira `/editmeta` 返回的可编辑字段及描述，其他字段不会被回写；自定义字段保持原始 JSON/HOCON 结构，需按该 Jira 实例的 REST 字段格式修改。`update` 比较导出时的字段，只发送修改过的字段；修改描述时将 Markdown 转成 Jira 内容格式。更新成功后重新导出再编辑。
 
 `update` 和 `comment-update` 上传前比较导出时和当前 Jira 的 `updated` 值，发现变化默认拒绝；`--force` 显式跳过检查。评论导出创建 `.md` 与同名 `.conf` 元数据，成功更新后需要重新导出。**这是上传前检查，不是原子并发锁**：检查与更新之间若发生并发写入仍可能冲突。状态更改使用 `transitions` 查到的**转换 ID**，不是状态名；新评论、状态转换和附件不使用导出文件的并发检查。
+
+问题及评论导出会记录实际 `apiVersion`；更新时必须与当前配置一致，切换版本后需要重新导出，`--force` 不跳过此检查。没有该字段的旧导出按原规则解释为 Cloud v3 或 Data Center v2。
 
 ### 创建问题：`issue create`
 
@@ -174,17 +179,17 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 默认表格列为问题 key、类型、状态、优先级、经办人、标题；缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出制表符分隔内容，`--no-headers` 移除表头。空结果仅输出表头，配合 `--no-headers` 时无输出。`--raw` 与 `--json` 等价，输出包含 `issues` 和分页元数据的原始 JSON 页，字段限定为标题、状态、类型、优先级、经办人和更新时间；不能与 `--plain` 或 `--no-headers` 混用。
 
-每次调用仅请求一页，不自动遍历所有问题；`--limit` 默认为 50，范围为 1–100，Jira 仍可能返回更少的条目。Cloud 使用 REST v3 `POST /search/jql` 与不透明的 `nextPageToken`；Data Center 使用 REST v2 `POST /search` 与零起始的 `startAt`。两种分页参数不能跨模式使用。表格/TSV 模式在存在下一页时向标准错误输出续页提示，JSON 模式直接保留服务器分页信息。查询结果受 Jira 权限限制，Cloud 最近写入的修改也可能不会立即出现在搜索中。
+每次调用仅请求一页，不自动遍历所有问题；`--limit` 默认为 50，范围为 1–100，Jira 仍可能返回更少的条目。在所选 API 版本下，Cloud 使用 `POST /search/jql` 与不透明的 `nextPageToken`；Data Center 使用 `POST /search` 与零起始的 `startAt`。两种分页参数不能跨模式使用。表格/TSV 模式在存在下一页时向标准错误输出续页提示，JSON 模式直接保留服务器分页信息。查询结果受 Jira 权限限制，Cloud 最近写入的修改也可能不会立即出现在搜索中。
 
 ### Markdown 边界
 
-Cloud 描述、评论支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。Data Center 使用 Jira wiki 格式而非 ADF，当前**只支持纯文本描述和评论**，遇到可识别的 wiki/Markdown 格式会拒绝转换；不能保证识别所有插件的私有格式。其他可编辑字段保留为原始结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
+API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。API v2（包括显式选择 v2 的 Cloud）使用 Jira wiki 格式而非 ADF，当前**只支持纯文本描述和评论**，遇到可识别的 wiki/Markdown 格式会拒绝转换；不能保证识别所有插件的私有格式。其他可编辑字段保留为原始结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
 
 ## English
 
 [Project home](../../readme.MD)
 
-`devpulse-jira` is an independently executable `jira` child module under the `devpulse-plugins` Maven aggregator and a Jira REST client for Jira Cloud (REST v3) and Data Center (REST v2). The core `devpulse` neither loads nor depends on it; the Jira JAR itself does not need Bash. From the repository root, `mvn clean package` produces `devpulse-plugins/jira/target/devpulse-jira.jar`; `bash run-jira.sh` builds only that module and launches it. **It has not been validated against a live Jira instance**; first check field shapes, permissions, and workflows in a test project.
+`devpulse-jira` is an independently executable `jira` child module under the `devpulse-plugins` Maven aggregator and a Jira REST client for Jira Cloud (REST v3 by default) and Data Center (REST v2 by default), with an explicit API version override. The core `devpulse` neither loads nor depends on it; the Jira JAR itself does not need Bash. From the repository root, `mvn clean package` produces `devpulse-plugins/jira/target/devpulse-jira.jar`; `bash run-jira.sh` builds only that module and launches it. **It has not been validated against a live Jira instance**; first check field shapes, permissions, and workflows in a test project.
 
 ### Connection configuration and authentication
 
@@ -194,6 +199,7 @@ Connection settings default to `.jira.conf` in the **current working directory**
 url = "https://example.atlassian.net"
 mode = "cloud"                  # Use "dc" for Data Center
 email = "user@example.com"       # Required for Cloud; optional for Data Center
+# apiVersion = 3                # Optional: 2 or 3; defaults to Cloud=3, Data Center=2
 ```
 
 Only the authentication token comes from the environment; never put it in connection configuration or issue templates:
@@ -209,7 +215,9 @@ bash run-jira.sh --config connection.conf issue list -p DEMO
 bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
 
-`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. `DEVPULSE_JIRA_URL`, `DEVPULSE_JIRA_MODE`, and `DEVPULSE_JIRA_EMAIL` are no longer read; migrate them to the file. Missing files or fields fail rather than falling back to those environment variables. Connection configuration accepts only `url`, `mode`, and `email`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, and offline issue-template `init` commands need neither connection configuration nor a token; `init --file` does not generate connection configuration.
+`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. `DEVPULSE_JIRA_URL`, `DEVPULSE_JIRA_MODE`, and `DEVPULSE_JIRA_EMAIL` are no longer read; migrate them to the file. Missing files or fields fail rather than falling back to those environment variables. Connection configuration accepts only `url`, `mode`, `email`, and `apiVersion`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, and offline issue-template `init` commands need neither connection configuration nor a token; `init --file` does not generate connection configuration.
+
+`apiVersion` optionally accepts the number `2` or `3`. Omission preserves the original rule: `mode = "cloud"` selects 3, and `mode = "dc"` selects 2. An explicit value overrides that default, using `/rest/api/{apiVersion}/` paths and API v2 text or API v3 ADF for descriptions/comments. Authentication, user identifiers, and search pagination still follow `mode`. Selecting a version does not guarantee server support; for example, Data Center typically does not expose v3, so verify the deployment's available APIs.
 
 Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history containing credentials, environment dumps, exported Jira data, or attachments. HTTP failures display only the status code, not the Jira response body.
 
@@ -237,6 +245,8 @@ bash run-jira.sh attach DEMO-1 --file diagram.png
 `init` and `export` create new files only; neither overwrites existing files. For creation, `fields` must contain `project`, `issuetype`, and `summary`; the description comes from the adjacent `.md`. Export includes only fields reported editable by Jira `/editmeta`, plus the description; other fields are never uploaded. Custom fields retain their original JSON/HOCON structure and must follow the REST field format of the particular Jira instance. `update` compares fields with the exported baseline and sends only changes; edited descriptions are converted from Markdown to Jira content. Export again after a successful update.
 
 Before upload, `update` and `comment-update` compare Jira's current `updated` value with its value at export, refusing stale changes by default; `--force` explicitly bypasses this check. Comment export creates a `.md` file and adjacent `.conf` metadata; re-export after a successful update. **This preflight check is not an atomic concurrency lock**: a write between checking and updating can still race. Change status by the **transition ID** returned by `transitions`, not a status name. New comments, transitions, and attachments do not use the export file's concurrency check.
+
+Issue and comment exports record the effective `apiVersion`, which must match the current configuration when updating. Re-export after switching versions; `--force` does not bypass this check. Older exports without that field retain the original interpretation: Cloud v3 or Data Center v2.
 
 ### Creating issues: `issue create`
 
@@ -352,8 +362,8 @@ Sorting defaults to `created DESC`. `--order-by` accepts `created`, `updated`, `
 
 Default table columns are issue key, type, status, priority, assignee, and summary. Missing or inaccessible optional fields display `-`; control characters are replaced with spaces in table/TSV output. `--plain` emits tab-separated values, and `--no-headers` removes headers. Empty results print only headers, or nothing with `--no-headers`. `--raw` and `--json` are equivalent: they emit the original JSON page containing `issues` and pagination metadata, with issue fields limited to summary, status, type, priority, assignee, and update time. They cannot be combined with `--plain` or `--no-headers`.
 
-Each invocation requests one page, never all issues automatically. `--limit` defaults to 50 and accepts 1–100; Jira may still return fewer items. Cloud uses REST v3 `POST /search/jql` with an opaque `nextPageToken`; Data Center uses REST v2 `POST /search` with zero-based `startAt`. Pagination flags cannot be used across modes. Table/TSV output writes a continuation hint to stderr when another page exists; JSON output preserves server pagination metadata directly. Results are limited by Jira permissions, and recent Cloud writes may not immediately appear in search results.
+Each invocation requests one page, never all issues automatically. `--limit` defaults to 50 and accepts 1–100; Jira may still return fewer items. Within the selected API version, Cloud uses `POST /search/jql` with an opaque `nextPageToken`; Data Center uses `POST /search` with zero-based `startAt`. Pagination flags cannot be used across modes. Table/TSV output writes a continuation hint to stderr when another page exists; JSON output preserves server pagination metadata directly. Results are limited by Jira permissions, and recent Cloud writes may not immediately appear in search results.
 
 ### Markdown limits
 
-Cloud descriptions and comments support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped. Data Center uses Jira wiki syntax rather than ADF; it currently supports **plain-text descriptions and comments only**, rejecting recognizable wiki/Markdown syntax. Proprietary plugin syntax cannot always be identified. Other editable fields retain their raw structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.
+API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped. API v2, including Cloud explicitly configured for v2, uses Jira wiki syntax rather than ADF; it currently supports **plain-text descriptions and comments only**, rejecting recognizable wiki/Markdown syntax. Proprietary plugin syntax cannot always be identified. Other editable fields retain their raw structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.

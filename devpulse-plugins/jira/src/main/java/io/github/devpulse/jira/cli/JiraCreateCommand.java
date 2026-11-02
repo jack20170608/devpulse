@@ -106,7 +106,7 @@ public final class JiraCreateCommand extends JiraCommand.Action {
         var jira = client();
         if (description != null) {
             issue.add("description", JiraMarkdown.toJira(description,
-                    jira.cloud()));
+                    jira.apiVersion() == 3));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");

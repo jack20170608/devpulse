@@ -214,6 +214,22 @@ public final class JiraCommand implements Runnable {
         return value.getAsJsonObject();
     }
 
+    private static void requireExportConfiguration(
+            com.typesafe.config.Config data, JiraClient jira)
+            throws IOException {
+        var mode = data.getString("mode");
+        if (!mode.equals(jira.cloud() ? "cloud" : "dc")) {
+            throw wrong("Exported Jira mode does not match configuration.");
+        }
+        var version = data.hasPathOrNull("apiVersion")
+                ? data.getNumber("apiVersion").doubleValue()
+                : mode.equals("cloud") ? 3 : 2;
+        if (version != jira.apiVersion()) {
+            throw wrong("Exported Jira API version does not match "
+                    + "configuration; re-export before updating.");
+        }
+    }
+
     abstract static class Action implements Callable<Integer> {
         @Spec
         CommandSpec spec;
@@ -337,12 +353,13 @@ public final class JiraCommand implements Runnable {
                 }
             }
             var description = JiraMarkdown.fromJira(
-                    source.get("description"), jira.cloud());
+                    source.get("description"), jira.apiVersion() == 3);
             var values = new LinkedHashMap<String, Object>();
             values.put("version", 1);
             values.put("key", string(issue, "key"));
             values.put("updated", string(source, "updated"));
             values.put("mode", jira.cloud() ? "cloud" : "dc");
+            values.put("apiVersion", jira.apiVersion());
             values.put("descriptionSha256", hash(description));
             values.put("fields", toMap(exported));
             values.put("originalFields", toMap(exported));
@@ -387,10 +404,7 @@ public final class JiraCommand implements Runnable {
                 throw wrong("Use jira export to create an update file.");
             }
             var jira = client();
-            if (!data.getString("mode").equals(jira.cloud()
-                    ? "cloud" : "dc")) {
-                throw wrong("Exported Jira mode does not match environment.");
-            }
+            requireExportConfiguration(data, jira);
             var current = jira.issue(data.getString("key"));
             var remote = object(current.get("fields"));
             if (!force && !data.getString("updated").equals(
@@ -423,7 +437,7 @@ public final class JiraCommand implements Runnable {
             if (!hash(description).equals(
                     data.getString("descriptionSha256"))) {
                 changes.add("description", JiraMarkdown.toJira(description,
-                        jira.cloud()));
+                        jira.apiVersion() == 3));
             }
             if (changes.isEmpty()) {
                 print("No changes to upload.");
@@ -489,7 +503,8 @@ public final class JiraCommand implements Runnable {
         @Override
         protected void execute() throws IOException {
             var jira = client();
-            jira.comment(key, JiraMarkdown.toJira(text(file), jira.cloud()));
+            jira.comment(key, JiraMarkdown.toJira(text(file),
+                    jira.apiVersion() == 3));
             print("Commented on " + key + ".");
         }
     }
@@ -516,13 +531,14 @@ public final class JiraCommand implements Runnable {
             var jira = client();
             var comment = jira.comment(key, id);
             var description = JiraMarkdown.fromJira(
-                    comment.get("body"), jira.cloud());
+                    comment.get("body"), jira.apiVersion() == 3);
             var values = new LinkedHashMap<String, Object>();
             values.put("version", 1);
             values.put("key", key);
             values.put("commentId", string(comment, "id"));
             values.put("updated", string(comment, "updated"));
             values.put("mode", jira.cloud() ? "cloud" : "dc");
+            values.put("apiVersion", jira.apiVersion());
             values.put("descriptionSha256", hash(description));
             write(file, description);
             try {
@@ -565,10 +581,7 @@ public final class JiraCommand implements Runnable {
                 throw wrong("Comment metadata does not match issue/ID.");
             }
             var jira = client();
-            if (!data.getString("mode").equals(jira.cloud()
-                    ? "cloud" : "dc")) {
-                throw wrong("Exported Jira mode does not match environment.");
-            }
+            requireExportConfiguration(data, jira);
             var current = jira.comment(key, id);
             if (!force && !data.getString("updated").equals(
                     string(current, "updated"))) {
@@ -581,7 +594,7 @@ public final class JiraCommand implements Runnable {
                 return;
             }
             jira.editComment(key, id,
-                    JiraMarkdown.toJira(content, jira.cloud()));
+                    JiraMarkdown.toJira(content, jira.apiVersion() == 3));
             print("Updated comment " + id + ". "
                     + "Re-export before the next update.");
         }

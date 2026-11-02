@@ -24,6 +24,7 @@ public final class JiraClient {
     private final String authorization;
     private final String api;
     private final boolean cloud;
+    private final int apiVersion;
 
     public JiraClient(JiraConfiguration configuration, String token)
             throws IOException {
@@ -55,7 +56,12 @@ public final class JiraClient {
             throw new IOException("Jira configuration mode must be cloud or dc.");
         }
         cloud = mode.equals("cloud");
-        api = "rest/api/" + (cloud ? "3" : "2") + "/";
+        apiVersion = configuration.apiVersion();
+        if (apiVersion != 2 && apiVersion != 3) {
+            throw new IOException("Jira configuration apiVersion "
+                    + "must be the number 2 or 3.");
+        }
+        api = "rest/api/" + apiVersion + "/";
         if (cloud) {
             var email = configuration.email();
             if (email == null || email.isBlank()) {
@@ -71,6 +77,10 @@ public final class JiraClient {
 
     public boolean cloud() {
         return cloud;
+    }
+
+    public int apiVersion() {
+        return apiVersion;
     }
 
     public JsonObject myself() throws IOException {

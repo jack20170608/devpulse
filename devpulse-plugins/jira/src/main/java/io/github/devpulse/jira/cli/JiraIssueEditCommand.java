@@ -124,7 +124,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
         }
         if (description != null) {
             fields.add("description", description.isEmpty() ? JsonNull.INSTANCE
-                    : JiraMarkdown.toJira(description, jira.cloud()));
+                    : JiraMarkdown.toJira(description, jira.apiVersion() == 3));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
