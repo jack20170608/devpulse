@@ -8,16 +8,30 @@
 
 `devpulse-jira` 是 `devpulse-plugins` Maven 聚合模块下独立可运行的 `jira` 子模块与 Jira REST 客户端，支持 Jira Cloud（REST v3）和 Data Center（REST v2）。核心 `devpulse` 不加载或依赖它，也不需要 Bash 来执行 Jira JAR。根目录 `mvn clean package` 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`；`bash run-jira.sh` 仅构建该模块并启动。**未连接真实 Jira 实例验证**；先在测试项目中检查字段格式、权限与工作流。
 
-### 认证
+### 连接配置与认证
 
-仅从环境变量读取连接信息，不在模板中保存凭据：
+连接信息默认从**当前工作目录**的 `.jira.conf` 读取，使用 UTF-8 HOCON；此文件与 `issue create --file` 等命令的 issue 模板完全独立：
+
+```hocon
+url = "https://example.atlassian.net"
+mode = "cloud"                  # Data Center 使用 "dc"
+email = "user@example.com"       # Cloud 必填，Data Center 可省略
+```
+
+仅认证令牌从环境变量读取，不在连接配置或 issue 模板中保存：
 
 ```bash
-export DEVPULSE_JIRA_MODE=cloud                 # Data Center 使用 dc
-export DEVPULSE_JIRA_URL=https://example.atlassian.net
-export DEVPULSE_JIRA_EMAIL=user@example.com    # 仅 Cloud
 export DEVPULSE_JIRA_TOKEN='your-api-token'     # Cloud API Token / Data Center PAT
 ```
+
+使用全局 `-c/--config` 指定其他连接配置文件；该选项可以放在子命令前或后，相对路径仍以当前工作目录为基准：
+
+```bash
+bash run-jira.sh --config connection.conf issue list -p DEMO
+bash run-jira.sh issue list -p DEMO --config connection.conf
+```
+
+`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。不再读取 `DEVPULSE_JIRA_URL`、`DEVPULSE_JIRA_MODE` 或 `DEVPULSE_JIRA_EMAIL`，旧配置需迁移到文件；缺少文件或字段时会报错，不回退到这些环境变量。连接配置仅接受 `url`、`mode`、`email`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本及离线 issue 模板 `init` 命令不需要连接配置或 token；`init --file` 不生成连接配置。
 
 使用 HTTPS；仅本机测试允许 HTTP。请勿将包含凭据的 shell 历史、环境转储、导出的 Jira 数据或附件提交到版本库。访问失败只显示 HTTP 状态码，不输出 Jira 的错误正文。
 
@@ -172,16 +186,30 @@ Cloud 描述、评论支持普通段落、1–6 级标题、简单列表、无�
 
 `devpulse-jira` is an independently executable `jira` child module under the `devpulse-plugins` Maven aggregator and a Jira REST client for Jira Cloud (REST v3) and Data Center (REST v2). The core `devpulse` neither loads nor depends on it; the Jira JAR itself does not need Bash. From the repository root, `mvn clean package` produces `devpulse-plugins/jira/target/devpulse-jira.jar`; `bash run-jira.sh` builds only that module and launches it. **It has not been validated against a live Jira instance**; first check field shapes, permissions, and workflows in a test project.
 
-### Authentication
+### Connection configuration and authentication
 
-Connection settings come only from environment variables; templates never store credentials:
+Connection settings default to `.jira.conf` in the **current working directory**, using UTF-8 HOCON. This file is separate from issue templates passed to commands such as `issue create --file`:
+
+```hocon
+url = "https://example.atlassian.net"
+mode = "cloud"                  # Use "dc" for Data Center
+email = "user@example.com"       # Required for Cloud; optional for Data Center
+```
+
+Only the authentication token comes from the environment; never put it in connection configuration or issue templates:
 
 ```bash
-export DEVPULSE_JIRA_MODE=cloud                 # Use dc for Data Center
-export DEVPULSE_JIRA_URL=https://example.atlassian.net
-export DEVPULSE_JIRA_EMAIL=user@example.com    # Cloud only
 export DEVPULSE_JIRA_TOKEN='your-api-token'     # Cloud API Token / Data Center PAT
 ```
+
+Use global `-c/--config` to select another connection file. It can appear before or after subcommands; relative paths still resolve against the current working directory:
+
+```bash
+bash run-jira.sh --config connection.conf issue list -p DEMO
+bash run-jira.sh issue list -p DEMO --config connection.conf
+```
+
+`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. `DEVPULSE_JIRA_URL`, `DEVPULSE_JIRA_MODE`, and `DEVPULSE_JIRA_EMAIL` are no longer read; migrate them to the file. Missing files or fields fail rather than falling back to those environment variables. Connection configuration accepts only `url`, `mode`, and `email`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, and offline issue-template `init` commands need neither connection configuration nor a token; `init --file` does not generate connection configuration.
 
 Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history containing credentials, environment dumps, exported Jira data, or attachments. HTTP failures display only the status code, not the Jira response body.
 

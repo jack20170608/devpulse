@@ -14,6 +14,7 @@ import com.typesafe.config.ConfigResolveOptions;
 import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueFactory;
 import io.github.devpulse.jira.JiraClient;
+import io.github.devpulse.jira.JiraConfiguration;
 import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -32,6 +33,7 @@ import picocli.CommandLine;
 import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.ScopeType;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
@@ -49,6 +51,13 @@ import picocli.CommandLine.Spec;
 public final class JiraCommand implements Runnable {
     @Spec
     private CommandSpec spec;
+
+    @Option(names = {"-c", "--config"}, defaultValue = ".jira.conf",
+            scope = ScopeType.INHERIT, paramLabel = "FILE",
+            description = "Jira connection HOCON file (default: .jira.conf "
+                    + "in the current directory). Token comes from "
+                    + "DEVPULSE_JIRA_TOKEN only.")
+    private Path configFile;
 
     public static void main(String[] args) {
         var cli = new CommandLine(new JiraCommand())
@@ -72,10 +81,6 @@ public final class JiraCommand implements Runnable {
     @Override
     public void run() {
         spec.commandLine().usage(spec.commandLine().getOut());
-    }
-
-    static JiraClient client() throws IOException {
-        return new JiraClient(System.getenv());
     }
 
     static String text(Path file) throws IOException {
@@ -214,6 +219,12 @@ public final class JiraCommand implements Runnable {
         CommandSpec spec;
 
         protected abstract void execute() throws IOException;
+
+        JiraClient client() throws IOException {
+            var root = (JiraCommand) spec.root().userObject();
+            return new JiraClient(JiraConfiguration.load(root.configFile),
+                    System.getenv("DEVPULSE_JIRA_TOKEN"));
+        }
 
         @Override
         public final Integer call() {

@@ -15,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.Map;
 
 public final class JiraClient {
     private final HttpClient http = HttpClient.newBuilder()
@@ -26,14 +25,22 @@ public final class JiraClient {
     private final String api;
     private final boolean cloud;
 
-    public JiraClient(Map<String, String> environment) throws IOException {
-        var url = required(environment, "DEVPULSE_JIRA_URL");
-        var token = required(environment, "DEVPULSE_JIRA_TOKEN");
-        var mode = required(environment, "DEVPULSE_JIRA_MODE");
+    public JiraClient(JiraConfiguration configuration, String token)
+            throws IOException {
+        var url = configuration.url();
+        var mode = configuration.mode();
+        if (token == null || token.isBlank()) {
+            throw new IOException("Set DEVPULSE_JIRA_TOKEN "
+                    + "in the environment.");
+        }
+        if (token.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IOException("DEVPULSE_JIRA_TOKEN must not "
+                    + "contain control characters.");
+        }
         try {
             base = URI.create(url.endsWith("/") ? url : url + "/");
         } catch (IllegalArgumentException exception) {
-            throw new IOException("Invalid DEVPULSE_JIRA_URL.", exception);
+            throw new IOException("Invalid Jira configuration URL.");
         }
         if (base.getHost() == null || base.getUserInfo() != null
                 || base.getRawQuery() != null || base.getRawFragment() != null
@@ -45,12 +52,16 @@ public final class JiraClient {
                     + "(HTTP is allowed only for loopback testing).");
         }
         if (!mode.equals("cloud") && !mode.equals("dc")) {
-            throw new IOException("DEVPULSE_JIRA_MODE must be cloud or dc.");
+            throw new IOException("Jira configuration mode must be cloud or dc.");
         }
         cloud = mode.equals("cloud");
         api = "rest/api/" + (cloud ? "3" : "2") + "/";
         if (cloud) {
-            var email = required(environment, "DEVPULSE_JIRA_EMAIL");
+            var email = configuration.email();
+            if (email == null || email.isBlank()) {
+                throw new IOException("Jira configuration requires "
+                        + "an email for Cloud.");
+            }
             authorization = "Basic " + Base64.getEncoder().encodeToString(
                     (email + ":" + token).getBytes(StandardCharsets.UTF_8));
         } else {
@@ -268,12 +279,4 @@ public final class JiraClient {
         return value;
     }
 
-    private static String required(Map<String, String> environment,
-            String name) throws IOException {
-        var value = environment.get(name);
-        if (value == null || value.isBlank()) {
-            throw new IOException("Set " + name + " in the environment.");
-        }
-        return value;
-    }
 }

@@ -1,6 +1,5 @@
 package io.github.devpulse.jira.cli;
 
-import static io.github.devpulse.jira.cli.JiraCommand.client;
 import static io.github.devpulse.jira.cli.JiraCommand.customFields;
 import static io.github.devpulse.jira.cli.JiraCommand.fields;
 import static io.github.devpulse.jira.cli.JiraCommand.load;

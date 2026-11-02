@@ -1,6 +1,5 @@
 package io.github.devpulse.jira.cli;
 
-import static io.github.devpulse.jira.cli.JiraCommand.client;
 import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 
 import com.google.gson.JsonElement;
