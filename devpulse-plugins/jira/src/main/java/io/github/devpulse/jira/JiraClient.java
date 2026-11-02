@@ -31,11 +31,11 @@ public final class JiraClient {
         var url = configuration.url();
         var mode = configuration.mode();
         if (token == null || token.isBlank()) {
-            throw new IOException("Set DEVPULSE_JIRA_TOKEN "
+            throw new IOException("Set JIRA_API_TOKEN "
                     + "in the environment.");
         }
         if (token.codePoints().anyMatch(Character::isISOControl)) {
-            throw new IOException("DEVPULSE_JIRA_TOKEN must not "
+            throw new IOException("JIRA_API_TOKEN must not "
                     + "contain control characters.");
         }
         try {

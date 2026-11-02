@@ -38,7 +38,7 @@ public record JiraConfiguration(String url, String mode, String email,
                     .containsAll(config.root().keySet())) {
                 throw new IOException("Jira configuration supports only "
                         + "url, mode, email, and apiVersion; "
-                        + "use DEVPULSE_JIRA_TOKEN "
+                        + "use JIRA_API_TOKEN "
                         + "for authentication.");
             }
             var mode = required(config, "mode");

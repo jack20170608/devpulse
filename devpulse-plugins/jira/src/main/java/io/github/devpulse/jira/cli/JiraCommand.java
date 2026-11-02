@@ -56,7 +56,7 @@ public final class JiraCommand implements Runnable {
             scope = ScopeType.INHERIT, paramLabel = "FILE",
             description = "Jira connection HOCON file (default: .jira.conf "
                     + "in the current directory). Token comes from "
-                    + "DEVPULSE_JIRA_TOKEN only.")
+                    + "JIRA_API_TOKEN only.")
     private Path configFile;
 
     public static void main(String[] args) {
@@ -239,7 +239,7 @@ public final class JiraCommand implements Runnable {
         JiraClient client() throws IOException {
             var root = (JiraCommand) spec.root().userObject();
             return new JiraClient(JiraConfiguration.load(root.configFile),
-                    System.getenv("DEVPULSE_JIRA_TOKEN"));
+                    System.getenv("JIRA_API_TOKEN"));
         }
 
         @Override
