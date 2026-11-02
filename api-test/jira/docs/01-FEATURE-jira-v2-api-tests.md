@@ -18,7 +18,7 @@ API v2 不等于 Jira 产品版本，也不能据此确定是 Cloud 还是自建
 | [创建工单测试](../03-issue-management/0301_create-issue.http) | 创建一个测试工单 |
 | [读取与更新测试](../03-issue-management/0302_read-issue.http) | 读取、编辑元数据、字段替换及标签追加 |
 | [附件管理测试](../04-attachment-management/0401_upload.http) | Jira Cloud 附件查询、上传、下载和显式确认删除；见[附件管理指南](02-FEATURE-jira-issue-attachments.md) |
-| [状态流转测试](../05_transitions.http) | 查询可用动作并执行流转 |
+| [状态流转测试](../05_transitions/05_transitions.http) | 查询可用动作并执行流转 |
 | [评论测试](../06_comments.http) | 分页读取和新增评论 |
 | [搜索测试](../07_search.http) | 传统搜索及 Cloud 增强搜索 |
 

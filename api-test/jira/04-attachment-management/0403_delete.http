@@ -1,1 +1,70 @@
 
+# Jira Cloud REST API v2. Authenticate with jiraMyself before running requests.
+# Run individually. Deletion is irreversible; verify ownership in jiraListIssueAttachments first.
+# See ../docs/02-FEATURE-jira-issue-attachments.md.
+
+### Delete one explicitly confirmed test attachment
+# @name jiraDeleteAttachment
+# @no-redirect
+# @no-log
+< {%
+    client.global.clear("deletedAttachment");
+    const allowWrites = request.environment.get("ALLOW_WRITES");
+    if (allowWrites !== true && allowWrites !== "true") {
+        throw new Error("Write requests are disabled. Set ALLOW_WRITES to true only for the selected test issue.");
+    }
+    const attachmentId = request.environment.get("ATTACHMENT_ID_1");
+    if (attachmentId === undefined || attachmentId === null || !/^[0-9]+$/.test(String(attachmentId))) {
+        throw new Error("Set ATTACHMENT_ID_1 to a numeric attachment ID from the selected issue.");
+    }
+    const confirmation = request.environment.get("CONFIRM_ATTACHMENT_DELETE_ID");
+    if (confirmation === undefined || confirmation === null || String(confirmation) !== String(attachmentId)) {
+        throw new Error("Deletion is irreversible. Verify the attachment belongs to ISSUE_KEY, then set CONFIRM_ATTACHMENT_DELETE_ID to ATTACHMENT_ID_1.");
+    }
+%}
+DELETE {{JIRA_BASE_URL}}/rest/api/2/attachment/{{ATTACHMENT_ID_1}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    const emptyBody = response.body === undefined || response.body === null || response.body === "";
+    client.test("Attachment is deleted with no response body", function () {
+        client.assert(response.status === 204,
+            "Expected HTTP 204. For a timeout or unexpected response, inspect the attachment before retrying; deletion is irreversible.");
+        client.assert(emptyBody, "Expected an empty response body");
+    });
+    if (response.status === 204 && emptyBody) {
+        client.global.set("deletedAttachment", JSON.stringify({
+            baseUrl: request.environment.get("JIRA_BASE_URL"),
+            issueKey: request.environment.get("ISSUE_KEY"),
+            id: String(request.environment.get("ATTACHMENT_ID_1"))
+        }));
+    }
+%}
+
+### Verify the successfully deleted attachment is no longer readable
+# @name jiraVerifyAttachmentDeleted
+# @no-redirect
+# @no-log
+< {%
+    const savedDeletion = client.global.get("deletedAttachment");
+    if (!savedDeletion) {
+        throw new Error("Run jiraDeleteAttachment successfully in this IDE session before verifying deletion.");
+    }
+    const deletion = JSON.parse(savedDeletion);
+    if (deletion.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || deletion.issueKey !== request.environment.get("ISSUE_KEY")
+        || deletion.id !== String(request.environment.get("ATTACHMENT_ID_1"))) {
+        throw new Error("The environment or attachment changed. Verification must use the successfully deleted attachment.");
+    }
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/{{ATTACHMENT_ID_1}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Deleted attachment is no longer readable", function () {
+        client.assert(response.status === 404,
+            "Expected HTTP 404 after a successful deletion; authentication failures and redirects are not proof of deletion.");
+    });
+%}

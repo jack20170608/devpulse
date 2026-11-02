@@ -1,0 +1,247 @@
+@fullLifecycleIssueKey=SPT-3
+
+# Authenticate with jiraMyself, select the test environment, and set ALLOW_WRITES=true.
+# Run steps 1-7 in order. This example permanently deletes ONLY the attachment it uploads.
+# Do not switch accounts or environments during a run. No automatic retries or cleanup.
+# See ../docs/02-FEATURE-jira-issue-attachments.md for failure recovery.
+
+### 1. Upload one disposable attachment and capture its ID
+# @name jiraLifecycleUpload
+# @no-redirect
+< {%
+    const allowWrites = request.environment.get("ALLOW_WRITES");
+    if (allowWrites !== true && allowWrites !== "true") {
+        throw new Error("Set ALLOW_WRITES to true only for the selected test issue.");
+    }
+    client.global.clear("jiraAttachmentLifecycle");
+    client.global.clear("lifecycleAttachmentId");
+    client.global.set("jiraAttachmentLifecycle", JSON.stringify({
+        baseUrl: request.environment.get("JIRA_BASE_URL"),
+        issueKey: request.environment.get("fullLifecycleIssueKey"),
+        filename: "lifecycle-build.log",
+        phase: "uploadPending"
+    }));
+%}
+POST {{JIRA_BASE_URL}}/rest/api/2/issue/{{fullLifecycleIssueKey}}/attachments
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+X-Atlassian-Token: no-check
+Content-Type: multipart/form-data; boundary=jira-lifecycle-boundary
+
+--jira-lifecycle-boundary
+Content-Disposition: form-data; name="file"; filename="lifecycle-build.log"
+Content-Type: text/plain
+
+< files/build.log
+--jira-lifecycle-boundary--
+
+> {%
+    client.test("Lifecycle attachment is uploaded", function () {
+        client.assert(response.status === 200, "Expected HTTP 200; inspect the issue before retrying a failed or timed-out upload");
+        client.assert(Array.isArray(response.body) && response.body.length === 1,
+            "Expected exactly one uploaded attachment");
+        const attachment = response.body[0];
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        client.assert(attachment && /^[0-9]+$/.test(String(attachment.id))
+            && attachment.filename === state.filename
+            && Number.isInteger(attachment.size) && attachment.size > 0,
+            "Expected a numeric ID, the lifecycle filename, and a positive size");
+        state.id = String(attachment.id);
+        state.size = attachment.size;
+        state.phase = "uploaded";
+        client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+    });
+%}
+
+### 2. Verify the uploaded attachment belongs to the selected issue
+# @name jiraLifecycleListUploaded
+# @no-redirect
+< {%
+    const saved = client.global.get("jiraAttachmentLifecycle");
+    if (!saved) {
+        throw new Error("Run jiraLifecycleUpload first.");
+    }
+    const state = JSON.parse(saved);
+    if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "uploaded") {
+        throw new Error("Expected the uploaded lifecycle attachment in the original environment. Run steps in order.");
+    }
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/{{fullLifecycleIssueKey}}?fields=attachment
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Uploaded attachment is listed on the selected issue", function () {
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.key === state.issueKey && response.body.fields
+            && Array.isArray(response.body.fields.attachment), "Expected the selected issue's attachment list");
+        const matches = response.body.fields.attachment.filter(function (attachment) {
+            return attachment && String(attachment.id) === state.id;
+        });
+        client.assert(matches.length === 1 && matches[0].filename === state.filename
+            && matches[0].size === state.size, "Expected the exact uploaded attachment, not just a matching filename");
+        state.phase = "listed";
+        client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+    });
+%}
+
+### 3. Read metadata for the captured attachment ID
+# @name jiraLifecycleMetadata
+# @no-redirect
+< {%
+    const saved = client.global.get("jiraAttachmentLifecycle");
+    if (!saved) {
+        throw new Error("Run jiraLifecycleUpload first.");
+    }
+    const state = JSON.parse(saved);
+    if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "listed") {
+        throw new Error("Expected a successful issue-list check in the original environment. Run steps in order.");
+    }
+    request.variables.set("lifecycleAttachmentId", state.id);
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/{{lifecycleAttachmentId}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Lifecycle metadata matches the upload", function () {
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && String(response.body.id) === state.id
+            && response.body.filename === state.filename && response.body.size === state.size,
+            "Expected the uploaded attachment's ID, filename, and size");
+        state.phase = "metadataRead";
+        client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+    });
+%}
+
+### 4. Download the attachment without following redirects
+# @name jiraLifecycleDownload
+# @no-redirect
+< {%
+    const saved = client.global.get("jiraAttachmentLifecycle");
+    if (!saved) {
+        throw new Error("Run jiraLifecycleUpload first.");
+    }
+    const state = JSON.parse(saved);
+    if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "metadataRead") {
+        throw new Error("Expected a successful metadata check in the original environment. Run steps in order.");
+    }
+    request.variables.set("lifecycleAttachmentId", state.id);
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/content/{{lifecycleAttachmentId}}?redirect=false
+Authorization: Basic {{JIRA_BASIC}}
+Accept: */*
+
+> {%
+    client.test("Lifecycle attachment content is downloaded", function () {
+        client.assert(response.status === 200, "Expected HTTP 200 with file content, not a redirect");
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        state.phase = "downloaded";
+        client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+    });
+%}
+
+### 5. Delete only the attachment created by this lifecycle
+# @name jiraLifecycleDelete
+# @no-redirect
+# @no-log
+< {%
+    const allowWrites = request.environment.get("ALLOW_WRITES");
+    if (allowWrites !== true && allowWrites !== "true") {
+        throw new Error("Deletion requires ALLOW_WRITES=true.");
+    }
+    const saved = client.global.get("jiraAttachmentLifecycle");
+    if (!saved) {
+        throw new Error("Run jiraLifecycleUpload first. Existing attachment environment variables are never deletion targets.");
+    }
+    const state = JSON.parse(saved);
+    if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "downloaded"
+        || !/^[0-9]+$/.test(state.id)) {
+        throw new Error("Expected this lifecycle's downloaded attachment in the original environment. Run steps in order.");
+    }
+    request.variables.set("lifecycleAttachmentId", state.id);
+    state.phase = "deletePending";
+    client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+%}
+DELETE {{JIRA_BASE_URL}}/rest/api/2/attachment/{{lifecycleAttachmentId}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Lifecycle attachment is deleted", function () {
+        client.assert(response.status === 204,
+            "Expected HTTP 204; inspect the issue and metadata before attempting further deletion");
+        client.assert(response.body === undefined || response.body === null || response.body === "",
+            "Expected an empty response body");
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        state.phase = "deleted";
+        client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+    });
+%}
+
+### 6. Verify metadata is no longer available after successful deletion
+# @name jiraLifecycleVerifyDeleted
+# @no-redirect
+# @no-log
+< {%
+    const saved = client.global.get("jiraAttachmentLifecycle");
+    if (!saved) {
+        throw new Error("Run jiraLifecycleUpload first.");
+    }
+    const state = JSON.parse(saved);
+    if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "deleted") {
+        throw new Error("Expected a successful lifecycle deletion in the original environment. Run steps in order.");
+    }
+    request.variables.set("lifecycleAttachmentId", state.id);
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/attachment/{{lifecycleAttachmentId}}
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Deleted lifecycle attachment returns HTTP 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404 after successful deletion, not an authentication failure or redirect");
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        state.phase = "notFound";
+        client.global.set("jiraAttachmentLifecycle", JSON.stringify(state));
+    });
+%}
+
+### 7. Verify the attachment is absent from the issue and clear lifecycle state
+# @name jiraLifecycleListAfterDelete
+# @no-redirect
+# @no-log
+< {%
+    const saved = client.global.get("jiraAttachmentLifecycle");
+    if (!saved) {
+        throw new Error("Run jiraLifecycleUpload first.");
+    }
+    const state = JSON.parse(saved);
+    if (state.baseUrl !== request.environment.get("JIRA_BASE_URL")
+        || state.issueKey !== request.environment.get("fullLifecycleIssueKey") || state.phase !== "notFound") {
+        throw new Error("Expected the post-deletion HTTP 404 check in the original environment. Run steps in order.");
+    }
+%}
+GET {{JIRA_BASE_URL}}/rest/api/2/issue/{{fullLifecycleIssueKey}}?fields=attachment
+Authorization: Basic {{JIRA_BASIC}}
+Accept: application/json
+
+> {%
+    client.test("Lifecycle attachment is absent from the issue", function () {
+        const state = JSON.parse(client.global.get("jiraAttachmentLifecycle"));
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body && response.body.key === state.issueKey && response.body.fields
+            && Array.isArray(response.body.fields.attachment), "Expected the selected issue's attachment list");
+        client.assert(response.body.fields.attachment.every(function (attachment) {
+            return attachment && String(attachment.id) !== state.id;
+        }), "The deleted attachment must no longer appear; unrelated attachments may remain");
+        client.global.clear("jiraAttachmentLifecycle");
+    });
+%}
