@@ -1,4 +1,4 @@
-package io.github.devpulse.cli;
+package io.github.devpulse.jira.cli;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -24,6 +24,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -37,7 +38,8 @@ import picocli.CommandLine.Spec;
 @Command(name = "jira", mixinStandardHelpOptions = true,
         versionProvider = JiraCommand.VersionProvider.class,
         description = "Manage Jira issues using HOCON and Markdown.",
-        subcommands = {JiraCommand.Init.class, JiraCommand.Create.class,
+        subcommands = {JiraCommand.Issue.class,
+                JiraCommand.Init.class,
                 JiraCommand.Show.class, JiraCommand.Export.class,
                 JiraCommand.Update.class, JiraCommand.Transitions.class,
                 JiraCommand.Transition.class, JiraCommand.Comment.class,
@@ -72,15 +74,15 @@ public final class JiraCommand implements Runnable {
         spec.commandLine().usage(spec.commandLine().getOut());
     }
 
-    private static JiraClient client() throws IOException {
+    static JiraClient client() throws IOException {
         return new JiraClient(System.getenv());
     }
 
-    private static String text(Path file) throws IOException {
+    static String text(Path file) throws IOException {
         return Files.readString(file, StandardCharsets.UTF_8);
     }
 
-    private static Path markdown(Path file) throws IOException {
+    static Path markdown(Path file) throws IOException {
         var name = file.getFileName().toString();
         if (!name.endsWith(".conf")) {
             throw new IOException("Issue metadata must be a .conf file.");
@@ -89,7 +91,7 @@ public final class JiraCommand implements Runnable {
                 + ".md");
     }
 
-    private static JsonObject fields(com.typesafe.config.Config config)
+    static JsonObject fields(com.typesafe.config.Config config)
             throws IOException {
         if (!config.hasPath("fields")) {
             throw new IOException("Issue template needs a fields object.");
@@ -100,7 +102,7 @@ public final class JiraCommand implements Runnable {
                         ConfigRenderOptions.concise())).getAsJsonObject();
     }
 
-    private static com.typesafe.config.Config load(Path file)
+    static com.typesafe.config.Config load(Path file)
             throws IOException {
         var options = ConfigParseOptions.defaults()
                 .setSyntax(ConfigSyntax.CONF).setAllowMissing(false)
@@ -140,11 +142,11 @@ public final class JiraCommand implements Runnable {
                         .setComments(false).setOriginComments(false)) + "\n";
     }
 
-    private static IOException wrong(String message) {
+    static IOException wrong(String message) {
         return new IOException(message);
     }
 
-    private static String string(JsonObject object, String field)
+    static String string(JsonObject object, String field)
             throws IOException {
         if (!object.has(field) || object.get(field).isJsonNull()) {
             throw wrong("Jira response is missing " + field + ".");
@@ -152,14 +154,62 @@ public final class JiraCommand implements Runnable {
         return object.get(field).getAsString();
     }
 
-    private static JsonObject object(JsonElement value) throws IOException {
+    static void customFields(JsonObject issue, List<String> custom)
+            throws IOException {
+        if (custom == null) {
+            return;
+        }
+        for (var entry : custom) {
+            var separator = entry.indexOf('=');
+            if (separator < 0 || !entry.substring(0, separator)
+                    .matches("customfield_[0-9]+")) {
+                throw wrong("Use --custom customfield_ID=HOCON_VALUE.");
+            }
+            try {
+                var parsed = ConfigFactory.parseString(
+                        "value = " + entry.substring(separator + 1),
+                        ConfigParseOptions.defaults()
+                                .setSyntax(ConfigSyntax.CONF)
+                                .setIncluder(new NoIncludes()))
+                        .resolve(ConfigResolveOptions.noSystem());
+                if (parsed.root().size() != 1
+                        || !parsed.root().containsKey("value")) {
+                    throw wrong("Each --custom must contain one "
+                            + "HOCON value.");
+                }
+                issue.add(entry.substring(0, separator),
+                        JsonParser.parseString(parsed.root().get("value")
+                                .render(ConfigRenderOptions.concise())));
+            } catch (ConfigException exception) {
+                throw wrong("Invalid HOCON value for --custom.");
+            }
+        }
+    }
+
+    static String nonblank(String value, String option) throws IOException {
+        if (value.isBlank()) {
+            throw wrong(option + " must not be blank.");
+        }
+        return value;
+    }
+
+    static void setNamed(JsonObject issue, String field,
+            String member, String value) throws IOException {
+        if (value != null) {
+            var named = new JsonObject();
+            named.addProperty(member, nonblank(value, field));
+            issue.add(field, named);
+        }
+    }
+
+    static JsonObject object(JsonElement value) throws IOException {
         if (value == null || !value.isJsonObject()) {
             throw wrong("Jira returned an unexpected JSON object.");
         }
         return value.getAsJsonObject();
     }
 
-    private abstract static class Action implements Callable<Integer> {
+    abstract static class Action implements Callable<Integer> {
         @Spec
         CommandSpec spec;
 
@@ -219,30 +269,17 @@ public final class JiraCommand implements Runnable {
         }
     }
 
-    @Command(name = "create", description = "Create an issue from "
-            + "HOCON fields and adjacent Markdown.")
-    static final class Create extends Action {
-        @Option(names = "--file", required = true, paramLabel = "ISSUE.conf")
-        Path file;
+    @Command(name = "issue", mixinStandardHelpOptions = true,
+            description = "Manage Jira issues.",
+            subcommands = {JiraCreateCommand.class, JiraIssueListCommand.class,
+                    JiraIssueEditCommand.class})
+    static final class Issue implements Runnable {
+        @Spec
+        CommandSpec spec;
 
         @Override
-        protected void execute() throws IOException {
-            var data = load(file);
-            var issue = fields(data);
-            for (var field : new String[]{"project", "issuetype",
-                    "summary"}) {
-                if (!issue.has(field)) {
-                    throw wrong("Missing required issue field: " + field);
-                }
-            }
-            if (issue.has("description")) {
-                throw wrong("Use the adjacent .md file for description.");
-            }
-            var description = text(markdown(file));
-            var jira = client();
-            issue.add("description", JiraMarkdown.toJira(description,
-                    jira.cloud()));
-            print("Created " + string(jira.create(issue), "key"));
+        public void run() {
+            spec.commandLine().usage(spec.commandLine().getOut());
         }
     }
 

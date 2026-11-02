@@ -1,0 +1,221 @@
+package io.github.devpulse.jira.cli;
+
+import static io.github.devpulse.jira.cli.JiraCommand.client;
+import static io.github.devpulse.jira.cli.JiraCommand.customFields;
+import static io.github.devpulse.jira.cli.JiraCommand.fields;
+import static io.github.devpulse.jira.cli.JiraCommand.load;
+import static io.github.devpulse.jira.cli.JiraCommand.markdown;
+import static io.github.devpulse.jira.cli.JiraCommand.nonblank;
+import static io.github.devpulse.jira.cli.JiraCommand.setNamed;
+import static io.github.devpulse.jira.cli.JiraCommand.string;
+import static io.github.devpulse.jira.cli.JiraCommand.text;
+import static io.github.devpulse.jira.cli.JiraCommand.wrong;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import io.github.devpulse.jira.JiraMarkdown;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.List;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+
+@Command(name = "create", mixinStandardHelpOptions = true,
+        description = "Create an issue using prompts, flags, or "
+                + "HOCON/Markdown files.")
+public final class JiraCreateCommand extends JiraCommand.Action {
+    @Option(names = "--file", paramLabel = "ISSUE.conf",
+            description = "HOCON fields and adjacent Markdown; "
+                    + "explicit flags override template fields.")
+    Path file;
+    @Option(names = {"-p", "--project"}, paramLabel = "KEY",
+            description = "Project key.")
+    String project;
+    @Option(names = {"-t", "--type"}, paramLabel = "NAME",
+            description = "Issue type name, e.g. Task or Bug.")
+    String type;
+    @Option(names = {"-s", "--summary"}, paramLabel = "TEXT",
+            description = "Issue summary.")
+    String summary;
+    @Option(names = {"-y", "--priority"}, paramLabel = "NAME",
+            description = "Priority name.")
+    String priority;
+    @Option(names = {"-a", "--assignee"}, paramLabel = "USER",
+            description = "Cloud accountId or DC username; "
+                    + "me=self, x=unassigned, default=project default.")
+    String assignee;
+    @Option(names = {"-l", "--label"}, paramLabel = "LABEL",
+            description = "Repeat for multiple labels; replaces "
+                    + "template labels.")
+    List<String> labels;
+    @Option(names = {"-C", "--component"}, paramLabel = "NAME",
+            description = "Repeat for multiple component names.")
+    List<String> components;
+    @Option(names = "--fix-version", paramLabel = "NAME",
+            description = "Repeat for multiple fix versions.")
+    List<String> fixVersions;
+    @Option(names = "--affects-version", paramLabel = "NAME",
+            description = "Repeat for multiple affected versions.")
+    List<String> affectsVersions;
+    @Option(names = {"-P", "--parent"}, paramLabel = "KEY",
+            description = "Parent issue key; subject to Jira hierarchy.")
+    String parent;
+    @Option(names = {"-b", "--body"}, paramLabel = "MARKDOWN",
+            description = "Description text; conflicts with --template.")
+    String body;
+    @Option(names = "--template", paramLabel = "BODY.md",
+            description = "UTF-8 description file, or - for stdin; "
+                    + "overrides adjacent Markdown.")
+    Path template;
+    @Option(names = "--custom", paramLabel = "FIELD=HOCON",
+            description = "Repeat to set customfield_ID using a "
+                    + "HOCON value; overrides template custom fields.")
+    List<String> custom;
+    @Option(names = "--no-input",
+            description = "Never prompt; missing required fields fail.")
+    boolean noInput;
+
+    @Override
+    protected void execute() throws IOException {
+        if (body != null && template != null) {
+            throw wrong("Use either --body or --template, not both.");
+        }
+        var issue = file == null ? new JsonObject() : fields(load(file));
+        if (issue.has("description")) {
+            throw wrong("Use --body, --template, or adjacent .md "
+                    + "for description, not fields.description.");
+        }
+        setNamed(issue, "project", "key", project);
+        setNamed(issue, "issuetype", "name", type);
+        if (summary != null) {
+            issue.addProperty("summary", nonblank(summary, "--summary"));
+        }
+        setNamed(issue, "priority", "name", priority);
+        setNamed(issue, "parent", "key", parent);
+        setList(issue, "labels", labels, false);
+        setList(issue, "components", components, true);
+        setList(issue, "fixVersions", fixVersions, true);
+        setList(issue, "versions", affectsVersions, true);
+        customFields(issue, custom);
+        requiredField(issue, "project", "key", "Project key", "--project");
+        requiredField(issue, "issuetype", "name", "Issue type", "--type");
+        requiredField(issue, "summary", null, "Summary", "--summary");
+
+        var description = description();
+        var jira = client();
+        if (description != null) {
+            issue.add("description", JiraMarkdown.toJira(description,
+                    jira.cloud()));
+        }
+        if (assignee != null) {
+            var user = nonblank(assignee, "--assignee");
+            if (user.equals("x")) {
+                issue.add("assignee", com.google.gson.JsonNull.INSTANCE);
+            } else if (user.equals("default")) {
+                issue.remove("assignee");
+            } else {
+                var identifier = jira.cloud() ? "accountId" : "name";
+                if (user.equals("me")) {
+                    user = string(jira.myself(), identifier);
+                }
+                setNamed(issue, "assignee", identifier, user);
+            }
+        }
+        print("Created " + string(jira.create(issue), "key"));
+    }
+
+    private String description() throws IOException {
+        if (body != null) {
+            return body;
+        }
+        if (template != null) {
+            return template.toString().equals("-")
+                    ? new String(System.in.readAllBytes(),
+                            StandardCharsets.UTF_8)
+                    : text(template);
+        }
+        if (file != null) {
+            return text(markdown(file));
+        }
+        if (!noInput && System.console() != null) {
+            return prompt("Description (optional; use --template "
+                    + "for multiline text)");
+        }
+        return null;
+    }
+
+    private void requiredField(JsonObject issue, String field,
+            String member, String label, String flag) throws IOException {
+        var value = issue.get(field);
+        if (value == null || value.isJsonNull()) {
+            if (noInput || System.console() == null) {
+                throw wrong("Missing required issue field: " + field
+                        + "; supply " + flag + " or --file"
+                        + " (interactive prompts require a terminal).");
+            }
+            var answer = nonblank(prompt(label), flag);
+            if (member == null) {
+                issue.addProperty(field, answer);
+            } else {
+                setNamed(issue, field, member, answer);
+            }
+            return;
+        }
+        if (member != null) {
+            if (!value.isJsonObject()) {
+                throw wrong("Issue field " + field
+                        + " must contain a nonblank id or " + member + ".");
+            }
+            var named = value.getAsJsonObject();
+            if (!nonblankString(named.get("id"))
+                    && !nonblankString(named.get(member))) {
+                throw wrong("Issue field " + field
+                        + " must contain a nonblank id or " + member + ".");
+            }
+        } else if (!nonblankString(value)) {
+            throw wrong("Issue field " + field
+                    + " must be a nonblank string.");
+        }
+    }
+
+    private String prompt(String label) throws IOException {
+        var console = System.console();
+        if (console == null) {
+            throw wrong("Interactive prompts require a terminal.");
+        }
+        spec.commandLine().getErr().print(label + ": ");
+        spec.commandLine().getErr().flush();
+        var answer = console.readLine();
+        if (answer == null) {
+            throw wrong("Input ended; issue was not created.");
+        }
+        return answer;
+    }
+
+    private static boolean nonblankString(JsonElement value) {
+        return value != null && value.isJsonPrimitive()
+                && value.getAsJsonPrimitive().isString()
+                && !value.getAsString().isBlank();
+    }
+
+    private static void setList(JsonObject issue, String field,
+            List<String> values, boolean named) throws IOException {
+        if (values == null) {
+            return;
+        }
+        var array = new JsonArray();
+        for (var value : values) {
+            nonblank(value, field);
+            if (named) {
+                var item = new JsonObject();
+                item.addProperty("name", value);
+                array.add(item);
+            } else {
+                array.add(value);
+            }
+        }
+        issue.add(field, array);
+    }
+}

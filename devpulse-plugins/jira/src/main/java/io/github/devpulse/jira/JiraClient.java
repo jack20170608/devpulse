@@ -1,5 +1,6 @@
 package io.github.devpulse.jira;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -61,6 +62,10 @@ public final class JiraClient {
         return cloud;
     }
 
+    public JsonObject myself() throws IOException {
+        return object(request("GET", "myself", null));
+    }
+
     public JsonObject issue(String key) throws IOException {
         return object(request("GET", "issue/" + segment(key)
                 + "?fields=*all", null));
@@ -77,9 +82,59 @@ public final class JiraClient {
         return object(request("POST", "issue", body));
     }
 
+    public JsonObject search(String jql, int limit, Integer startAt,
+            String nextPageToken) throws IOException {
+        if (jql == null || jql.isBlank()) {
+            throw new IOException("Search JQL must not be blank.");
+        }
+        if (limit < 1 || limit > 100) {
+            throw new IOException("--limit must be between 1 and 100.");
+        }
+        if (startAt != null && startAt < 0) {
+            throw new IOException("--start-at must not be negative.");
+        }
+        if (cloud && startAt != null) {
+            throw new IOException("Cloud uses --next-page-token, "
+                    + "not --start-at.");
+        }
+        if (!cloud && nextPageToken != null) {
+            throw new IOException("Data Center uses --start-at, "
+                    + "not --next-page-token.");
+        }
+        if (nextPageToken != null && nextPageToken.isBlank()) {
+            throw new IOException("--next-page-token must not be blank.");
+        }
+        var body = new JsonObject();
+        body.addProperty("jql", jql);
+        body.addProperty("maxResults", limit);
+        var fields = new JsonArray();
+        for (var field : new String[]{"summary", "status", "issuetype",
+                "priority", "assignee", "updated"}) {
+            fields.add(field);
+        }
+        body.add("fields", fields);
+        if (cloud) {
+            if (nextPageToken != null) {
+                body.addProperty("nextPageToken", nextPageToken);
+            }
+        } else {
+            body.addProperty("startAt", startAt == null ? 0 : startAt);
+        }
+        return object(request("POST", cloud ? "search/jql" : "search",
+                body));
+    }
+
     public void edit(String key, JsonObject fields) throws IOException {
+        edit(key, fields, new JsonObject());
+    }
+
+    public void edit(String key, JsonObject fields, JsonObject updates)
+            throws IOException {
         var body = new JsonObject();
         body.add("fields", fields);
+        if (!updates.isEmpty()) {
+            body.add("update", updates);
+        }
         request("PUT", "issue/" + segment(key), body);
     }
 
