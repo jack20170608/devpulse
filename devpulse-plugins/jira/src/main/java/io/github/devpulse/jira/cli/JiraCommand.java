@@ -314,7 +314,8 @@ public final class JiraCommand implements Runnable {
     @Command(name = "issue", mixinStandardHelpOptions = true,
             description = "Manage Jira issues.",
             subcommands = {JiraCreateCommand.class, JiraIssueListCommand.class,
-                    JiraIssueEditCommand.class, IssueTemplate.class})
+                    JiraIssueEditCommand.class, JiraIssueAssignCommand.class,
+                    IssueTemplate.class})
     static final class Issue implements Runnable {
         @Spec
         CommandSpec spec;

@@ -91,7 +91,7 @@ bash run-jira.sh attach DEMO-1 --file diagram.png
 
 ### 创建问题：`issue create`
 
-借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。当前 `issue` 分组提供 `create`、`edit`、`list` 和 `template`，其余操作仍使用上面的顶层命令。
+借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。当前 `issue` 分组提供 `create`、`edit`、`assign`、`list` 和 `template`，其余操作仍使用上面的顶层命令。
 
 ```bash
 # 在终端交互输入项目 key、问题类型、标题与可选的单行描述
@@ -170,6 +170,24 @@ bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
 直接编辑先读取当前问题，仅发送显式变更，跳过可识别的未变化字段；写入前通过 `/editmeta` 检查字段可编辑性及所需的 `set`、`add`、`remove` 操作，并再次比较问题的 `updated` 值，发现并发变化则拒绝提交。`--force` 只跳过更新时间检查，不绕过 Jira 字段权限。**更新时间检查不是原子并发锁**；检查与实际写入之间仍可能出现竞争。描述转换仍受下面的 Markdown 边界限制。
 
 `--file` 仅接受已有 `export` 生成的文件，复用顶层 `update` 的字段差异、模式及导出时更新时间检查；不与任何字段编辑参数混用。成功更新后需要重新导出。顶层 `update` 保持兼容，不新增顶层 `edit`。
+
+### 指派用户：`issue assign`
+
+```bash
+# 交互输入问题 key 和用户；多人匹配时按编号选择
+bash run-jira.sh issue assign
+# 仅补问用户
+bash run-jira.sh issue assign DEMO-1
+# 同时提供两个参数时跳过所有提示
+bash run-jira.sh issue assign DEMO-1 "Jon Doe"
+# 取消指派或指派给自己
+bash run-jira.sh issue assign DEMO-1 x
+bash run-jira.sh issue assign DEMO-1 me
+```
+
+普通用户通过当前问题的 `/user/assignable/search` 查询，支持显示名和 Data Center 用户名；Cloud 使用 `query`，Data Center 使用 `username`，写入时分别使用 `accountId` 和 `name`。优先采用名称或标识完全匹配的结果，否则要求搜索结果唯一。多人匹配时，仅在省略位置参数的交互模式中提供编号选择；两个参数齐全时直接报错，不偷偷选择第一人或弹出提示。单次查询最多 50 人，达到上限则要求缩小搜索范围，避免根据截断结果误指派。
+
+`--no-input` 显式禁止交互，必须提供 KEY 和 USER；无终端且缺少参数时同样在请求 Jira 前报错。`me` 查询当前用户，`x` 通过空用户标识取消指派，均不搜索用户。命令使用专用 `PUT /issue/{key}/assignee`，不改动其他字段，也不使用导出文件的并发检查；Jira 最终校验指派权限及是否允许未指派。输入结束或选择前中断不会提交。
 
 ### 查询问题：`issue list`
 

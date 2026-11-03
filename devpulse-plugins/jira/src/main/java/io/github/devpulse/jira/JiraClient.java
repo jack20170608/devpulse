@@ -83,6 +83,29 @@ public final class JiraClient {
                 + "/editmeta", null));
     }
 
+    public JsonArray assignableUsers(String key, String query)
+            throws IOException {
+        var result = request("GET", "user/assignable/search?issueKey="
+                + segment(key) + (cloud ? "&query=" : "&username=")
+                + URLEncoder.encode(query, StandardCharsets.UTF_8)
+                + "&maxResults=50", null);
+        if (!result.isJsonArray()) {
+            throw new IOException("Expected a JSON array from Jira.");
+        }
+        return result.getAsJsonArray();
+    }
+
+    public void assign(String key, String user) throws IOException {
+        var body = new JsonObject();
+        var identifier = cloud ? "accountId" : "name";
+        if (user == null) {
+            body.add(identifier, com.google.gson.JsonNull.INSTANCE);
+        } else {
+            body.addProperty(identifier, user);
+        }
+        request("PUT", "issue/" + segment(key) + "/assignee", body);
+    }
+
     public JsonObject create(JsonObject fields) throws IOException {
         var body = new JsonObject();
         body.add("fields", fields);
