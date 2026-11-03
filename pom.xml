@@ -16,6 +16,8 @@
         <module>devpulse-plugins</module>
         <module>devpulse-cli</module>
         <module>devpulse-dist</module>
+        <!-- the POC module is not part of the main build, but can be built separately -->
+        <module>devpulse-poc</module>
     </modules>
 
     <properties>

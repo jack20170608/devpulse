@@ -69,15 +69,21 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
     @Option(names = "--plain",
             description = "Output tab-separated rows instead of a table.")
     boolean plain;
+    @Option(names = "--csv",
+            description = "List recent issues in CSV format.")
+    boolean csv;
     @Option(names = "--no-headers",
-            description = "Omit column headers from table/plain output.")
+            description = "Omit column headers from table/plain/CSV output.")
     boolean noHeaders;
 
     @Override
     protected void execute() throws IOException {
-        if (raw && (plain || noHeaders)) {
+        if (raw && (plain || csv || noHeaders)) {
             throw wrong("--raw/--json cannot be combined with "
-                    + "--plain or --no-headers.");
+                    + "--plain, --csv, or --no-headers.");
+        }
+        if (csv && plain) {
+            throw wrong("--csv cannot be combined with --plain.");
         }
         var query = query();
         var jira = client();
@@ -94,12 +100,12 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
         for (var value : issues.getAsJsonArray()) {
             var issue = object(value);
             var fields = object(issue.get("fields"));
-            rows.add(List.of(scalar(issue.get("key")),
+            rows.add(List.of(scalar(issue.get("key"), csv),
                     named(fields, "issuetype", "name"),
                     named(fields, "status", "name"),
                     named(fields, "priority", "name"),
                     named(fields, "assignee", "displayName"),
-                    scalar(fields.get("summary"))));
+                    scalar(fields.get("summary"), csv)));
         }
         var hint = pageHint(page, jira.cloud(), rows.size());
         var headers = List.of("KEY", "TYPE", "STATUS", "PRIORITY",
@@ -194,6 +200,11 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
     }
 
     private String row(List<String> values, int[] widths) {
+        if (csv) {
+            return String.join(",", values.stream()
+                    .map(value -> "\"" + value.replace("\"", "\"\"") + "\"")
+                    .toList());
+        }
         if (plain) {
             return String.join("\t", values);
         }
@@ -249,11 +260,11 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
         return result;
     }
 
-    private static String named(JsonObject fields, String name,
+    private String named(JsonObject fields, String name,
             String member) throws IOException {
         var value = fields.get(name);
         return value == null || value.isJsonNull()
-                ? "-" : scalar(object(value).get(member));
+                ? "-" : scalar(object(value).get(member), csv);
     }
 
     private static JsonObject object(JsonElement value) throws IOException {
@@ -264,12 +275,19 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
     }
 
     private static String scalar(JsonElement value) throws IOException {
+        return scalar(value, false);
+    }
+
+    private static String scalar(JsonElement value, boolean preserveControls)
+            throws IOException {
         if (value == null || value.isJsonNull()) {
             return "-";
         }
         if (!value.isJsonPrimitive()) {
             throw wrong("Unexpected Jira search field shape.");
         }
-        return value.getAsString().replaceAll("[\\p{Cc}\\p{Cf}]", " ");
+        var text = value.getAsString();
+        return preserveControls ? text
+                : text.replaceAll("[\\p{Cc}\\p{Cf}]", " ");
     }
 }

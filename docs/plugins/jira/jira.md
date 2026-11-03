@@ -191,6 +191,10 @@ bash run-jira.sh issue list --jql \
 bash run-jira.sh issue list -p DEMO --json
 bash run-jira.sh issue list -p DEMO --plain --no-headers
 
+# 将当前页导出为 CSV；也可使用已安装的 jira issue list --csv
+bash run-jira.sh issue list -p DEMO --csv > issues.csv
+bash run-jira.sh issue list -p DEMO --csv --no-headers
+
 # 下一页必须复用相同的查询、排序及 --limit
 # Cloud：使用上一页 nextPageToken
 bash run-jira.sh issue list -p DEMO --limit 20 --next-page-token 'TOKEN'
@@ -202,9 +206,9 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 默认按 `created DESC` 排序；`--order-by` 支持 `created`、`updated`、`priority`、`key`、`rank`、`summary`、`status`、`assignee`、`issuetype`，`--reverse` 改为升序。`--created` 与 `--updated` 接受 Jira 日期或相对时间，表示大于等于该值。**仅在没有默认项目、任何筛选及 JQL 时**默认添加 `created >= "-30d"`，以满足 Cloud 搜索必须具有查询限制的要求；默认或显式项目等筛选存在时不再添加时间限制。`-q/--jql` 是完整查询，不能与显式筛选、`--order-by` 或 `--reverse` 混用，也不注入默认项目，Cloud 的自定义 JQL 同样需要包含查询限制。
 
-默认表格列为问题 key、类型、状态、优先级、经办人、标题；缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出制表符分隔内容，`--no-headers` 移除表头。空结果仅输出表头，配合 `--no-headers` 时无输出。`--raw` 与 `--json` 等价，输出包含 `issues` 和分页元数据的原始 JSON 页，字段限定为标题、状态、类型、优先级、经办人和更新时间；不能与 `--plain` 或 `--no-headers` 混用。
+默认表格列为问题 key、类型、状态、优先级、经办人、标题；缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出制表符分隔内容；`--csv` 输出相同列的 UTF-8 CSV，所有字段用双引号包裹，字段内的双引号加倍，并保留逗号和换行，可重定向保存为文件。`--csv` 与 `--plain` 互斥。`--no-headers` 移除表格、TSV 或 CSV 的表头。空结果仅输出表头，配合 `--no-headers` 时无输出。`--raw` 与 `--json` 等价，输出包含 `issues` 和分页元数据的原始 JSON 页，字段限定为标题、状态、类型、优先级、经办人和更新时间；不能与 `--plain`、`--csv` 或 `--no-headers` 混用。
 
-每次调用仅请求一页，不自动遍历所有问题；`--limit` 默认为 50，范围为 1–100，Jira 仍可能返回更少的条目。在所选 API 版本下，Cloud 使用 `POST /search/jql` 与不透明的 `nextPageToken`；Data Center 使用 `POST /search` 与零起始的 `startAt`。两种分页参数不能跨模式使用。表格/TSV 模式在存在下一页时向标准错误输出续页提示，JSON 模式直接保留服务器分页信息。查询结果受 Jira 权限限制，Cloud 最近写入的修改也可能不会立即出现在搜索中。
+每次调用仅请求一页，不自动遍历所有问题；`--limit` 默认为 50，范围为 1–100，Jira 仍可能返回更少的条目。在所选 API 版本下，Cloud 使用 `POST /search/jql` 与不透明的 `nextPageToken`；Data Center 使用 `POST /search` 与零起始的 `startAt`。两种分页参数不能跨模式使用。表格/TSV/CSV 模式在存在下一页时向标准错误输出续页提示，不混入标准输出的数据；JSON 模式直接保留服务器分页信息。查询结果受 Jira 权限限制，Cloud 最近写入的修改也可能不会立即出现在搜索中。
 
 ### Markdown 边界
 
@@ -399,6 +403,10 @@ bash run-jira.sh issue list --jql \
 bash run-jira.sh issue list -p DEMO --json
 bash run-jira.sh issue list -p DEMO --plain --no-headers
 
+# Export the current page as CSV; installed tools also support jira issue list --csv
+bash run-jira.sh issue list -p DEMO --csv > issues.csv
+bash run-jira.sh issue list -p DEMO --csv --no-headers
+
 # Reuse the same query, sorting, and --limit for the next page
 # Cloud: use nextPageToken from the previous page
 bash run-jira.sh issue list -p DEMO --limit 20 --next-page-token 'TOKEN'
@@ -410,9 +418,9 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 Sorting defaults to `created DESC`. `--order-by` accepts `created`, `updated`, `priority`, `key`, `rank`, `summary`, `status`, `assignee`, or `issuetype`; `--reverse` switches to ascending order. `--created` and `--updated` accept Jira dates or relative times and mean greater than or equal to that value. **Only when no default project, filters, or JQL are supplied**, the command adds `created >= "-30d"` to satisfy Cloud's requirement for a restricted query; a default or explicit project or other filter removes this time restriction. `-q/--jql` is a complete query and cannot be combined with explicit filters, `--order-by`, or `--reverse`; it does not receive an implicit default project either. Custom Cloud JQL must also contain a search restriction.
 
-Default table columns are issue key, type, status, priority, assignee, and summary. Missing or inaccessible optional fields display `-`; control characters are replaced with spaces in table/TSV output. `--plain` emits tab-separated values, and `--no-headers` removes headers. Empty results print only headers, or nothing with `--no-headers`. `--raw` and `--json` are equivalent: they emit the original JSON page containing `issues` and pagination metadata, with issue fields limited to summary, status, type, priority, assignee, and update time. They cannot be combined with `--plain` or `--no-headers`.
+Default table columns are issue key, type, status, priority, assignee, and summary. Missing or inaccessible optional fields display `-`; control characters are replaced with spaces in table/TSV output. `--plain` emits tab-separated values. `--csv` emits the same columns as UTF-8 CSV, quoting every field, doubling embedded double quotes, and preserving commas and line breaks; redirect it to save a file. `--csv` and `--plain` are mutually exclusive. `--no-headers` removes table, TSV, or CSV headers. Empty results print only headers, or nothing with `--no-headers`. `--raw` and `--json` are equivalent: they emit the original JSON page containing `issues` and pagination metadata, with issue fields limited to summary, status, type, priority, assignee, and update time. They cannot be combined with `--plain`, `--csv`, or `--no-headers`.
 
-Each invocation requests one page, never all issues automatically. `--limit` defaults to 50 and accepts 1–100; Jira may still return fewer items. Within the selected API version, Cloud uses `POST /search/jql` with an opaque `nextPageToken`; Data Center uses `POST /search` with zero-based `startAt`. Pagination flags cannot be used across modes. Table/TSV output writes a continuation hint to stderr when another page exists; JSON output preserves server pagination metadata directly. Results are limited by Jira permissions, and recent Cloud writes may not immediately appear in search results.
+Each invocation requests one page, never all issues automatically. `--limit` defaults to 50 and accepts 1–100; Jira may still return fewer items. Within the selected API version, Cloud uses `POST /search/jql` with an opaque `nextPageToken`; Data Center uses `POST /search` with zero-based `startAt`. Pagination flags cannot be used across modes. Table/TSV/CSV output writes a continuation hint to stderr when another page exists, keeping it separate from stdout data; JSON output preserves server pagination metadata directly. Results are limited by Jira permissions, and recent Cloud writes may not immediately appear in search results.
 
 ### Markdown limits
 
