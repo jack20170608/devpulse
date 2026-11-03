@@ -321,7 +321,7 @@ Issue and comment exports record the effective `apiVersion`, which must match th
 
 ### Creating issues: `issue create`
 
-Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group currently exposes `create`, `edit`, `list`, and `template`; other operations still use the top-level commands above.
+Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group currently exposes `create`, `edit`, `assign`, `list`, and `template`; other operations still use the top-level commands above.
 
 ```bash
 # Interactively enter project key, issue type, summary, and optional single-line description
@@ -400,6 +400,24 @@ Labels (`-l/--label`), components (`-C/--component`), fix versions (`--fix-versi
 Direct editing reads the current issue, sends only explicit changes, and skips recognizable unchanged fields. Before writing, it checks `/editmeta` for field editability and the required `set`, `add`, or `remove` operations, then compares the issue's `updated` value again and refuses concurrent changes. `--force` bypasses only the timestamp check, not Jira field permissions. **The timestamp check is not an atomic concurrency lock**; a write can still race between checking and submission. Description conversion remains subject to the Markdown limits below.
 
 `--file` accepts only an existing `export` file and reuses top-level `update`'s field-difference, mode, and exported-timestamp checks. It cannot be combined with any field edit flags. Export again after a successful update. Top-level `update` remains compatible; there is no top-level `edit` command.
+
+### Assigning users: `issue assign`
+
+```bash
+# Prompt for the issue key and user; select by number for multiple matches
+bash run-jira.sh issue assign
+# Prompt only for the user
+bash run-jira.sh issue assign DEMO-1
+# Supplying both arguments skips all prompts
+bash run-jira.sh issue assign DEMO-1 "Jon Doe"
+# Unassign or assign to yourself
+bash run-jira.sh issue assign DEMO-1 x
+bash run-jira.sh issue assign DEMO-1 me
+```
+
+Regular users are resolved through `/user/assignable/search` for the current issue, supporting display names and Data Center usernames. Cloud uses `query` and Data Center uses `username`; assignment sends `accountId` and `name`, respectively. Exact name or identifier matches take precedence; otherwise, the search must return a unique user. Multiple matches offer numbered selection only in interactive mode with positional arguments omitted. With both arguments supplied, ambiguity fails instead of silently choosing the first user or prompting. Searches are limited to 50 users; reaching that limit requires a more specific query to avoid assigning from truncated results.
+
+`--no-input` explicitly disables prompts and requires both KEY and USER. Missing arguments without a terminal also fail before contacting Jira. `me` resolves the current user, while `x` unassigns using a null user identifier; neither searches users. This command uses the dedicated `PUT /issue/{key}/assignee`, leaves other fields untouched, and does not use exported-file concurrency checks. Jira ultimately validates assignment permissions and whether unassigned issues are allowed. End-of-input or interruption before selection does not submit changes.
 
 ### Listing issues: `issue list`
 
