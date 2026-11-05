@@ -6,33 +6,48 @@ import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import org.commonmark.node.BulletList;
+import org.commonmark.node.BlockQuote;
 import org.commonmark.node.Code;
 import org.commonmark.node.Emphasis;
 import org.commonmark.node.FencedCodeBlock;
 import org.commonmark.node.HardLineBreak;
 import org.commonmark.node.Heading;
+import org.commonmark.node.Image;
+import org.commonmark.node.IndentedCodeBlock;
 import org.commonmark.node.Link;
+import org.commonmark.node.LinkReferenceDefinition;
 import org.commonmark.node.ListItem;
 import org.commonmark.node.Node;
 import org.commonmark.node.OrderedList;
 import org.commonmark.node.Paragraph;
 import org.commonmark.node.StrongEmphasis;
+import org.commonmark.node.SoftLineBreak;
 import org.commonmark.node.Text;
+import org.commonmark.node.ThematicBreak;
 import org.commonmark.parser.Parser;
 
 public final class JiraMarkdown {
+    public enum Format { markdown, wiki }
+
     private JiraMarkdown() {}
 
     public static JsonElement toJira(String markdown, boolean adf)
             throws IOException {
-        if (!adf) {
-            // REST v2 uses Jira wiki text rather than ADF.
-            if (!plain(markdown)) {
-                throw new IOException("REST API v2 supports plain-text "
-                        + "descriptions/comments only; rich Markdown "
-                        + "cannot be converted without losing formatting.");
+        return toJira(markdown, adf, Format.markdown);
+    }
+
+    public static JsonElement toJira(String markdown, boolean adf,
+            Format format) throws IOException {
+        if (format == Format.wiki) {
+            if (adf) {
+                throw new IOException("Jira wiki input requires REST API v2; "
+                        + "use --body-format markdown for REST API v3.");
             }
             return new com.google.gson.JsonPrimitive(markdown);
+        }
+        if (!adf) {
+            return new com.google.gson.JsonPrimitive(wikiBlocks(
+                    Parser.builder().build().parse(markdown)));
         }
         var doc = new JsonObject();
         doc.addProperty("type", "doc");
@@ -54,11 +69,9 @@ public final class JiraMarkdown {
         }
         if (!adf) {
             if (!value.isJsonPrimitive()
-                    || !value.getAsJsonPrimitive().isString()
-                    || !plain(value.getAsString())) {
-                throw new IOException("REST API v2 description contains "
-                        + "wiki markup or unsupported content; refusing "
-                        + "lossy Markdown export.");
+                    || !value.getAsJsonPrimitive().isString()) {
+                throw new IOException("REST API v2 description/comment "
+                        + "must be a Jira wiki string.");
             }
             return value.getAsString();
         }
@@ -339,16 +352,137 @@ public final class JiraMarkdown {
                 name -> java.util.List.of(names).contains(name));
     }
 
-    private static boolean plain(String text) {
-        return !text.matches("(?s).*(?:^|\\n)\\s*(?:[#*>-] |"
-                + "[0-9]+\\. |```|\\{code\\}|h[1-6]\\. |"
-                + "\\|\\||\\{panel).*")
-                && !text.matches("(?s).*\\[.+\\]\\(.+\\).*")
-                && !text.matches("(?s).*\\[[^\\]]+\\].*")
-                && !text.matches("(?s).*\\*\\S[^*]*\\*.*")
-                && !text.matches("(?s).*_\\S[^_]*_.*")
-                && !text.matches("(?s).*!\\S[^!]*!.*")
-                && !text.contains("**") && !text.contains("{");
+    private static String wikiBlocks(Node parent) throws IOException {
+        var blocks = new ArrayList<String>();
+        for (var node = parent.getFirstChild(); node != null;
+                node = node.getNext()) {
+            if (!(node instanceof LinkReferenceDefinition)) {
+                blocks.add(wikiBlock(node));
+            }
+        }
+        return String.join("\n\n", blocks);
+    }
+
+    private static String wikiBlock(Node node) throws IOException {
+        return switch (node) {
+            case Paragraph paragraph -> wikiInline(paragraph);
+            case Heading heading -> "h" + heading.getLevel() + ". "
+                    + wikiInline(heading);
+            case BulletList list -> wikiList(list, "");
+            case OrderedList list -> wikiList(list, "");
+            case BlockQuote quote -> {
+                if (quote.getParent() instanceof BlockQuote) {
+                    throw unsupportedWiki();
+                }
+                yield "{quote}\n" + wikiBlocks(quote) + "\n{quote}";
+            }
+            case FencedCodeBlock code -> wikiCode(
+                    code.getLiteral(), code.getInfo());
+            case IndentedCodeBlock code -> wikiCode(code.getLiteral(), "");
+            case ThematicBreak ignored -> "----";
+            default -> throw unsupportedWiki();
+        };
+    }
+
+    private static String wikiList(Node list, String prefix)
+            throws IOException {
+        var marker = prefix + (list instanceof OrderedList ? "#" : "*");
+        var lines = new ArrayList<String>();
+        for (var item = list.getFirstChild(); item != null;
+                item = item.getNext()) {
+            if (!(item instanceof ListItem)
+                    || !(item.getFirstChild() instanceof Paragraph)) {
+                throw unsupportedWiki();
+            }
+            lines.add(marker + " " + wikiInline(item.getFirstChild()));
+            for (var child = item.getFirstChild().getNext(); child != null;
+                    child = child.getNext()) {
+                if (!(child instanceof BulletList)
+                        && !(child instanceof OrderedList)) {
+                    throw unsupportedWiki();
+                }
+                lines.add(wikiList(child, marker));
+            }
+        }
+        return String.join("\n", lines);
+    }
+
+    private static String wikiCode(String literal, String info)
+            throws IOException {
+        if ((!info.isBlank() && !info.matches("[A-Za-z0-9_+#.-]+"))
+                || literal.matches("(?is).*\\{code(?::[^}]*)?\\}.*")) {
+            throw unsupportedWiki();
+        }
+        return "{code" + (info.isBlank() ? "" : ":" + info) + "}\n"
+                + literal.replaceFirst("\\n$", "") + "\n{code}";
+    }
+
+    private static String wikiInline(Node parent) throws IOException {
+        var result = new StringBuilder();
+        for (var node = parent.getFirstChild(); node != null;
+                node = node.getNext()) {
+            result.append(switch (node) {
+                case Text text -> wikiEscaped(text.getLiteral());
+                case StrongEmphasis strong -> "*" + wikiInline(strong) + "*";
+                case Emphasis emphasis -> "_" + wikiInline(emphasis) + "_";
+                case Code code -> {
+                    if (code.getLiteral().contains("}}")) {
+                        throw unsupportedWiki();
+                    }
+                    yield "{{" + code.getLiteral() + "}}";
+                }
+                case Link link -> {
+                    requireWikiDestination(link.getDestination());
+                    if (link.getTitle() != null && !link.getTitle().isEmpty()) {
+                        throw unsupportedWiki();
+                    }
+                    yield "[" + wikiInline(link) + "|"
+                            + link.getDestination() + "]";
+                }
+                case Image image -> {
+                    requireWikiDestination(image.getDestination());
+                    if ((image.getTitle() != null && !image.getTitle().isEmpty())
+                            || image.getDestination().contains("!")) {
+                        throw unsupportedWiki();
+                    }
+                    var alt = new StringBuilder();
+                    for (var child = image.getFirstChild(); child != null;
+                            child = child.getNext()) {
+                        if (!(child instanceof Text text)
+                                || text.getLiteral().matches("(?s).*[|!,=\\r\\n].*")) {
+                            throw unsupportedWiki();
+                        }
+                        alt.append(text.getLiteral());
+                    }
+                    yield "!" + image.getDestination()
+                            + (alt.isEmpty() ? "" : "|alt=" + alt) + "!";
+                }
+                case SoftLineBreak ignored -> "\n";
+                case HardLineBreak ignored -> "\\\\\n";
+                default -> throw unsupportedWiki();
+            });
+        }
+        return result.toString();
+    }
+
+    private static void requireWikiDestination(String destination)
+            throws IOException {
+        if (destination.isBlank()
+                || destination.matches("(?s).*[\\[\\]|\\s].*")) {
+            throw unsupportedWiki();
+        }
+    }
+
+    private static String wikiEscaped(String text) {
+        return text.replace("\\", "\\\\")
+                .replaceAll("([\\[\\]{}*_!|#^~+?\\-])", "\\\\$1")
+                .replaceAll("(?m)^(h[1-6]|bq)\\.", "$1\\\\.");
+    }
+
+    private static IOException unsupportedWiki() {
+        return new IOException("Markdown contains content that cannot be "
+                + "represented safely as Jira wiki; simplify it or use "
+                + "--body-format wiki with native Jira wiki input.");
     }
 
     private static JsonObject object(JsonElement value, String type)

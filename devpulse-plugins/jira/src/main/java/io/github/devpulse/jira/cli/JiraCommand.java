@@ -31,6 +31,7 @@ import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine;
 import picocli.CommandLine.IVersionProvider;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.ScopeType;
@@ -232,6 +233,39 @@ public final class JiraCommand implements Runnable {
         }
     }
 
+    static final class BodyFormat {
+        @Option(names = "--body-format", paramLabel = "markdown|wiki",
+                description = "Body input format: ${COMPLETION-CANDIDATES}. "
+                        + "Default: markdown, or the exported format "
+                        + "when updating. Wiki requires REST API v2.")
+        JiraMarkdown.Format format;
+
+        JsonElement toJira(String body, JiraClient jira) throws IOException {
+            return JiraMarkdown.toJira(body, jira.apiVersion() == 3,
+                    format == null ? JiraMarkdown.Format.markdown : format);
+        }
+
+        JsonElement toJira(String body, JiraClient jira,
+                com.typesafe.config.Config metadata) throws IOException {
+            if (format != null || !metadata.hasPath("bodyFormat")) {
+                return toJira(body, jira);
+            }
+            try {
+                return JiraMarkdown.toJira(body, jira.apiVersion() == 3,
+                        JiraMarkdown.Format.valueOf(
+                                metadata.getString("bodyFormat")));
+            } catch (IllegalArgumentException exception) {
+                throw wrong("Exported bodyFormat must be markdown or wiki.");
+            }
+        }
+
+        boolean changesFormat(com.typesafe.config.Config metadata) {
+            return format != null && !format.name().equals(
+                    metadata.hasPath("bodyFormat")
+                            ? metadata.getString("bodyFormat") : "markdown");
+        }
+    }
+
     abstract static class Action implements Callable<Integer> {
         @Spec
         CommandSpec spec;
@@ -376,6 +410,7 @@ public final class JiraCommand implements Runnable {
             values.put("updated", string(source, "updated"));
             values.put("mode", jira.cloud() ? "cloud" : "dc");
             values.put("apiVersion", jira.apiVersion());
+            values.put("bodyFormat", jira.apiVersion() == 2 ? "wiki" : "markdown");
             values.put("descriptionSha256", hash(description));
             values.put("fields", toMap(exported));
             values.put("originalFields", toMap(exported));
@@ -404,6 +439,8 @@ public final class JiraCommand implements Runnable {
     @Command(name = "update", description = "Update only changed exported "
             + "fields; reject changed remote issues by default.")
     static final class Update extends Action {
+        @Mixin
+        BodyFormat bodyFormat = new BodyFormat();
         @Option(names = "--file", required = true, paramLabel = "ISSUE.conf")
         Path file;
         @Option(names = "--force", description = "Override the remote "
@@ -450,10 +487,10 @@ public final class JiraCommand implements Runnable {
                 }
             }
             var description = text(markdown(file));
-            if (!hash(description).equals(
+            if (bodyFormat.changesFormat(data) || !hash(description).equals(
                     data.getString("descriptionSha256"))) {
-                changes.add("description", JiraMarkdown.toJira(description,
-                        jira.apiVersion() == 3));
+                changes.add("description", bodyFormat.toJira(
+                        description, jira, data));
             }
             if (changes.isEmpty()) {
                 print("No changes to upload.");
@@ -511,6 +548,8 @@ public final class JiraCommand implements Runnable {
 
     @Command(name = "comment", description = "Add a Markdown comment.")
     static final class Comment extends Action {
+        @Mixin
+        BodyFormat bodyFormat = new BodyFormat();
         @Parameters(index = "0")
         String key;
         @Option(names = "--file", required = true, paramLabel = "BODY.md")
@@ -519,8 +558,7 @@ public final class JiraCommand implements Runnable {
         @Override
         protected void execute() throws IOException {
             var jira = client();
-            jira.comment(key, JiraMarkdown.toJira(text(file),
-                    jira.apiVersion() == 3));
+            jira.comment(key, bodyFormat.toJira(text(file), jira));
             print("Commented on " + key + ".");
         }
     }
@@ -555,6 +593,7 @@ public final class JiraCommand implements Runnable {
             values.put("updated", string(comment, "updated"));
             values.put("mode", jira.cloud() ? "cloud" : "dc");
             values.put("apiVersion", jira.apiVersion());
+            values.put("bodyFormat", jira.apiVersion() == 2 ? "wiki" : "markdown");
             values.put("descriptionSha256", hash(description));
             write(file, description);
             try {
@@ -570,6 +609,8 @@ public final class JiraCommand implements Runnable {
     @Command(name = "comment-update",
             description = "Update an exported Markdown comment.")
     static final class CommentUpdate extends Action {
+        @Mixin
+        BodyFormat bodyFormat = new BodyFormat();
         @Parameters(index = "0")
         String key;
         @Parameters(index = "1")
@@ -605,12 +646,13 @@ public final class JiraCommand implements Runnable {
                         + "or explicitly use --force to override.");
             }
             var content = text(file);
-            if (hash(content).equals(data.getString("descriptionSha256"))) {
+            if (!bodyFormat.changesFormat(data)
+                    && hash(content).equals(data.getString("descriptionSha256"))) {
                 print("No changes to upload.");
                 return;
             }
             jira.editComment(key, id,
-                    JiraMarkdown.toJira(content, jira.apiVersion() == 3));
+                    bodyFormat.toJira(content, jira, data));
             print("Updated comment " + id + ". "
                     + "Re-export before the next update.");
         }

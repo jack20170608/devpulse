@@ -13,18 +13,20 @@ import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 @Command(name = "create", mixinStandardHelpOptions = true,
         description = "Create an issue using prompts, flags, or "
                 + "HOCON/Markdown files.")
 public final class JiraCreateCommand extends JiraCommand.Action {
+    @Mixin
+    JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
     @Option(names = "--file", paramLabel = "ISSUE.conf",
             description = "HOCON fields and adjacent Markdown; "
                     + "explicit flags override template fields.")
@@ -108,8 +110,7 @@ public final class JiraCreateCommand extends JiraCommand.Action {
         var description = description();
         var jira = client();
         if (description != null) {
-            issue.add("description", JiraMarkdown.toJira(description,
-                    jira.apiVersion() == 3));
+            issue.add("description", bodyFormat.toJira(description, jira));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");

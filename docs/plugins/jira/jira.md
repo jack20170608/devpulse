@@ -230,7 +230,20 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 ### Markdown 边界
 
-API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。API v2（包括显式选择 v2 的 Cloud）使用 Jira wiki 格式而非 ADF，当前**只支持纯文本描述和评论**，遇到可识别的 wiki/Markdown 格式会拒绝转换；不能保证识别所有插件的私有格式。其他可编辑字段保留为原始结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
+API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。
+
+API v2（包括显式选择 v2 的 Cloud）使用 Jira Wiki 格式而非 ADF。创建、直接编辑和新增评论默认以 Markdown 解析正文；支持段落、标题、加粗、斜体、行内代码、带或不带语言的代码块、简单及嵌套列表、引用、链接、图片和分隔线，并转换为 Wiki。HTML、带标题的链接/图片、多段落列表项及无法安全转换的内容会明确报错；不提供 GFM 表格、任务列表和删除线扩展转换。需要直接使用 Wiki 表格、宏、用户提及等原生格式时，添加 `--body-format wiki`，正文将原样提交，不进行 Markdown 解析或格式猜测。`*文字*` 在默认 Markdown 模式下为斜体，在 Wiki 模式下为加粗。Wiki 模式只适用于 API v2；API v3 保持 Markdown → ADF 的原有行为。
+
+```bash
+# 默认 Markdown，也可显式添加 --body-format markdown
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
+# 原生 Jira Wiki；文件扩展名不决定格式
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --body-format wiki --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
+```
+
+v2 的 `export` 和 `comment-export` 在 `.md` 文件中保留原始 Wiki 文本，不执行有损的 Wiki → Markdown 转换，并在 HOCON 元数据中记录 `bodyFormat = "wiki"`；v3 记录 `"markdown"`。`update`、`issue edit --file` 和 `comment-update` 默认使用导出的格式，也可通过 `--body-format markdown|wiki` 显式覆盖。旧导出文件没有该字段时仍默认为 Markdown。切换格式时应重写正文，而不是只修改格式标记。其他可编辑字段保留为原始结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
 
 ## English
 
@@ -460,4 +473,17 @@ Each invocation requests one page, never all issues automatically. `--limit` def
 
 ### Markdown limits
 
-API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped. API v2, including Cloud explicitly configured for v2, uses Jira wiki syntax rather than ADF; it currently supports **plain-text descriptions and comments only**, rejecting recognizable wiki/Markdown syntax. Proprietary plugin syntax cannot always be identified. Other editable fields retain their raw structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.
+API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped.
+
+API v2, including Cloud explicitly configured for v2, uses Jira Wiki rather than ADF. Creation, direct editing, and new comments parse bodies as Markdown by default, converting paragraphs, headings, bold, italic, inline code, labelled or unlabelled code blocks, simple and nested lists, quotes, links, images, and thematic breaks to Wiki. HTML, titled links/images, multi-paragraph list items, and content that cannot be converted safely produce explicit errors. GFM table, task-list, and strikethrough extension conversion is not provided. For native Wiki tables, macros, user mentions, and other native syntax, add `--body-format wiki` to submit the body unchanged, without Markdown parsing or format guessing. `*text*` means italic in default Markdown mode and bold in Wiki mode. Wiki mode requires API v2; API v3 retains its existing Markdown → ADF behavior.
+
+```bash
+# Markdown by default; --body-format markdown is also accepted
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
+# Native Jira Wiki; the file extension does not determine the format
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --body-format wiki --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
+```
+
+For v2, `export` and `comment-export` preserve the original Wiki text in the `.md` file rather than attempting a lossy Wiki → Markdown conversion, and record `bodyFormat = "wiki"` in HOCON metadata; v3 records `"markdown"`. `update`, `issue edit --file`, and `comment-update` use the exported format by default; `--body-format markdown|wiki` overrides it explicitly. Legacy exports without this field still default to Markdown. Rewrite the body when switching formats rather than merely changing the format marker. Other editable fields retain their raw structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.

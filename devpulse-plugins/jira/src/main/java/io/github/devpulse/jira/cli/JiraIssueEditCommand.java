@@ -14,19 +14,21 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 @Command(name = "edit", mixinStandardHelpOptions = true,
         description = "Edit selected issue fields, or update an exported file.")
 public final class JiraIssueEditCommand extends JiraCommand.Action {
+    @Mixin
+    JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
     @Parameters(index = "0", paramLabel = "KEY")
     String key;
     @Option(names = {"-s", "--summary"}, paramLabel = "TEXT",
@@ -91,6 +93,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             var update = new JiraCommand.Update();
             update.file = file;
             update.force = force;
+            update.bodyFormat = bodyFormat;
             update.spec = spec;
             update.execute();
             return;
@@ -124,7 +127,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
         }
         if (description != null) {
             fields.add("description", description.isEmpty() ? JsonNull.INSTANCE
-                    : JiraMarkdown.toJira(description, jira.apiVersion() == 3));
+                    : bodyFormat.toJira(description, jira));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
