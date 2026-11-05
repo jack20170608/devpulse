@@ -1,9 +1,7 @@
-package io.github.devpulse.execution;
+package io.github.devpulse.core.execution;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.core.environment.BashShell;
-import io.github.devpulse.core.execution.TaskDefinition;
-import io.github.devpulse.core.execution.TaskPlan;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

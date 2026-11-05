@@ -1,4 +1,4 @@
-package io.github.devpulse.execution;
+package io.github.devpulse.core.execution;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
@@ -14,7 +14,6 @@ import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigResolveOptions;
 import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueFactory;
-import io.github.devpulse.core.execution.TaskPlan;
 
 import java.io.BufferedWriter;
 import java.io.File;

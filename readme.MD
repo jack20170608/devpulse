@@ -63,7 +63,7 @@ jira --help
 ```text
 devpulse-dependencies/   外部依赖版本
 devpulse-bom/            内部产物版本
-devpulse-core/           工作流计划与环境共享库
+devpulse-core/           DAG 执行引擎与环境共享库
 devpulse-plugins/        插件聚合模块
   pulse/                 独立的 Pulse CLI
   gather/                独立的 Gather CLI
@@ -135,7 +135,7 @@ Use `--prefix` to customize the installation directory and add its `bin` directo
 ```text
 devpulse-dependencies/   External dependency versions
 devpulse-bom/            Internal artifact versions
-devpulse-core/           Workflow planning and shared environment library
+devpulse-core/           DAG execution engine and shared environment library
 devpulse-plugins/        Plugin aggregator
   pulse/                 Standalone Pulse CLI
   gather/                Standalone Gather CLI

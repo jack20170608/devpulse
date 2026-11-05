@@ -1,8 +1,8 @@
 package io.github.devpulse.cli;
 
 import io.github.devpulse.core.environment.EnvironmentGatherer;
-import io.github.devpulse.execution.RunHistory;
-import io.github.devpulse.execution.DaemonManager;
+import io.github.devpulse.core.execution.RunHistory;
+import io.github.devpulse.core.execution.DaemonManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

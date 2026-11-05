@@ -1,8 +1,6 @@
-package io.github.devpulse.execution;
+package io.github.devpulse.core.execution;
 
 import io.github.devpulse.core.environment.BashShell;
-import io.github.devpulse.core.execution.TaskDefinition;
-import io.github.devpulse.core.execution.TaskPlan;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -13,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -21,45 +20,62 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public final class PulseExecutor {
+public final class WorkflowRun {
+    public record Result(RunHistory.State state, int succeeded,
+            int failed, int skipped) {}
+
     private final BashShell bash;
     private final Path directory;
     private final PrintWriter out;
     private final RunHistory.Writer history;
     private final DaemonManager daemons;
+    private final TaskPlan plan;
+    private final int jobs;
     private final Object gate = new Object();
     private final Object cleanupGate = new Object();
     private final Set<ProcessHandle> processes = ConcurrentHashMap.newKeySet();
     private volatile boolean failed;
-    private TaskPlan plan;
+    private boolean executing;
+    private boolean finished;
+    private boolean cancelled;
+    private Thread coordinator;
 
     private enum State { SUCCESS, READY, FAILED, SKIPPED }
 
-    private record Result(String name, State state, Integer exitCode,
+    private record TaskResult(String name, State state, Integer exitCode,
             String error, Instant finishedAt) {}
 
-    public PulseExecutor(BashShell bash, Path directory, PrintWriter out,
-            RunHistory.Writer history) {
-        this.bash = bash;
-        this.directory = directory;
-        this.out = out;
-        this.history = history;
+    public WorkflowRun(BashShell bash, Path directory, PrintWriter out,
+            RunHistory.Writer history, TaskPlan plan, int jobs) {
+        if (jobs <= 0) {
+            throw new IllegalArgumentException("jobs must be a positive integer.");
+        }
+        this.bash = Objects.requireNonNull(bash, "bash");
+        this.directory = Objects.requireNonNull(directory, "directory");
+        this.out = Objects.requireNonNull(out, "out");
+        this.history = Objects.requireNonNull(history, "history");
+        this.plan = Objects.requireNonNull(plan, "plan");
+        this.jobs = jobs;
         daemons = new DaemonManager(history, bash, directory);
     }
 
-    public int execute(TaskPlan plan, int jobs)
+    public Result execute()
             throws IOException, InterruptedException {
-        this.plan = plan;
+        synchronized (gate) {
+            if (executing) {
+                throw new IllegalStateException("A WorkflowRun can only be executed once.");
+            }
+            executing = true;
+            coordinator = Thread.currentThread();
+        }
         var pool = Executors.newVirtualThreadPerTaskExecutor();
-        var completions = new ExecutorCompletionService<Result>(pool);
+        var completions = new ExecutorCompletionService<TaskResult>(pool);
         var started = new HashSet<String>();
         var succeeded = new HashSet<String>();
         var reportedDaemons = new HashSet<String>();
         var active = 0;
         var failures = 0;
         IOException persistenceFailure = null;
-        var hook = Thread.ofPlatform().unstarted(this::cancel);
-        Runtime.getRuntime().addShutdownHook(hook);
         try {
             while (true) {
                 var reportedBefore = reportedDaemons.size();
@@ -90,7 +106,7 @@ public final class PulseExecutor {
                 if (active == 0) {
                     break;
                 }
-                Result result;
+                TaskResult result;
                 try {
                     var completion = completions.poll(200,
                             TimeUnit.MILLISECONDS);
@@ -132,17 +148,26 @@ public final class PulseExecutor {
             }
             daemons.finishMonitoring();
             failures += recordDaemonFailures(reportedDaemons, succeeded);
-            cleanupHooks();
             var skipped = plan.tasks().size() - succeeded.size() - failures;
-            history.ended(failed || skipped > 0
-                    ? RunHistory.State.FAILED : RunHistory.State.SUCCESS);
+            Result result;
+            synchronized (cleanupGate) {
+                cleanupHooks();
+                synchronized (gate) {
+                    var state = cancelled ? RunHistory.State.CANCELLED
+                            : failed || skipped > 0 ? RunHistory.State.FAILED
+                            : RunHistory.State.SUCCESS;
+                    history.ended(state);
+                    finished = true;
+                    result = new Result(state, succeeded.size(), failures, skipped);
+                }
+            }
             log("pulse", "Finished: " + succeeded.size() + " succeeded, "
                     + failures + " failed, " + skipped + " skipped.");
             if (persistenceFailure != null) {
                 throw new IOException("Run state could not be persisted.",
                         persistenceFailure);
             }
-            return failed || skipped > 0 ? 1 : 0;
+            return result;
         } catch (InterruptedException exception) {
             cancel();
             throw exception;
@@ -155,12 +180,15 @@ public final class PulseExecutor {
                 if (interrupted) {
                     Thread.currentThread().interrupt();
                 }
-                Runtime.getRuntime().removeShutdownHook(hook);
+                synchronized (gate) {
+                    finished = true;
+                    coordinator = null;
+                }
             }
         }
     }
 
-    private Result run(TaskDefinition task, ExecutorService pool) {
+    private TaskResult run(TaskDefinition task, ExecutorService pool) {
         if (task.daemon() != null) {
             return runDaemon(task, pool);
         }
@@ -171,7 +199,7 @@ public final class PulseExecutor {
         try {
             synchronized (gate) {
                 if (failed) {
-                    return new Result(task.name(), State.SKIPPED,
+                    return new TaskResult(task.name(), State.SKIPPED,
                             null, null, Instant.now());
                 }
                 try {
@@ -242,21 +270,21 @@ public final class PulseExecutor {
                 }
             }
             log(task.name(), "Finished with exit code " + code + ".");
-            return new Result(task.name(),
+            return new TaskResult(task.name(),
                     code == 0 ? State.SUCCESS : State.FAILED, code,
                     code == 0 ? null : "Bash exited with code " + code + ".",
                     finishedAt);
         } catch (IOException | ExecutionException exception) {
             markFailed();
             log(task.name(), "Failed: " + exception.getMessage());
-            return new Result(task.name(), State.FAILED, exitCode,
+            return new TaskResult(task.name(), State.FAILED, exitCode,
                     exception.getMessage(),
                     finishedAt == null ? Instant.now() : finishedAt);
         } catch (InterruptedException exception) {
             markFailed();
             Thread.currentThread().interrupt();
             log(task.name(), "Interrupted.");
-            return new Result(task.name(), State.FAILED, exitCode,
+            return new TaskResult(task.name(), State.FAILED, exitCode,
                     "Task execution interrupted.", Instant.now());
         } finally {
             if (taskLog != null) {
@@ -277,11 +305,11 @@ public final class PulseExecutor {
         }
     }
 
-    private Result runDaemon(TaskDefinition task, ExecutorService pool) {
+    private TaskResult runDaemon(TaskDefinition task, ExecutorService pool) {
         try {
             synchronized (gate) {
                 if (failed) {
-                    return new Result(task.name(), State.SKIPPED,
+                    return new TaskResult(task.name(), State.SKIPPED,
                             null, null, Instant.now());
                 }
                 history.started(task.name());
@@ -291,16 +319,16 @@ public final class PulseExecutor {
             daemons.awaitReady(task.name(), pool);
             log(task.name(), "Daemon ready. shutdownHook="
                     + task.daemon().shutdownHook());
-            return new Result(task.name(), State.READY, null, null, null);
+            return new TaskResult(task.name(), State.READY, null, null, null);
         } catch (IOException exception) {
             markFailed();
             log(task.name(), "Daemon failed: " + exception.getMessage());
-            return new Result(task.name(), State.FAILED, null,
+            return new TaskResult(task.name(), State.FAILED, null,
                     exception.getMessage(), Instant.now());
         } catch (InterruptedException exception) {
             markFailed();
             Thread.currentThread().interrupt();
-            return new Result(task.name(), State.FAILED, null,
+            return new TaskResult(task.name(), State.FAILED, null,
                     "Daemon startup interrupted.", Instant.now());
         }
     }
@@ -343,16 +371,29 @@ public final class PulseExecutor {
         }
     }
 
-    private void cancel() {
-        markFailed();
-        try {
-            history.ended(RunHistory.State.CANCELLED);
-        } catch (IOException exception) {
-            log("pulse", "Could not persist cancellation: "
-                    + exception.getMessage());
+    public void cancel() {
+        synchronized (cleanupGate) {
+            Thread running;
+            synchronized (gate) {
+                if (finished || cancelled) {
+                    return;
+                }
+                cancelled = true;
+                failed = true;
+                running = coordinator;
+            }
+            try {
+                history.ended(RunHistory.State.CANCELLED);
+            } catch (IOException exception) {
+                log("pulse", "Could not persist cancellation: "
+                        + exception.getMessage());
+            }
+            processes.stream().toList().forEach(WorkflowRun::terminate);
+            cleanupHooks();
+            if (running != null && running != Thread.currentThread()) {
+                running.interrupt();
+            }
         }
-        processes.stream().toList().forEach(PulseExecutor::terminate);
-        cleanupHooks();
     }
 
     private static void terminate(ProcessHandle process) {

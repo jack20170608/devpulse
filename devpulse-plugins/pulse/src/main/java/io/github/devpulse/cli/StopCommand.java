@@ -1,7 +1,7 @@
 package io.github.devpulse.cli;
 
-import io.github.devpulse.execution.DaemonManager;
-import io.github.devpulse.execution.RunHistory;
+import io.github.devpulse.core.execution.DaemonManager;
+import io.github.devpulse.core.execution.RunHistory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;

@@ -57,16 +57,16 @@
 - **探测资源控制**：Bash 验证与环境扫描均设置超时，持续读取扫描输出，并清理探测进程。
 - **平台边界**：统一 Bash 语法不代表工具、路径、文件权限和操作系统能力完全一致；Git Bash 不是完整 Linux 环境。
 
-#### 4. 图拓扑智能调度引擎（`PulseCommand.java`）
+#### 4. 图拓扑调度引擎（`WorkflowRun.java`、`PulseCommand.java`）
 
 **职责**：读取用户存放的 `.devpulse.yaml` 配置文件，智能计算依赖顺序，拉起本地系统进程执行。
 
-**独立计划 module**：`devpulse-core` 提供不可变的 `TaskDefinition`、`WorkflowDefinition` 和 `TaskPlan`，只依赖 JDK，不依赖 YAML、Typesafe Config 或 CLI。任务定义包含命令、依赖和可选的长驻进程选项；工作流定义包含任务列表与流水线目标。`TaskPlan.create` 校验完整定义，再为指定任务或流水线补齐传递依赖并生成拓扑有序的计划；不会读取配置、探测 Bash、执行命令或写入运行记录。
+**独立计划模块**：`devpulse-core` 的不可变 `TaskDefinition`、`WorkflowDefinition` 和 `TaskPlan` 只依赖 JDK，不依赖 YAML、Typesafe Config 或 CLI。任务定义包含命令、依赖和可选的长驻进程选项；工作流定义包含任务列表与流水线目标。`TaskPlan.create` 校验完整定义，再为指定任务或流水线补齐传递依赖并生成拓扑有序的计划；不会读取配置、探测 Bash、执行命令或写入运行记录。
 
 ```java
-import io.github.devpulse.execution.TaskDefinition;
-import io.github.devpulse.execution.TaskPlan;
-import io.github.devpulse.execution.WorkflowDefinition;
+import io.github.devpulse.core.execution.TaskDefinition;
+import io.github.devpulse.core.execution.TaskPlan;
+import io.github.devpulse.core.execution.WorkflowDefinition;
 import java.util.List;
 import java.util.Map;
 
@@ -78,7 +78,27 @@ var workflow = new WorkflowDefinition(
 var plan = TaskPlan.create(workflow, "dev");
 ```
 
-`PlanningException` 通过 `scope()`、`name()` 和 `field()` 提供与配置格式无关的错误定位；Pulse 的 `PulseConfiguration.plan` 将其关联到原 YAML 文件和可用行号。长驻进程的终端说明由 Pulse 的 `TaskDetails` 生成，不进入核心定义。当前阶段仅下沉定义和计划；`PulseExecutor`、`RunHistory` 和 `DaemonManager` 仍在 Pulse，调度、失败策略与持久化格式不变。
+`PlanningException` 通过 `scope()`、`name()` 和 `field()` 提供与配置格式无关的错误定位；Pulse 的 `PulseConfiguration.plan` 将其关联到原 YAML 文件和可用行号。长驻进程的终端说明由 Pulse 的 `TaskDetails` 生成，不进入核心定义。
+
+**独立执行运行时**：core 的 `WorkflowRun` 绑定一个计划和并发上限，阻塞式 `execute()` 只能调用一次，返回整体状态及成功、失败、跳过数量。`cancel()` 可从其他线程调用；执行前取消不会启动任务，重复取消和完成后取消不改变已结束的结果，执行中的外部取消会中断执行线程。调用方用 try-with-resources 管理 `RunHistory.Writer`，并自行决定是否注册 JVM 退出钩子；core 不注册全局钩子。Pulse 将成功结果映射为退出码 `0`，其他结果映射为 `1`，中断映射为 `130`。
+
+`RunHistory` 和 `DaemonManager` 也位于 core，保留原有调度、失败策略与版本 `1` 的 HOCON 记录格式。执行运行时依赖 Typesafe Config 读写这些记录，但不读取任务 YAML、不依赖 picocli 或 TUI。嵌入调用示例（接续上面的 `plan`）：
+
+```java
+import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.core.execution.RunHistory;
+import io.github.devpulse.core.execution.WorkflowRun;
+import java.io.PrintWriter;
+import java.nio.file.Path;
+
+var directory = Path.of(".").toAbsolutePath().normalize();
+var shell = BashShell.discover(null);
+try (var history = new RunHistory(directory).begin("dev", plan, 4)) {
+    var run = new WorkflowRun(shell, directory, new PrintWriter(System.out),
+            history, plan, 4);
+    var result = run.execute();
+}
+```
 
 **实现步骤**：
 
@@ -149,7 +169,7 @@ var plan = TaskPlan.create(workflow, "dev");
 
 #### 8. 预定义 CLI 集成：Jira（`JiraCommand.java`）
 
-**模块与接口**：根目录 `pom.xml` 聚合各模块。`devpulse-dependencies` 管理外部依赖，`devpulse-bom` 管理可消费的内部产物版本；构建插件版本在根 POM 的 `pluginManagement`。`devpulse-core` 提供独立工作流定义与计划构建，以及 Bash 和环境盘点共享代码，不生成可执行 JAR；`devpulse-plugins/pulse` 包含工作流命令 `pulse`、`init`、`review`、`status`、`stop`、YAML 到核心定义的转换和现有执行运行时，`devpulse-plugins/gather` 包含提示词命令，`devpulse-plugins/jira` 独立访问 Jira。各工具 JAR 仅依赖所需模块，不相互依赖；共享库不注册命令，也不引入动态插件加载。`devpulse-cli` 是保留 `devpulse <子命令>` 用法的组合式兼容产物，不加入单工具发行包。`devpulse-dist` 依赖工具产物并组装独立归档，供用户按需安装，不被工具反向依赖。运行模块继承 `devpulse-dependencies` 的本地相对父路径，内部 BOM 不作为运行时依赖。安装和发行细节见 [发行与安装](distribution.md)。
+**模块与接口**：根目录 `pom.xml` 聚合各模块。`devpulse-dependencies` 管理外部依赖，`devpulse-bom` 管理可消费的内部产物版本；构建插件版本在根 POM 的 `pluginManagement`。`devpulse-core` 提供独立工作流定义、计划构建、执行运行时、运行记录和长驻进程管理，以及 Bash 和环境盘点共享代码，不生成可执行 JAR；`devpulse-plugins/pulse` 包含工作流命令 `pulse`、`init`、`review`、`status`、`stop`、YAML 到核心定义的转换、终端展示和 CLI 生命周期适配，`devpulse-plugins/gather` 包含提示词命令，`devpulse-plugins/jira` 独立访问 Jira。各工具 JAR 仅依赖所需模块，不相互依赖；共享库不注册命令，也不引入动态插件加载。`devpulse-cli` 是保留 `devpulse <子命令>` 用法的组合式兼容产物，不加入单工具发行包。`devpulse-dist` 依赖工具产物并组装独立归档，供用户按需安装，不被工具反向依赖。运行模块继承 `devpulse-dependencies` 的本地相对父路径，内部 BOM 不作为运行时依赖。安装和发行细节见 [发行与安装](distribution.md)。
 
 **版本来源**：根 `pom.xml` 的 `<revision>` 是唯一的项目版本值。Maven 3 要求各子模块写出 `<parent><version>`，这里统一引用 `${revision}`，不重复填写版本号；内部模块依赖和 BOM 使用 `${project.version}`。构建继承的 Flatten Maven Plugin 仅解析 CI-friendly 版本占位符，保证以后安装或发布的 POM 可被其他 Maven 项目消费。外部依赖、构建插件、HOCON 配置格式的版本各有独立语义，不跟随项目版本递增。
 
@@ -243,16 +263,16 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 - **Probe resource control**: Apply timeouts to verification and inventory, continuously read inventory output, and clean up probe processes.
 - **Platform boundaries**: Shared Bash syntax does not make tools, paths, permissions, or OS capabilities identical. Git Bash is not a complete Linux environment.
 
-#### 4. Scheduling engine (`PulseCommand.java`)
+#### 4. Scheduling engine (`WorkflowRun.java`, `PulseCommand.java`)
 
 **Responsibility**: Read `.devpulse.yaml`, determine dependency order, and execute local subprocesses.
 
-**Independent planning module**: `devpulse-core` provides immutable `TaskDefinition`, `WorkflowDefinition`, and `TaskPlan`, depending only on the JDK rather than YAML, Typesafe Config, or the CLI. Task definitions contain commands, dependencies, and optional daemon settings; workflow definitions contain task lists and pipeline targets. `TaskPlan.create` validates the complete definition, expands transitive dependencies for a selected task or pipeline, and returns a topologically ordered plan without reading configuration, discovering Bash, executing commands, or writing run records.
+**Independent planning module**: The immutable `TaskDefinition`, `WorkflowDefinition`, and `TaskPlan` in `devpulse-core` depend only on the JDK rather than YAML, Typesafe Config, or the CLI. Task definitions contain commands, dependencies, and optional daemon settings; workflow definitions contain task lists and pipeline targets. `TaskPlan.create` validates the complete definition, expands transitive dependencies for a selected task or pipeline, and returns a topologically ordered plan without reading configuration, discovering Bash, executing commands, or writing run records.
 
 ```java
-import io.github.devpulse.execution.TaskDefinition;
-import io.github.devpulse.execution.TaskPlan;
-import io.github.devpulse.execution.WorkflowDefinition;
+import io.github.devpulse.core.execution.TaskDefinition;
+import io.github.devpulse.core.execution.TaskPlan;
+import io.github.devpulse.core.execution.WorkflowDefinition;
 import java.util.List;
 import java.util.Map;
 
@@ -264,7 +284,27 @@ var workflow = new WorkflowDefinition(
 var plan = TaskPlan.create(workflow, "dev");
 ```
 
-`PlanningException` exposes format-independent error locations through `scope()`, `name()`, and `field()`. Pulse's `PulseConfiguration.plan` associates these with the original YAML file and available line numbers. Pulse's `TaskDetails` formats daemon terminal descriptions rather than placing them in core definitions. This stage extracts definitions and planning only; `PulseExecutor`, `RunHistory`, and `DaemonManager` remain in Pulse, preserving scheduling, failure policy, and persistence formats.
+`PlanningException` exposes format-independent error locations through `scope()`, `name()`, and `field()`. Pulse's `PulseConfiguration.plan` associates these with the original YAML file and available line numbers. Pulse's `TaskDetails` formats daemon terminal descriptions rather than placing them in core definitions.
+
+**Independent execution runtime**: Core's `WorkflowRun` binds a plan and concurrency limit. Its blocking `execute()` may be called only once and returns the overall state and succeeded, failed, and skipped counts. `cancel()` may be called from another thread: cancellation before execution starts no tasks, repeated cancellation and cancellation after completion do not change terminal results, and external cancellation during execution interrupts the execution thread. Callers manage `RunHistory.Writer` with try-with-resources and decide whether to register a JVM shutdown hook; core registers no global hooks. Pulse maps success to exit code `0`, other results to `1`, and interruption to `130`.
+
+`RunHistory` and `DaemonManager` also reside in core, preserving scheduling, failure policy, and version `1` HOCON record formats. The execution runtime uses Typesafe Config for these records but does not read task YAML or depend on picocli or the TUI. Embedded usage (continuing with the `plan` above):
+
+```java
+import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.core.execution.RunHistory;
+import io.github.devpulse.core.execution.WorkflowRun;
+import java.io.PrintWriter;
+import java.nio.file.Path;
+
+var directory = Path.of(".").toAbsolutePath().normalize();
+var shell = BashShell.discover(null);
+try (var history = new RunHistory(directory).begin("dev", plan, 4)) {
+    var run = new WorkflowRun(shell, directory, new PrintWriter(System.out),
+            history, plan, 4);
+    var result = run.execute();
+}
+```
 
 **Implementation steps**:
 
@@ -335,7 +375,7 @@ var plan = TaskPlan.create(workflow, "dev");
 
 #### 8. Built-in CLI integration: Jira (`JiraCommand.java`)
 
-**Module and interface**: The root `pom.xml` aggregates the modules. `devpulse-dependencies` manages external dependencies, `devpulse-bom` manages consumable internal artifact versions, and the root POM's `pluginManagement` manages build plugin versions. `devpulse-core` provides independent workflow definitions and planning alongside shared Bash and environment inventory code, without an executable entry point. `devpulse-plugins/pulse` contains the workflow commands `pulse`, `init`, `review`, `status`, and `stop`, YAML-to-core definition conversion, and the existing execution runtime; `devpulse-plugins/gather` contains prompt generation; `devpulse-plugins/jira` accesses Jira independently. Each tool JAR depends only on modules it needs, with no tool-to-tool dependency. The shared library does not register commands or load plugins dynamically. `devpulse-cli` preserves the combined `devpulse <subcommand>` entry point but is excluded from individual tool archives. `devpulse-dist` depends on tool artifacts and assembles selective archives; tools never depend on the distribution module. Runtime modules inherit `devpulse-dependencies` via local relative parent paths, and the internal BOM is not a runtime dependency. See [distribution and installation](distribution.md).
+**Module and interface**: The root `pom.xml` aggregates the modules. `devpulse-dependencies` manages external dependencies, `devpulse-bom` manages consumable internal artifact versions, and the root POM's `pluginManagement` manages build plugin versions. `devpulse-core` provides independent workflow definitions, planning, execution runtime, run history, and daemon management alongside shared Bash and environment inventory code, without an executable entry point. `devpulse-plugins/pulse` contains the workflow commands `pulse`, `init`, `review`, `status`, and `stop`, YAML-to-core definition conversion, terminal presentation, and CLI lifecycle adaptation; `devpulse-plugins/gather` contains prompt generation; `devpulse-plugins/jira` accesses Jira independently. Each tool JAR depends only on modules it needs, with no tool-to-tool dependency. The shared library does not register commands or load plugins dynamically. `devpulse-cli` preserves the combined `devpulse <subcommand>` entry point but is excluded from individual tool archives. `devpulse-dist` depends on tool artifacts and assembles selective archives; tools never depend on the distribution module. Runtime modules inherit `devpulse-dependencies` via local relative parent paths, and the internal BOM is not a runtime dependency. See [distribution and installation](distribution.md).
 
 **Version source**: The root `pom.xml`'s `<revision>` is the only project version value. Maven 3 still requires each child's `<parent><version>` element, so it references `${revision}` rather than repeating a literal version; internal module dependencies and the BOM use `${project.version}`. The inherited Flatten Maven Plugin resolves CI-friendly version placeholders so installed or deployed POMs remain consumable by other Maven projects. External dependency versions, build plugin versions, and the HOCON configuration schema version have separate meanings and do not advance with the project version.
 

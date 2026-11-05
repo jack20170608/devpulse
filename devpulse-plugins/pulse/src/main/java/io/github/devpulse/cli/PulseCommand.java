@@ -2,9 +2,9 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.core.execution.RunHistory;
+import io.github.devpulse.core.execution.WorkflowRun;
 import io.github.devpulse.execution.PulseConfiguration;
-import io.github.devpulse.execution.PulseExecutor;
-import io.github.devpulse.execution.RunHistory;
 import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -84,8 +84,19 @@ public final class PulseCommand implements Callable<Integer> {
                     .begin(target, plan, concurrency)) {
                 out.println("Run ID: " + history.id());
                 out.flush();
-                return new PulseExecutor(shell, config.directory(), out,
-                        history).execute(plan, concurrency);
+                var run = new WorkflowRun(shell, config.directory(), out,
+                        history, plan, concurrency);
+                var hook = Thread.ofPlatform().unstarted(run::cancel);
+                Runtime.getRuntime().addShutdownHook(hook);
+                try {
+                    return run.execute().state() == RunHistory.State.SUCCESS ? 0 : 1;
+                } finally {
+                    try {
+                        Runtime.getRuntime().removeShutdownHook(hook);
+                    } catch (IllegalStateException exception) {
+                        // Shutdown is already in progress; the hook owns cancellation.
+                    }
+                }
             }
         } catch (ConfigException | IOException exception) {
             err.println("pulse: " + exception.getMessage());
