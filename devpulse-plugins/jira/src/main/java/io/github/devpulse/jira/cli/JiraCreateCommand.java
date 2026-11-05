@@ -24,7 +24,7 @@ import picocli.CommandLine.Option;
 @Command(name = "create", mixinStandardHelpOptions = true,
         description = "Create an issue using prompts, flags, or "
                 + "HOCON/Markdown files.")
-public final class JiraCreateCommand extends JiraCommand.Action {
+public class JiraCreateCommand extends JiraCommand.Action {
     @Mixin
     JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
     @Option(names = "--file", paramLabel = "ISSUE.conf",
@@ -141,6 +141,11 @@ public final class JiraCreateCommand extends JiraCommand.Action {
         }
         if (file != null) {
             return text(markdown(file));
+        }
+        if (System.console() == null) {
+            var input = new String(System.in.readAllBytes(),
+                    StandardCharsets.UTF_8);
+            return input.isEmpty() ? null : input;
         }
         if (!noInput && System.console() != null) {
             return prompt("Description (optional; use --template "

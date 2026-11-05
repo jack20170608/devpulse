@@ -22,7 +22,7 @@ public final class JiraIssueAssignCommand extends JiraCommand.Action {
     String key;
     @Parameters(index = "1", arity = "0..1", paramLabel = "USER",
             description = "Display name or DC username; me=self, x=unassigned. "
-                    + "Supplying both arguments skips all prompts.")
+                    + "Ambiguous matches may prompt unless --no-input is set.")
     String assignee;
     @Option(names = "--no-input",
             description = "Never prompt; KEY and USER are required.")
@@ -30,7 +30,7 @@ public final class JiraIssueAssignCommand extends JiraCommand.Action {
 
     @Override
     protected void execute() throws IOException {
-        var interactive = !noInput && (key == null || assignee == null);
+        var interactive = !noInput && System.console() != null;
         if ((key == null || assignee == null)
                 && (noInput || System.console() == null)) {
             throw wrong("Supply KEY and USER; interactive assignment "
@@ -85,8 +85,8 @@ public final class JiraIssueAssignCommand extends JiraCommand.Action {
         }
         if (!interactive) {
             throw wrong("Multiple assignable users matched; use a more "
-                    + "specific name or rerun with USER omitted "
-                    + "to select interactively.");
+                    + "specific name or rerun in a terminal "
+                    + "without --no-input to select interactively.");
         }
         var err = spec.commandLine().getErr();
         for (var index = 0; index < candidates.size(); index++) {

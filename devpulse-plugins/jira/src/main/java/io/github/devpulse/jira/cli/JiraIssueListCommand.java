@@ -13,7 +13,15 @@ import picocli.CommandLine.Option;
 
 @Command(name = "list", mixinStandardHelpOptions = true,
         description = "Search one page of Jira issues using filters or JQL.")
-public final class JiraIssueListCommand extends JiraCommand.Action {
+public class JiraIssueListCommand extends JiraCommand.Action {
+    String scopeJql;
+    @Option(names = {"-w", "--watching"}, description = "Issues watched by you.")
+    boolean watching;
+    @Option(names = "--history", description = "Issues in your recent viewing history.")
+    boolean history;
+    @Option(names = {"-R", "--resolution"}, paramLabel = "NAME",
+            description = "Resolution; prefix with ~ to exclude.")
+    String resolution;
     @Option(names = {"-p", "--project"}, paramLabel = "KEY",
             description = "Project key; defaults to connection configuration.")
     String project;
@@ -43,6 +51,14 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
     @Option(names = "--updated", paramLabel = "DATE",
             description = "Updated on or after a Jira date or relative time.")
     String updated;
+    @Option(names = "--created-before", paramLabel = "DATE")
+    String createdBefore;
+    @Option(names = "--updated-before", paramLabel = "DATE")
+    String updatedBefore;
+    @Option(names = "--columns", split = ",", paramLabel = "COLUMN,...",
+            description = "key,type,status,priority,assignee,summary,reporter,"
+                    + "created,updated,resolution,labels,components,fixVersions,parent.")
+    List<String> columns;
     @Option(names = {"-q", "--jql"}, paramLabel = "JQL",
             description = "Complete JQL, including optional ORDER BY; "
                     + "cannot be combined with filters or sort flags.")
@@ -85,9 +101,28 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
         if (csv && plain) {
             throw wrong("--csv cannot be combined with --plain.");
         }
+        var selectedColumns = columns == null
+                ? List.of("key", "type", "status", "priority", "assignee", "summary")
+                : columns.stream().map(value -> value.toLowerCase(Locale.ROOT)).toList();
+        for (var column : selectedColumns) {
+            if (!List.of("key", "type", "status", "priority", "assignee", "summary",
+                    "reporter", "created", "updated", "resolution", "labels",
+                    "components", "fixversions", "parent").contains(column)) {
+                throw wrong("Unsupported --columns value; see list --help.");
+            }
+        }
         var query = query();
         var jira = client();
-        var page = jira.search(query, limit, startAt, nextPageToken);
+        var requested = selectedColumns.stream().filter(column -> !column.equals("key"))
+                .map(column -> switch (column) {
+                    case "type" -> "issuetype";
+                    case "fixversions" -> "fixVersions";
+                    default -> column;
+                }).distinct().toList();
+        var page = jira.search(query, limit, startAt, nextPageToken, raw
+                ? List.of("summary", "status", "issuetype", "priority",
+                        "assignee", "reporter", "created", "updated", "resolution",
+                        "labels", "components", "fixVersions", "parent") : requested);
         var issues = page.get("issues");
         if (issues == null || !issues.isJsonArray()) {
             throw wrong("Jira search response is missing an issues array.");
@@ -100,16 +135,15 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
         for (var value : issues.getAsJsonArray()) {
             var issue = object(value);
             var fields = object(issue.get("fields"));
-            rows.add(List.of(scalar(issue.get("key"), csv),
-                    named(fields, "issuetype", "name"),
-                    named(fields, "status", "name"),
-                    named(fields, "priority", "name"),
-                    named(fields, "assignee", "displayName"),
-                    scalar(fields.get("summary"), csv)));
+            var row = new ArrayList<String>();
+            for (var column : selectedColumns) {
+                row.add(column(issue, fields, column));
+            }
+            rows.add(row);
         }
         var hint = pageHint(page, jira.cloud(), rows.size());
-        var headers = List.of("KEY", "TYPE", "STATUS", "PRIORITY",
-                "ASSIGNEE", "SUMMARY");
+        var headers = selectedColumns.stream()
+                .map(value -> value.toUpperCase(Locale.ROOT)).toList();
         var widths = new int[headers.size()];
         for (var i = 0; i < widths.length; i++) {
             widths[i] = headers.get(i).length();
@@ -138,16 +172,29 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
         filter(clauses, "priority", priority, false);
         filter(clauses, "assignee", assignee, true);
         filter(clauses, "reporter", reporter, true);
+        filter(clauses, "resolution", resolution, false);
+        if (watching) {
+            clauses.add("watcher = currentUser()");
+        }
+        if (history) {
+            clauses.add("issuekey IN issueHistory()");
+        }
         if (labels != null) {
             for (var label : labels) {
                 filter(clauses, "labels", label, false);
             }
         }
         if (created != null) {
-            clauses.add("created >= " + quote(created));
+            clauses.add("created >= " + date(created));
         }
         if (updated != null) {
-            clauses.add("updated >= " + quote(updated));
+            clauses.add("updated >= " + date(updated));
+        }
+        if (createdBefore != null) {
+            clauses.add("created < " + date(createdBefore));
+        }
+        if (updatedBefore != null) {
+            clauses.add("updated < " + date(updatedBefore));
         }
         if (jql != null) {
             if (jql.isBlank()) {
@@ -157,7 +204,7 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
                 throw wrong("--jql is a complete query; do not combine "
                         + "it with filters, --order-by, or --reverse.");
             }
-            return jql;
+            return scopeJql == null ? jql : scoped(jql, scopeJql);
         }
         var sort = orderBy == null ? "created"
                 : orderBy.toLowerCase(Locale.ROOT);
@@ -166,11 +213,75 @@ public final class JiraIssueListCommand extends JiraCommand.Action {
             throw wrong("Unsupported --order-by field; see list --help.");
         }
         // Cloud enhanced search requires a restriction, not only ORDER BY.
+        if (scopeJql != null) {
+            clauses.add("(" + scopeJql + ")");
+        }
         if (clauses.isEmpty()) {
             clauses.add("created >= \"-30d\"");
         }
+
         return String.join(" AND ", clauses) + " ORDER BY " + sort
                 + (reverse ? " ASC" : " DESC");
+    }
+
+    private static String date(String value) throws IOException {
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "day", "today" -> "startOfDay()";
+            case "week" -> "startOfWeek()";
+            case "month" -> "startOfMonth()";
+            case "year" -> "startOfYear()";
+            default -> quote(value);
+        };
+    }
+
+    private static String scoped(String query, String scope) throws IOException {
+        boolean quoted = false;
+        char delimiter = 0;
+        for (var i = 0; i < query.length(); i++) {
+            var character = query.charAt(i);
+            if (character == '\\') {
+                i++;
+            } else if (quoted && character == delimiter) {
+                quoted = false;
+            } else if (!quoted && (character == '"' || character == '\'')) {
+                quoted = true;
+                delimiter = character;
+            } else if (!quoted && (i == 0 || Character.isWhitespace(query.charAt(i - 1)))
+                    && query.substring(i).matches("(?is)ORDER\\s+BY\\b.*")) {
+                return "(" + query.substring(0, i).strip() + ") AND (" + scope
+                        + ") " + query.substring(i);
+            }
+        }
+        if (quoted) {
+            throw wrong("Unterminated quoted JQL value.");
+        }
+        return "(" + query + ") AND (" + scope + ")";
+    }
+
+    private String column(JsonObject issue, JsonObject fields, String column)
+            throws IOException {
+        return switch (column) {
+            case "key" -> scalar(issue.get("key"), csv);
+            case "type" -> named(fields, "issuetype", "name");
+            case "assignee", "reporter" -> named(fields, column, "displayName");
+            case "status", "priority", "resolution" -> named(fields, column, "name");
+            case "parent" -> named(fields, "parent", "key");
+            case "labels", "components", "fixversions" -> {
+                var value = fields.get(column.equals("fixversions") ? "fixVersions" : column);
+                var values = new ArrayList<String>();
+                if (value != null && !value.isJsonNull()) {
+                    if (!value.isJsonArray()) {
+                        throw wrong("Unexpected Jira list field shape.");
+                    }
+                    for (var item : value.getAsJsonArray()) {
+                        values.add(column.equals("labels") ? scalar(item, csv)
+                                : scalar(object(item).get("name"), csv));
+                    }
+                }
+                yield values.isEmpty() ? "-" : String.join(", ", values);
+            }
+            default -> scalar(fields.get(column), csv);
+        };
     }
 
     private static void filter(List<String> clauses, String field,
