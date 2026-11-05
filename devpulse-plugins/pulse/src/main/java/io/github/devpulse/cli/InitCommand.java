@@ -17,33 +17,26 @@ import picocli.CommandLine.Spec;
         name = "init",
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
-        description = "Initialize a local .devpulse.conf HOCON configuration."
+        description = "Initialize a local .devpulse.yaml task configuration."
 )
 public final class InitCommand implements Callable<Integer> {
     private static final String DEFAULT_CONFIGURATION = """
             # 示例任务仅打印消息，请替换为实际项目命令。
             # Example tasks only print messages; replace with project commands.
-            version = 1
-            parallelism = 4
+            version: 1
+            parallelism: 4
 
-            tools = [
-              {
-                name = check
-                cmd = "echo 'devpulse: replace with a project check'"
-              },
-              {
-                name = build
-                cmd = "echo 'devpulse: replace with a project build'"
-                needs = [check]
-              }
-            ]
+            tasks:
+              check:
+                cmd: "echo 'devpulse: replace with a project check'"
+              build:
+                cmd: "echo 'devpulse: replace with a project build'"
+                needs: [check]
 
-            pipelines {
-              dev {
-                description = "示例检查与构建 / Example check and build"
-                tasks = [check, build]
-              }
-            }
+            pipelines:
+              dev:
+                description: "示例检查与构建 / Example check and build"
+                tasks: [check, build]
             """;
 
     @Spec
@@ -55,13 +48,13 @@ public final class InitCommand implements Callable<Integer> {
     private Path directory;
 
     @Option(names = "--force",
-            description = "Overwrite an existing .devpulse.conf file.")
+            description = "Overwrite an existing .devpulse.yaml file.")
     private boolean force;
 
     @Override
     public Integer call() {
         var root = directory.toAbsolutePath().normalize();
-        var target = root.resolve(".devpulse.conf");
+        var target = root.resolve(".devpulse.yaml");
         var err = spec.commandLine().getErr();
         if (!Files.isDirectory(root)) {
             err.println("init: project directory does not exist: " + root);

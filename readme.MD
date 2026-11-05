@@ -4,7 +4,7 @@
 
 ## 中文
 
-devpulse 是基于 Java 25 和 Maven 的本地 DevOps 工具箱。Pulse 使用 HOCON 配置描述任务和依赖，通过 Bash 执行；Jira 独立运行。两者可以分别安装。
+devpulse 是基于 Java 25 和 Maven 的本地 DevOps 工具箱。Pulse 使用 `.devpulse.yaml` 中的 YAML 配置描述用户自定义任务和依赖，通过 Bash 执行；Jira 独立运行。两者可以分别安装。旧 HOCON 任务配置的迁移方式见[核心 CLI 使用指南](docs/core-cli.md)。
 
 ### 快速开始
 
@@ -76,7 +76,7 @@ devpulse-dist/           可选工具发行包
 
 ## English
 
-devpulse is a local DevOps toolbox built with Java 25 and Maven. Pulse uses HOCON to describe tasks and dependencies and runs them through Bash. Jira runs independently; the tools can be installed separately.
+devpulse is a local DevOps toolbox built with Java 25 and Maven. Pulse uses YAML in `.devpulse.yaml` to describe user-defined tasks and dependencies and runs them through Bash. Jira runs independently; the tools can be installed separately. See the [Core CLI guide](docs/core-cli.md) for migrating legacy HOCON task configurations.
 
 ### Quick start
 

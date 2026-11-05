@@ -17,7 +17,7 @@ public final class EnvironmentGatherer {
             "build.gradle.kts", "Dockerfile", "compose.yaml", "compose.yml",
             "docker-compose.yaml", "docker-compose.yml", "pyproject.toml",
             "requirements.txt", "go.mod", "Cargo.toml", "Makefile",
-            ".devpulse.conf");
+            ".devpulse.yaml");
 
     public record Tool(String name, String location) {}
 

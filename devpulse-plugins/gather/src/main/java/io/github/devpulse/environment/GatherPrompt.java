@@ -31,33 +31,26 @@ public final class GatherPrompt {
                 facts.architecture(), facts.javaVersion(),
                 facts.bash().executable(), files, tools);
         var example = """
-                ```hocon
-                version = 1
-                parallelism = 4
-                tools = [
-                  {
-                    name = check
-                    cmd = "echo 'replace with a project check'"
-                  },
-                  {
-                    name = build
-                    cmd = "echo 'replace with a project build'"
-                    needs = [check]
-                  }
-                ]
-                pipelines {
-                  dev {
-                    description = "Check and build"
-                    tasks = [check, build]
-                  }
-                }
+                ```yaml
+                version: 1
+                parallelism: 4
+                tasks:
+                  check:
+                    cmd: "echo 'replace with a project check'"
+                  build:
+                    cmd: "echo 'replace with a project build'"
+                    needs: [check]
+                pipelines:
+                  dev:
+                    description: "Check and build"
+                    tasks: [check, build]
                 ```
                 """;
         var chinese = """
                 ## 中文
 
-                根据以下本地事实，为 devpulse 生成 `.devpulse.conf`。
-                只支持 HOCON，不要生成 YAML。所有命令均通过非登录、
+                根据以下本地事实，为 devpulse 生成 `.devpulse.yaml`。
+                只支持 YAML，不要生成 HOCON。所有命令均通过非登录、
                 非交互的 Bash 执行；Windows 使用 Git Bash，不使用 CMD、
                 PowerShell 或 WSL。不可依赖用户的 alias 或启动文件。
                 Bash 语法统一不代表操作系统工具完全相同。
@@ -71,17 +64,19 @@ public final class GatherPrompt {
 
                 ### 配置要求
 
-                - 使用 `version = 1`、`tools` 和 `pipelines`。
-                - 工具包含唯一的 `name`、`cmd` 和可选的 `needs`。
-                - 仅用户明确需要时使用 `type = daemon`；必须配置
+                - 使用 `version: 1`、`tasks` 命名映射和 `pipelines`。
+                - 任务名作为唯一映射键，包含 `cmd`、可选的 `description`
+                  和列表形式的 `needs`；多行命令使用 `|`。
+                - 仅用户明确需要时使用 `type: daemon`；必须配置
                   `ready.cmd`，启动命令保持前台运行，不使用 `&` 或 `nohup`。
                   `shutdownHook` 默认 false，保留进程供 `stop` 子命令清理；
                   true 时退出自动清理。可选 `stop` 指定清理时的停止命令。
                 - 流水线包含 `description` 和 `tasks`。
-                - 默认 `parallelism = 4`；依赖不得未知或成环。
+                - 默认 `parallelism: 4`；依赖不得未知或成环。
                 - 仅推荐已发现的工具，不捏造项目脚本或文件内容。
                 - 不默认包含安装、删除、部署、推送或其他破坏性操作。
-                - 不使用远程 include，不嵌入凭据或其他秘密。
+                - 不使用 include、自定义标签、锚点、别名或合并键，不嵌入凭据
+                  或其他秘密；不做配置变量替换，命令内变量由 Bash 处理。
                 - 信息不足时说明假设，并让用户确认实际命令。
                 - 用户必须先审核生成的命令再执行；devpulse 不是沙箱。
 
@@ -92,8 +87,8 @@ public final class GatherPrompt {
         var english = """
                 ## English
 
-                Generate `.devpulse.conf` for devpulse using the local facts
-                below. Only HOCON is supported; do not generate YAML.
+                Generate `.devpulse.yaml` for devpulse using the local facts
+                below. Only YAML is supported; do not generate HOCON.
                 All commands run through non-login, non-interactive Bash.
                 Windows uses Git Bash, not CMD, PowerShell, or WSL.
                 Do not depend on user aliases or startup files.
@@ -109,20 +104,23 @@ public final class GatherPrompt {
 
                 ### Configuration requirements
 
-                - Use `version = 1`, `tools`, and `pipelines`.
-                - Tools have a unique `name`, `cmd`, and optional `needs`.
-                - Use `type = daemon` only when explicitly requested; require
+                - Use `version: 1`, a named `tasks` mapping, and `pipelines`.
+                - Task names are unique mapping keys, with `cmd`, optional
+                  `description`, and a `needs` list; use `|` for multiline commands.
+                - Use `type: daemon` only when explicitly requested; require
                   `ready.cmd` and keep the command in the foreground without
                   `&` or `nohup`. `shutdownHook` defaults to false, retaining
                   processes for the `stop` subcommand; true enables cleanup
                   on exit. An optional `stop` specifies the cleanup command.
                 - Pipelines have `description` and `tasks`.
-                - Default `parallelism = 4`; no unknown or cyclic dependencies.
+                - Default `parallelism: 4`; no unknown or cyclic dependencies.
                 - Recommend discovered tools only; do not invent project
                   scripts or file contents.
                 - Do not include installation, deletion, deployment, pushing,
                   or other destructive operations by default.
-                - Do not use remote includes or embed credentials or secrets.
+                - Do not use includes, custom tags, anchors, aliases, or merge
+                  keys, or embed credentials or secrets. There is no configuration
+                  substitution; Bash handles variables inside commands.
                 - State assumptions and request confirmation of actual commands
                   when facts are insufficient.
                 - Users must review commands before execution; devpulse is

@@ -12,14 +12,14 @@
 
 ### 一、配置格式与加载
 
-- 仅支持 HOCON 格式的 `.devpulse.conf`，不支持 YAML。
-- 显式解析项目的 `.devpulse.conf`，通过 `withFallback` 合并内置 `reference.conf` 默认值，再调用 `resolve` 解析变量引用；不自动加载无关的 JVM 系统属性。
-- 使用 Typesafe Config 的类型化读取 API 构造配置模型。
-- `include` 仅允许本地文件或 classpath 资源，不允许远程 URL；实现时需限制包含资源的加载行为，而不是仅约定用户不写远程地址。
-- 支持相对文件和显式 `file`、`classpath` include；可选缺失 include 被忽略，`required` 缺失时报错。拒绝 URL 和 UNC 网络路径，并检测 include 循环。
-- 配置错误应报告文件来源及可用的行号信息；字段类型、重复任务名、未知依赖和循环依赖均需在执行任何命令之前校验。
-- 工具和流水线的未知字段应报错，防止拼写错误被静默忽略；根级可定义用于 HOCON 变量引用的辅助字段。
-- `gather` 生成的 Prompt 与 `init` 生成的默认配置统一使用 HOCON 示例。
+- 任务配置仅支持 UTF-8 YAML 文件 `.devpulse.yaml`，不再读取 `.devpulse.conf`；迁移说明见[核心 CLI 使用指南](core-cli.md)。
+- 使用 SnakeYAML Engine 的 YAML 1.2 Core Schema 解析单个映射文档，限制文件大小为 1 MiB、集合嵌套为 64 层；拒绝重复键、非字符串键、自定义标签、锚点、别名和合并键，不构造任意 Java 对象。
+- 将 YAML 节点转换为带文件和行号来源的 Typesafe Config 值，复用类型化读取和时长校验；不将 YAML 字符串再次按 HOCON 解析。
+- 默认 `version: 1`、`parallelism: 4` 和空 `pipelines`；不做配置变量替换，不加载 JVM 系统属性或环境变量，命令中的变量保留给 Bash。
+- 不支持 include 或远程资源加载；复杂逻辑由用户维护的本地脚本承载。
+- `tasks` 是以任务名为键的映射，任务支持可选 `description`；`pipelines` 通过目标任务列表选择执行范围。声明顺序不代表依赖顺序。
+- 配置错误应报告文件来源及可用的行号信息；字段类型、重复键、未知依赖和循环依赖均需在执行任何命令之前校验。根级、任务、就绪检查和流水线的未知字段均报错。
+- `gather` 生成的 Prompt 与 `init` 生成的默认配置统一使用 YAML 示例。Jira 配置和内部运行记录继续使用 HOCON，不受任务配置迁移影响。
 
 ### 二、核心架构设计
 
@@ -42,7 +42,7 @@
 - **环境与工具盘点**：记录 OS、架构、Java 版本、Bash 路径，通过 Bash 的 `command -v` 检查固定工具清单，不执行工具版本或健康检查。
 - **项目特征嗅探**：仅检查项目根目录中关键指纹是否存在（如 `package.json`、`pom.xml`、`Dockerfile`、`.git`），不读取文件内容、不递归扫描目录。
 - **采集边界**：环境变量仅用于 Bash 定位及工具查找，不将环境变量值或凭据加入提示词。提示词包含项目路径和工具位置，用户发送给外部 AI 前应审核。
-- **提示词输出**：生成包含本地事实、HOCON 示例、Bash 执行约束和命令审核提醒的 Markdown；支持中文、英文或中英双语，双语模式保留同页面语言导航，单语言模式仅包含对应语言章节，不显示双语导航。本地事实中的路径、工具名等数据及 HOCON 示例保持原样；信息不足时要求 AI 声明假设，不捏造任务。
+- **提示词输出**：生成包含本地事实、YAML 示例、Bash 执行约束和命令审核提醒的 Markdown；支持中文、英文或中英双语，双语模式保留同页面语言导航，单语言模式仅包含对应语言章节，不显示双语导航。本地事实中的路径、工具名等数据及 YAML 示例保持原样；信息不足时要求 AI 声明假设，不捏造任务。
 - **编码警告**：提示词输出前检查 Java 控制台的 `Console.charset()`；无控制台时检查 `System.out.charset()`。检测到非 UTF-8 时向标准错误输出英文警告，包含检测到的编码和 Git Bash 的 `Options > Text > Character set > UTF-8` 设置提示，不改变语言、输出编码、剪贴板内容或成功退出码。该检查反映 Java 检测到的编码，不能可靠读取 Git Bash 窗口的实际显示字符集；重定向输出时也可能触发，不代表已经确认发生乱码。
 - **剪贴板控制**：默认通过 AWT 写入剪贴板；无图形环境、剪贴板忙或不可访问时提示警告，保留标准输出，盘点仍成功。
 - **命令选项**：`gather --directory <目录>` 指定盘点位置，`--bash <路径>` 指定 Bash，`--no-clipboard` 禁用剪贴板复制；`--language zh|en|both` 同时控制终端与剪贴板中的提示词语言，默认 `both`，不支持的取值在盘点前拒绝。目录无效、Bash 缺失或扫描失败时返回非零退出码。遇到中文终端显示乱码时可使用 `gather --language en` 避开提示词中的中文；该选项不修复终端编码，也不翻译本地事实数据。
@@ -59,13 +59,13 @@
 
 #### 4. 图拓扑智能调度引擎（`PulseCommand.java`）
 
-**职责**：读取用户存放的 `.devpulse.conf` 配置文件，智能计算依赖顺序，拉起本地系统进程执行。
+**职责**：读取用户存放的 `.devpulse.yaml` 配置文件，智能计算依赖顺序，拉起本地系统进程执行。
 
 **实现步骤**：
 
-- **解析配置**：按配置加载规则读取 HOCON 配置，构造配置模型。
+- **解析配置**：按配置加载规则读取 YAML 配置，构造配置模型。
 - **目标选择**：`pulse` 默认选择 `dev`；`pulse <名称>` 支持流水线或单任务。目标同时是任务名和流水线名时拒绝执行，要求用户消除重名。
-- **构建有向无环图（DAG）**：将 `tools` 列表中的每个工具视作一个节点（Vertex），将它们之间的 `needs` 依赖关系视作有向边（Edge）。
+- **构建有向无环图（DAG）**：将 `tasks` 映射中的每个任务视作一个节点（Vertex），将它们之间的 `needs` 依赖关系视作有向边（Edge）。
 - **依赖补齐**：流水线的 `tasks` 声明最终目标，自动补齐全部传递依赖；共享依赖和重复目标在本次执行中只运行一次。列表顺序不代表依赖顺序。
 - **拓扑排序与循环依赖检测**：采用 Kahn 算法或 DFS 算法检查依赖图。如果发现循环依赖（例如 A 依赖 B，B 又依赖 A），在启动任何命令前报错；执行时仅将所有依赖均已满足的任务加入就绪队列：普通任务成功退出，长驻进程通过就绪检查；在并发上限内调度。
 - **底层进程控制器**：复用 Bash 基础组件拉起本地命令，工作目录为项目配置所在目录。合并错误流和标准流（`redirectErrorStream(true)`），普通任务以 UTF-8 持续读取并输出带任务名前缀的日志，长驻进程直接写入日志文件。工具必须已安装且能被 Bash 找到；执行权限与当前用户相同，不提供沙箱。
@@ -76,9 +76,9 @@
 
 #### 5. 配置初始化模块（`InitCommand.java`）
 
-**职责**：在项目目录生成可修改的 `.devpulse.conf` 配置骨架，不扫描环境、不调用 AI、不执行任务，也不要求已安装 Bash。
+**职责**：在项目目录生成可修改的 `.devpulse.yaml` 配置骨架，不扫描环境、不调用 AI、不执行任务，也不要求已安装 Bash。
 
-- **默认配置**：UTF-8 编码的 HOCON，包含 `version = 1`、`parallelism = 4`、两个仅使用 Bash `echo` 的示例工具，以及带有依赖关系的 `dev` 流水线。
+- **默认配置**：UTF-8 编码的 YAML，包含 `version: 1`、`parallelism: 4`、两个仅使用 Bash `echo` 的示例任务，以及带有依赖关系的 `dev` 流水线。
 - **目录选择**：默认使用当前工作目录；`init --directory <目录>` 指定其他已存在的项目目录，不自动创建目录。
 - **覆盖保护**：默认仅创建新文件，配置已存在时拒绝写入并返回非零退出码；仅显式 `--force` 时允许覆盖普通文件，不跟随配置文件的符号链接。
 - **结果反馈**：成功后打印配置路径和命令审核提醒；目录无效或文件写入失败时明确报错，不执行示例任务。
@@ -138,7 +138,7 @@
 
 #### 9. 本地长驻进程管理（`DaemonManager.java`、`StopCommand.java`）
 
-- **配置与启动**：任务可声明 `type = daemon`、必填的 `ready.cmd`、检查间隔和超时；`shutdownHook` 默认 false，可选 `stop` 与 `stopTimeout`。启动、检查和停止脚本按任务 ID 保存，进程 PID、启动时间、Bash 路径及停止配置通过独立 HOCON 文件原子持久化。无法记录身份或元数据时尽力终止尚未受管的实例。
+- **配置与启动**：任务可声明 `type: daemon`、必填的 `ready.cmd`、检查间隔和超时；`shutdownHook` 默认 false，可选 `stop` 与 `stopTimeout`。启动、检查和停止脚本按任务 ID 保存，进程 PID、启动时间、Bash 路径及停止配置通过独立 HOCON 文件原子持久化。无法记录身份或元数据时尽力终止尚未受管的实例。
 - **依赖与并发**：普通依赖等待成功退出，长驻进程依赖等待就绪；就绪后释放执行槽，但继续持有进程及监控。`--jobs` 不限制已就绪进程的总数或探测进程。每个进程通过虚拟线程进行有时限的周期探测；意外退出或失去就绪状态使运行失败并停止启动新任务，不自动重启。
 - **生命周期**：运行结束或可处理的退出时，仅清理开启 hook 的实例，按计划逆依赖顺序处理。未开启 hook 的实例在 CLI 返回后继续运行，监控随 CLI 结束；后续 `status` 详情按需核验存活及就绪，不存在独立后台调度器。就绪状态不是跨进程的恢复点。
 - **清理与所有权**：`stop [TASK] --run <ID>` 使用已保存配置，默认选最新运行、可省略任务名清理全部实例。单实例清理使用独立锁，与运行状态写入分开；PID 和启动时间不匹配时不终止复用 PID 的其他进程，身份不确定时拒绝操作。停止命令接收实例身份环境变量，先执行有时限的停止，再尽力强制回收已确认的进程及可见后代；不按名称批量清理，不删除业务数据。
@@ -161,7 +161,7 @@
 
 #### 阶段三：攻克 pulse 模块（打通调度流）
 
-- 引入 Typesafe Config 解析 HOCON 配置文件，完成默认值合并与执行前校验。
+- 使用 SnakeYAML Engine 解析 YAML 任务配置，保留来源行号并复用 Typesafe Config 完成默认值合并与执行前校验。
 - 手写基于 Kahn 的拓扑排序函数，确保能够处理复杂的相互依赖。
 - 实现依赖就绪任务的并发调度，落实默认 4 个任务的并发上限，以及 `parallelism`、`--jobs` 的覆盖规则。
 - 完善 `ProcessBuilder` 的异常处理，落实停止新任务、等待运行中任务结束的失败策略，不会引起系统崩溃。
@@ -179,14 +179,14 @@ The technology stack, language conventions, build and packaging rules, resource 
 
 ### 1. Configuration format and loading
 
-- Support only HOCON in `.devpulse.conf`, not YAML.
-- Explicitly parse the project configuration, merge built-in `reference.conf` defaults with `withFallback`, and call `resolve` for substitutions. Do not automatically load unrelated JVM system properties.
-- Construct configuration models using the typed Typesafe Config API.
-- Allow only local file or classpath includes, not remote URLs. Enforce this in resource loading rather than relying on user conventions.
-- Support relative files and explicit `file` or `classpath` includes. Ignore absent optional includes and report absent `required` includes. Reject URLs and UNC network paths, and detect include cycles.
-- Report configuration origins and line numbers when available. Validate field types, duplicate task names, unknown dependencies, and cycles before executing any command.
-- Reject unknown tool or pipeline fields to avoid silently ignoring typos. Root-level helper fields may be defined for HOCON substitutions.
-- Use HOCON examples consistently in generated gather prompts and init configurations.
+- Task configuration supports only UTF-8 YAML in `.devpulse.yaml`; `.devpulse.conf` is no longer read. See the [Core CLI guide](core-cli.md) for migration.
+- Use SnakeYAML Engine's YAML 1.2 Core Schema to parse a single mapping document, limited to 1 MiB and 64 collection nesting levels. Reject duplicate keys, non-string keys, custom tags, anchors, aliases, and merge keys; never construct arbitrary Java objects.
+- Convert YAML nodes to Typesafe Config values with file and line origins, reusing typed reads and duration validation without reparsing YAML strings as HOCON.
+- Default to `version: 1`, `parallelism: 4`, and empty `pipelines`. Do not substitute configuration variables or load JVM system properties/environment variables; leave command variables to Bash.
+- Do not support includes or remote resource loading. Keep complex logic in user-maintained local scripts.
+- `tasks` is a mapping keyed by task name, with optional task `description`; `pipelines` select execution targets through task lists. Declaration order is not dependency order.
+- Report configuration origins and line numbers when available. Validate field types, duplicate keys, unknown dependencies, and cycles before executing any command. Reject unknown root, task, readiness, and pipeline fields.
+- Use YAML examples consistently in generated gather prompts and init configurations. Jira configuration and internal run records retain HOCON and are unaffected by task configuration migration.
 
 ### 2. Architecture
 
@@ -209,7 +209,7 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 - **Environment and tool inventory**: Record OS, architecture, Java version, and Bash location. Check a fixed tool list using Bash `command -v`; do not execute version commands or health checks.
 - **Project detection**: Check only the presence of root-level markers such as `package.json`, `pom.xml`, `Dockerfile`, and `.git`. Do not read file contents or recursively scan directories.
 - **Collection boundaries**: Use environment variables only for Bash discovery and tool lookup; do not include their values or credentials in the prompt. Prompts contain project and tool locations, which users must review before sharing with external AI services.
-- **Prompt output**: Generate Markdown containing facts, a HOCON example, Bash constraints, and command-review reminders. Support Chinese, English, or both. Bilingual mode retains same-page language navigation; single-language modes include only the corresponding language section without bilingual navigation. Keep local fact data such as paths and tool names, and the HOCON example, unchanged. Require AI to state assumptions instead of inventing tasks when facts are insufficient.
+- **Prompt output**: Generate Markdown containing facts, a YAML example, Bash constraints, and command-review reminders. Support Chinese, English, or both. Bilingual mode retains same-page language navigation; single-language modes include only the corresponding language section without bilingual navigation. Keep local fact data such as paths and tool names, and the YAML example, unchanged. Require AI to state assumptions instead of inventing tasks when facts are insufficient.
 - **Encoding warning**: Before printing the prompt, check Java's `Console.charset()`, or `System.out.charset()` when no console is available. If the detected encoding is not UTF-8, print an English warning to standard error with the detected encoding and Git Bash's `Options > Text > Character set > UTF-8` setting. Do not change the language, output encoding, clipboard content, or successful exit code. This check reflects Java's detected encoding and cannot reliably read the Git Bash window's actual display character set. It may also warn when output is redirected and does not establish that garbling has occurred.
 - **Clipboard**: Copy through AWT by default. In headless environments or when the clipboard is busy or inaccessible, warn and retain standard output; inventory still succeeds.
 - **Options**: `gather --directory <directory>` selects the project, `--bash <path>` selects Bash, and `--no-clipboard` disables clipboard writes. `--language zh|en|both` controls the prompt language for both terminal and clipboard output, defaults to `both`, and rejects unsupported values before inventory. Invalid directories, missing Bash, and scan failures return nonzero exit codes. Use `gather --language en` to avoid Chinese prompt text when the terminal displays it incorrectly; this option does not fix terminal encoding or translate local fact data.
@@ -226,13 +226,13 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 
 #### 4. Scheduling engine (`PulseCommand.java`)
 
-**Responsibility**: Read `.devpulse.conf`, determine dependency order, and execute local subprocesses.
+**Responsibility**: Read `.devpulse.yaml`, determine dependency order, and execute local subprocesses.
 
 **Implementation steps**:
 
-- **Configuration**: Load HOCON according to the configuration rules and construct configuration models.
+- **Configuration**: Load YAML according to the configuration rules and construct configuration models.
 - **Target selection**: `pulse` defaults to `dev`; `pulse <name>` accepts either a pipeline or a single task. Reject targets that name both a task and a pipeline and require the collision to be resolved.
-- **DAG construction**: Treat each entry in `tools` as a vertex and each `needs` relationship as a directed edge.
+- **DAG construction**: Treat each task in the `tasks` mapping as a vertex and each `needs` relationship as a directed edge.
 - **Dependency expansion**: Pipeline `tasks` declare final targets. Include all transitive dependencies automatically and run shared dependencies or duplicate targets once per invocation. List order does not define dependency order.
 - **Ordering and cycle detection**: Validate the dependency graph using Kahn's algorithm or DFS. Report cycles before starting commands. Only enqueue tasks whose dependencies are all satisfied: successful batch exit or successful daemon readiness. Schedule within the concurrency limit.
 - **Process execution**: Reuse the Bash component with the project configuration directory as the working directory. Merge standard error and output using `redirectErrorStream(true)`. Continuously read UTF-8 batch output with task-name prefixes; redirect daemon output directly to log files. Tools must be installed and discoverable by Bash. Commands run with the current user's permissions; no sandbox is provided.
@@ -243,9 +243,9 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 
 #### 5. Configuration initializer (`InitCommand.java`)
 
-**Responsibility**: Generate an editable `.devpulse.conf` skeleton in the project directory. Do not scan the environment, call AI, execute tasks, or require an installed Bash.
+**Responsibility**: Generate an editable `.devpulse.yaml` skeleton in the project directory. Do not scan the environment, call AI, execute tasks, or require an installed Bash.
 
-- **Defaults**: UTF-8 HOCON containing `version = 1`, `parallelism = 4`, two example tools using only Bash `echo`, and a `dev` pipeline with a dependency relationship.
+- **Defaults**: UTF-8 YAML containing `version: 1`, `parallelism: 4`, two example tasks using only Bash `echo`, and a `dev` pipeline with a dependency relationship.
 - **Directory selection**: Use the current working directory by default. `init --directory <directory>` selects another existing project directory; do not create directories automatically.
 - **Overwrite protection**: Create new files only by default. Refuse existing configurations with a nonzero exit code. Allow overwriting regular files only with explicit `--force`; do not follow configuration-file symbolic links.
 - **Feedback**: Print the configuration path and a command-review reminder on success. Clearly report invalid directories or write failures without executing example tasks.
@@ -305,7 +305,7 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 
 #### 9. Local daemon management (`DaemonManager.java`, `StopCommand.java`)
 
-- **Configuration and startup**: Tasks may declare `type = daemon`, required `ready.cmd`, check intervals, and timeouts. `shutdownHook` defaults to false, with optional `stop` and `stopTimeout`. Save launch, readiness, and stop scripts by task ID; atomically persist PID, process start time, Bash path, and stop settings in separate HOCON files. If identity or metadata cannot be recorded, attempt to terminate the untracked instance.
+- **Configuration and startup**: Tasks may declare `type: daemon`, required `ready.cmd`, check intervals, and timeouts. `shutdownHook` defaults to false, with optional `stop` and `stopTimeout`. Save launch, readiness, and stop scripts by task ID; atomically persist PID, process start time, Bash path, and stop settings in separate HOCON files. If identity or metadata cannot be recorded, attempt to terminate the untracked instance.
 - **Dependencies and concurrency**: Batch prerequisites require successful exit; daemon prerequisites require readiness. Readiness releases an execution slot while retaining the process and monitoring it. `--jobs` does not limit ready daemons or probe processes. Each daemon uses a virtual thread for periodic, bounded checks. Unexpected exit or readiness loss fails the run and stops new tasks without automatic restart.
 - **Lifecycle**: On completion or handled exit, clean up only hook-enabled instances in reverse plan dependency order. Other instances survive CLI exit, when monitoring ends. Later detailed `status` queries check liveness and readiness on demand; there is no separate background scheduler. Readiness is not a cross-process recovery checkpoint.
 - **Cleanup and ownership**: `stop [TASK] --run <ID>` uses saved settings, defaults to the latest run, and allows omitting the task to clean all instances. Per-instance cleanup uses a separate lock independent of run-state writes. PID/start-time mismatches never terminate a reused PID; uncertain identity is refused. Stop commands receive instance identity environment variables. Execute bounded stopping, then attempt forced cleanup of confirmed processes and visible descendants. Do not kill by process name or delete business data.
@@ -328,7 +328,7 @@ The first release includes `init`, concurrent `pulse`, `gather`, `review`, and `
 
 #### Stage 3: Pulse and scheduling
 
-- Parse HOCON with Typesafe Config, merge defaults, and validate before execution.
+- Parse YAML task configuration with SnakeYAML Engine, preserve source lines, and reuse Typesafe Config to merge defaults and validate before execution.
 - Implement Kahn-based dependency ordering for complex graphs.
 - Implement dependency-ready concurrent scheduling with the default limit of 4 and `parallelism`/`--jobs` overrides.
 - Handle `ProcessBuilder` failures by stopping new tasks and waiting for started tasks without crashing the application.

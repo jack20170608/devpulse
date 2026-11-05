@@ -39,7 +39,7 @@ public final class PulseCommand implements Callable<Integer> {
     private String target;
 
     @Option(names = "--directory", defaultValue = ".",
-            description = "Project directory containing .devpulse.conf "
+            description = "Project directory containing .devpulse.yaml "
                     + "(default: ${DEFAULT-VALUE}).")
     private Path directory;
 

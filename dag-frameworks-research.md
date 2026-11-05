@@ -25,7 +25,7 @@
 | Java 应用内组件编排 | LiteFlow | 易嵌入、规则驱动；不能替代分布式持久化工作流平台 |
 | AWS 内的托管服务编排 | AWS Step Functions | 减少自运维；受云绑定、配额及使用计费影响 |
 
-**对 devpulse 当前“本地 HOCON + Bash + 单次 DAG 执行”的定位，最值得直接比较的是 Task；值得借鉴的容器化路线是 Dagger。仅为了拓扑排序和受控并行，不值得引入 Airflow、Temporal 或 Kubernetes 平台。** 这是基于项目现有说明的适配判断，不是对当前实现的代码审计。
+**对 devpulse 当前“本地 YAML + Bash + 单次 DAG 执行”的定位，最值得直接比较的是 Task；值得借鉴的容器化路线是 Dagger。仅为了拓扑排序和受控并行，不值得引入 Airflow、Temporal 或 Kubernetes 平台。** 这是基于项目现有说明的适配判断，不是对当前实现的代码审计。
 
 ### 2. 范围与调研方法
 
@@ -220,7 +220,7 @@
 
 ### 8. 对 devpulse 的参考意义
 
-项目 README 描述的核心边界是：本地 HOCON 配置、Bash 命令、传递依赖与共享依赖去重、受控并发、失败后停止新任务、执行前审阅，以及本地运行历史。因此，这里不是将大型平台替换进项目的建议，也不代表新增功能已经实现。
+项目 README 描述的核心边界是：本地 YAML 配置、Bash 命令、传递依赖与共享依赖去重、受控并发、失败后停止新任务、执行前审阅，以及本地运行历史。因此，这里不是将大型平台替换进项目的建议，也不代表新增功能已经实现。
 
 | 当前或潜在需求 | 最有参考价值的对象 | 可借鉴的机制 |
 |---|---|---|
@@ -306,7 +306,7 @@
 | In-process Java component orchestration | LiteFlow | Embeddable and rule-driven; not a distributed durable workflow platform |
 | Managed service orchestration within AWS | AWS Step Functions | Less self-operation; cloud coupling, quotas, and usage billing apply |
 
-**For devpulse's current “local HOCON + Bash + one-shot DAG execution” positioning, Task is the closest direct comparison, while Dagger is a useful containerization reference. Topological ordering and bounded parallelism alone do not justify introducing Airflow, Temporal, or a Kubernetes platform.** This is a fit assessment based on the existing project documentation, not a code audit.
+**For devpulse's current “local YAML + Bash + one-shot DAG execution” positioning, Task is the closest direct comparison, while Dagger is a useful containerization reference. Topological ordering and bounded parallelism alone do not justify introducing Airflow, Temporal, or a Kubernetes platform.** This is a fit assessment based on the existing project documentation, not a code audit.
 
 ### 2. Scope and methodology
 
@@ -501,7 +501,7 @@ Do not start with a single overall score for all 14 products. Infrastructure, la
 
 ### 8. Relevance to devpulse
 
-The project README describes local HOCON configuration, Bash commands, transitive and shared dependency deduplication, bounded concurrency, stopping new tasks after failure, pre-execution review, and local execution history. This section does not propose replacing the project with a large platform or claim that additional features are already implemented.
+The project README describes local YAML configuration, Bash commands, transitive and shared dependency deduplication, bounded concurrency, stopping new tasks after failure, pre-execution review, and local execution history. This section does not propose replacing the project with a large platform or claim that additional features are already implemented.
 
 | Current or potential need | Most useful references | Mechanisms to study |
 |---|---|---|

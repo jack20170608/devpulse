@@ -25,6 +25,10 @@
             <artifactId>config</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.snakeyaml</groupId>
+            <artifactId>snakeyaml-engine</artifactId>
+        </dependency>
+        <dependency>
             <groupId>dev.tamboui</groupId>
             <artifactId>tamboui-tui</artifactId>
         </dependency>
@@ -53,9 +57,6 @@
                                     </manifestEntries>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-                                    <resource>reference.conf</resource>
-                                </transformer>
                             </transformers>
                         </configuration>
                     </execution>

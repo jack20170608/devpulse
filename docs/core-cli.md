@@ -8,7 +8,7 @@
 
 ### 项目简介
 
-devpulse 是一个面向开发者和运维工程师的本地 DevOps 工具箱，目标是用 `.devpulse.conf` 中的 HOCON 配置描述脚本、CLI 任务、依赖和流水线，无需搭建远程 CI/CD 平台。
+devpulse 是一个面向开发者和运维工程师的本地 DevOps 工具箱，目标是用 `.devpulse.yaml` 中的 YAML 配置描述用户自定义脚本、CLI 任务、依赖和流水线，无需搭建远程 CI/CD 平台。
 
 **当前状态**：Pulse 独立工具实现 `init`、`pulse`、`review`、`status` 和 `stop`，支持普通任务和本地长驻进程。Gather 与 Jira 是独立工具；组合式 CLI 暂保留所有原有子命令。工具之间不相互依赖，也不内置 AI 调用；仅执行显式配置的长驻进程就绪检查，不自动探测 Docker 等工具的守护进程。
 
@@ -49,9 +49,9 @@ java -jar devpulse-cli\target\devpulse.jar gather --help
 
 **适用场景**：你知道项目的检查、构建等命令，希望先生成配置骨架，再自己填写。
 
-`init` 在指定目录创建 UTF-8 编码的 `.devpulse.conf`，写入固定的 HOCON 模板。它不扫描项目、不调用 AI、不安装工具，也不执行任务。
+`init` 在指定目录创建 UTF-8 编码的 `.devpulse.yaml`，写入固定的 YAML 模板。它不扫描项目、不调用 AI、不安装工具，也不执行任务。
 
-模板包含 `version = 1`、`parallelism = 4`、`check` 和 `build` 两个任务，以及一个 `dev` 流水线。`build` 通过 `needs = [check]` 声明对 `check` 的依赖。**任务命令只是打印消息的 `echo` 占位符，不会进行实际检查或构建，需要替换为项目的真实命令。**
+模板包含 `version: 1`、`parallelism: 4`、`check` 和 `build` 两个任务，以及一个 `dev` 流水线。`build` 通过 `needs: [check]` 声明对 `check` 的依赖。**任务命令只是打印消息的 `echo` 占位符，不会进行实际检查或构建，需要替换为项目的真实命令。**
 
 | 参数 | 作用 |
 |------|------|
@@ -73,17 +73,17 @@ java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project" --
 
 ### `gather`：生成辅助编写配置的 AI 提示词
 
-**适用场景**：你希望 AI 根据本机可用工具和项目类型，辅助编写 `.devpulse.conf`，而不是从空白开始。
+**适用场景**：你希望 AI 根据本机可用工具和项目类型，辅助编写 `.devpulse.yaml`，而不是从空白开始。
 
 `gather` 收集以下事实，按所选语言组装 Markdown 提示词并输出到终端，默认使用中英文对照并复制到剪贴板：
 
 - 项目的绝对路径、操作系统、架构、当前 Java 版本和 Bash 路径。
 - 固定工具清单的查找结果：`git`、`docker`、`kubectl`、`helm`、`node`、`npm`、`pnpm`、`yarn`、`java`、`mvn`、`gradle`、`python`、`python3`、`go`、`cargo`、`make`、`terraform`。通过 Bash 的 `command -v` 记录位置，未找到的工具标为缺失。
-- 项目根目录中的标志是否存在，例如 `.git`、`package.json`、`pom.xml`、Gradle 构建文件、`Dockerfile`、Compose 配置、Python 依赖文件、`go.mod`、`Cargo.toml`、`Makefile` 和 `.devpulse.conf`。
+- 项目根目录中的标志是否存在，例如 `.git`、`package.json`、`pom.xml`、Gradle 构建文件、`Dockerfile`、Compose 配置、Python 依赖文件、`go.mod`、`Cargo.toml`、`Makefile` 和 `.devpulse.yaml`。
 
-提示词包含 HOCON 示例、任务依赖要求、Bash 执行约束和命令审核提醒，要求 AI 不捏造项目脚本、信息不足时说明假设，并避免默认推荐安装、删除、部署或推送等操作。
+提示词包含 YAML 示例、任务依赖要求、Bash 执行约束和命令审核提醒，要求 AI 不捏造项目脚本、信息不足时说明假设，并避免默认推荐安装、删除、部署或推送等操作。
 
-**能力边界**：不读取项目文件内容、不递归扫描、不采集环境变量值，也不执行工具版本或健康检查。找到工具不代表工具配置正确或服务可用。`gather` 不会自动调用 AI、生成或写入 `.devpulse.conf`，也不会执行项目任务。
+**能力边界**：不读取项目文件内容、不递归扫描、不采集环境变量值，也不执行工具版本或健康检查。找到工具不代表工具配置正确或服务可用。`gather` 不会自动调用 AI、生成或写入 `.devpulse.yaml`，也不会执行项目任务。
 
 | 参数 | 作用 |
 |------|------|
@@ -112,7 +112,7 @@ java -jar devpulse-cli\target\devpulse.jar gather --language en --no-clipboard
 
 ### `pulse`：执行任务或流水线
 
-`pulse [TARGET]` 从项目目录读取 `.devpulse.conf`，默认执行名为 `dev` 的流水线或任务。自动补齐传递依赖，共享依赖和重复目标只执行一次；普通依赖必须成功退出，长驻进程依赖必须通过就绪检查，下游才会启动。独立任务可在并发上限内同时执行。
+`pulse [TARGET]` 从项目目录读取 `.devpulse.yaml`，默认执行名为 `dev` 的流水线或任务。自动补齐传递依赖，共享依赖和重复目标只执行一次；普通依赖必须成功退出，长驻进程依赖必须通过就绪检查，下游才会启动。独立任务可在并发上限内同时执行。
 
 执行前校验完整配置，包括字段类型、未知字段、重复任务名、未知依赖和循环依赖。目标同时是任务名和流水线名时拒绝执行。配置错误不会启动任务。
 
@@ -138,34 +138,30 @@ java -jar devpulse-cli\target\devpulse.jar pulse dev --directory "D:\your-projec
 
 ### 本地长驻进程
 
-在任务中声明 `type = daemon`，将依赖满足条件从“成功退出”改为“通过就绪检查”。省略 `type` 或使用 `type = task` 保持原有批任务行为；批任务不能配置长驻进程字段。
+在任务中声明 `type: daemon`，将依赖满足条件从“成功退出”改为“通过就绪检查”。省略 `type` 或使用 `type: task` 保持原有批任务行为；批任务不能配置长驻进程字段。
 
 以下配置以项目已有的 Node 测试服务器为例，命令和健康接口必须按实际项目调整；不会自动安装 Node 或创建服务器代码：
 
-```hocon
-version = 1
-parallelism = 1
-tools = [
-  {
-    name = server
-    type = daemon
-    cmd = "node server.js"
-    ready {
-      cmd = "curl --fail --silent --max-time 2 http://127.0.0.1:3000/health"
-      interval = 500ms
-      timeout = 30s
-      checkTimeout = 2s
-    }
-    shutdownHook = false
-    stopTimeout = 5s
-  },
-  {
-    name = check
-    cmd = "node check.js"
-    needs = [server]
-  }
-]
-pipelines { dev { tasks = [check] } }
+```yaml
+version: 1
+parallelism: 1
+tasks:
+  server:
+    type: daemon
+    cmd: "node server.js"
+    ready:
+      cmd: "curl --fail --silent --max-time 2 http://127.0.0.1:3000/health"
+      interval: 500ms
+      timeout: 30s
+      checkTimeout: 2s
+    shutdownHook: false
+    stopTimeout: 5s
+  check:
+    cmd: "node check.js"
+    needs: [server]
+pipelines:
+  dev:
+    tasks: [check]
 ```
 
 | 字段 | 含义 |
@@ -199,7 +195,7 @@ java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>"
 java -jar devpulse-cli\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
-`stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；省略任务名时按逆依赖顺序清理该运行的所有已记录长驻进程。它使用保存的停止配置，不依赖当前 `.devpulse.conf`；不会清理其他历史运行，也不会删除日志或业务数据。进程身份通过 PID 和启动时间核验，PID 已复用时不终止新进程，身份无法确认时拒绝清理。
+`stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；省略任务名时按逆依赖顺序清理该运行的所有已记录长驻进程。它使用保存的停止配置，不依赖当前 `.devpulse.yaml`；不会清理其他历史运行，也不会删除日志或业务数据。进程身份通过 PID 和启动时间核验，PID 已复用时不终止新进程，身份无法确认时拒绝清理。
 
 已退出实例重复清理返回 `0`；不存在任何运行或所选运行没有长驻进程也返回 `0`。指定任务未记录进程、停止命令失败或无法确认清理结果返回 `1`；中断返回 `130`。手动停止仍被执行中的 DAG 使用的长驻进程，会触发该运行的故障策略。
 
@@ -259,43 +255,49 @@ java -jar devpulse-cli\target\devpulse.jar status --tools
 
 1. 运行 `gather`，获取环境提示词。
 2. 审核提示词后，将其交给你选择的本地或云端 AI，并补充实际项目脚本和需求。
-3. 审核 AI 生成的 HOCON 配置，手动保存为项目目录下的 `.devpulse.conf`。
+3. 审核 AI 生成的 YAML 配置，手动保存为项目目录下的 `.devpulse.yaml`。
 4. 运行 `review` 或 `pulse --dry-run`，检查依赖和完整命令。
 5. 确认后运行 `pulse`，再用 `status` 查询结果或日志。
 
 devpulse 不内置 AI 调用；是否向外部服务分享提示词由你决定。自己编写的配置也应先审阅，再执行。
 
-### 配置示例（`.devpulse.conf`）
+### 配置示例（`.devpulse.yaml`）
 
-配置采用 HOCON，不支持 YAML。以下示例与 `init` 模板一致，可由 `pulse` 执行，但仅打印占位消息，并非已经发现的项目任务：
+任务配置仅采用 YAML。以下示例与 `init` 模板一致，可由 `pulse` 执行，但仅打印占位消息，并非已经发现的项目任务：
 
-```hocon
-version = 1
-parallelism = 4
+```yaml
+version: 1
+parallelism: 4
 
-tools = [
-  {
-    name = check
-    cmd = "echo 'devpulse: replace with a project check'"
-  },
-  {
-    name = build
-    cmd = "echo 'devpulse: replace with a project build'"
-    needs = [check]
-  }
-]
+tasks:
+  check:
+    cmd: "echo 'devpulse: replace with a project check'"
+  build:
+    cmd: "echo 'devpulse: replace with a project build'"
+    needs: [check]
 
-pipelines {
-  dev {
-    description = "示例检查与构建 / Example check and build"
-    tasks = [check, build]
-  }
-}
+pipelines:
+  dev:
+    description: "示例检查与构建 / Example check and build"
+    tasks: [check, build]
 ```
 
-`tools` 描述任务名称和命令，`needs` 描述依赖，`pipelines` 将任务组成流水线，`parallelism` 描述并发上限。配置命令的执行约定是非登录、非交互 Bash；Windows 使用 Git Bash，不依赖用户的 alias 或启动文件。实际执行前必须审核命令，devpulse 不是沙箱。
+`tasks` 是以任务名为键的映射，每个任务包含必填 `cmd`、可选 `description` 和列表形式的 `needs`。`pipelines` 将目标任务组成流水线，自动补齐依赖；声明顺序不代表串行顺序。`parallelism` 描述并发上限，省略时为 `4`；`version` 省略时为 `1`，`pipelines` 可省略以直接执行单任务。配置命令的执行约定是非登录、非交互 Bash；Windows 使用 Git Bash，不依赖用户的 alias 或启动文件。实际执行前必须审核命令，devpulse 不是沙箱。
 
-配置支持本地文件及 classpath include 和 HOCON 变量引用，拒绝 URL／UNC 网络 include、包含循环、未知工具或流水线字段及无效依赖。缺失的可选 include 被忽略，`required` 缺失时报错；根级辅助字段可用于变量引用。
+多行命令使用 `cmd: |`。字符串含 `: `、`#` 等 YAML 特殊内容时应加引号；Windows 路径优先使用 YAML 单引号并另行遵守 Bash 引号规则。时长使用 `500ms`、`30s` 等字符串，布尔值使用 `true` 或 `false`。
+
+只接受单个 UTF-8 YAML 映射文档，最大 1 MiB、集合嵌套最多 64 层。重复键、非字符串键、未知字段、未知依赖和循环依赖均报错；不支持 include、自定义标签、锚点、别名或合并键。不进行配置变量替换，`${...}` 保持原样交给命令中的 Bash 处理，不读取系统属性或环境变量来填充配置。
+
+### 从 HOCON 迁移
+
+旧 `.devpulse.conf` 不再读取，不会自动转换。仅存在旧文件时会提示迁移；两种文件并存时只读取 `.devpulse.yaml`，旧文件内容被忽略。不要只改扩展名：
+
+1. 将 `tools = [{ name = build, cmd = "..." }]` 改为 `tasks` 映射，以 `build` 为键，移除 `name` 字段；将 HOCON 的 `=`、花括号结构改为 YAML 冒号和缩进。
+2. 保留任务名称、命令、`needs`、`pipelines` 和长驻进程选项的含义；任务和流水线引用仍使用列表。HOCON 三引号脚本改为 `cmd: |`。
+3. 展开原有 include，移除根级辅助字段，并显式填写原来通过 HOCON 引用得到的值。配置不再解析 `${...}`；需要 Shell 变量时，在命令中按 Bash 规则使用。
+4. 保存为 `.devpulse.yaml`，先运行 `review --plain` 或 `pulse --dry-run`，核对完整命令与依赖后再执行。`init` 只生成新模板，不迁移旧文件。
+
+Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元数据不变；历史查询和清理仍可使用既有记录。
 
 ### 实现说明
 
@@ -307,7 +309,7 @@ pipelines {
 
 ### Overview
 
-devpulse is a local DevOps toolbox for developers and operations engineers. It aims to describe scripts, CLI tasks, dependencies, and pipelines using HOCON in `.devpulse.conf`, without requiring a remote CI/CD platform.
+devpulse is a local DevOps toolbox for developers and operations engineers. It aims to describe user-defined scripts, CLI tasks, dependencies, and pipelines using YAML in `.devpulse.yaml`, without requiring a remote CI/CD platform.
 
 **Current status**: The independent Pulse tool implements `init`, `pulse`, `review`, `status`, and `stop`, supporting batch tasks and local long-running processes. Gather and Jira are independent tools; the combined compatibility CLI retains all former subcommands. The tools do not depend on one another and have no built-in AI calls. Pulse runs explicitly configured daemon readiness checks, not automatic health checks for tool daemons such as Docker.
 
@@ -348,9 +350,9 @@ java -jar devpulse-cli\target\devpulse.jar gather --help
 
 **When to use it**: You know your project's check, build, or other commands and want a configuration skeleton to fill in manually.
 
-`init` creates a UTF-8 `.devpulse.conf` in the selected directory with a fixed HOCON template. It does not scan the project, call AI, install tools, or execute tasks.
+`init` creates a UTF-8 `.devpulse.yaml` in the selected directory with a fixed YAML template. It does not scan the project, call AI, install tools, or execute tasks.
 
-The template contains `version = 1`, `parallelism = 4`, two tasks named `check` and `build`, and a `dev` pipeline. `build` declares its dependency on `check` using `needs = [check]`. **The task commands are only message-printing `echo` placeholders, not real checks or builds; replace them with actual project commands.**
+The template contains `version: 1`, `parallelism: 4`, two tasks named `check` and `build`, and a `dev` pipeline. `build` declares its dependency on `check` using `needs: [check]`. **The task commands are only message-printing `echo` placeholders, not real checks or builds; replace them with actual project commands.**
 
 | Option | Effect |
 |--------|--------|
@@ -372,17 +374,17 @@ On success, the command prints the configuration path and returns exit code `0`.
 
 ### `gather`: generate an AI prompt for configuration assistance
 
-**When to use it**: You want AI to help write `.devpulse.conf` based on locally available tools and project markers rather than starting from scratch.
+**When to use it**: You want AI to help write `.devpulse.yaml` based on locally available tools and project markers rather than starting from scratch.
 
 `gather` collects the following facts, formats them as a Markdown prompt in the selected language, and prints it to the terminal. By default, the prompt is bilingual Chinese/English and is also copied to the clipboard:
 
 - The absolute project path, operating system, architecture, current Java version, and Bash path.
 - Lookup results for a fixed tool list: `git`, `docker`, `kubectl`, `helm`, `node`, `npm`, `pnpm`, `yarn`, `java`, `mvn`, `gradle`, `python`, `python3`, `go`, `cargo`, `make`, and `terraform`. Bash's `command -v` records their locations; tools that cannot be found are marked as missing.
-- Whether project markers exist in the project root, such as `.git`, `package.json`, `pom.xml`, Gradle build files, `Dockerfile`, Compose configurations, Python dependency files, `go.mod`, `Cargo.toml`, `Makefile`, and `.devpulse.conf`.
+- Whether project markers exist in the project root, such as `.git`, `package.json`, `pom.xml`, Gradle build files, `Dockerfile`, Compose configurations, Python dependency files, `go.mod`, `Cargo.toml`, `Makefile`, and `.devpulse.yaml`.
 
-The prompt includes a HOCON example, task dependency requirements, Bash execution constraints, and command review reminders. It asks AI not to invent project scripts, to state assumptions when information is insufficient, and to avoid recommending installation, deletion, deployment, or pushing by default.
+The prompt includes a YAML example, task dependency requirements, Bash execution constraints, and command review reminders. It asks AI not to invent project scripts, to state assumptions when information is insufficient, and to avoid recommending installation, deletion, deployment, or pushing by default.
 
-**Limitations**: It does not read project file contents, scan recursively, collect environment variable values, or run tool version or health checks. Finding a tool does not establish correct configuration or service availability. `gather` does not automatically call AI, generate or write `.devpulse.conf`, or execute project tasks.
+**Limitations**: It does not read project file contents, scan recursively, collect environment variable values, or run tool version or health checks. Finding a tool does not establish correct configuration or service availability. `gather` does not automatically call AI, generate or write `.devpulse.yaml`, or execute project tasks.
 
 | Option | Effect |
 |--------|--------|
@@ -411,7 +413,7 @@ The prompt contains local project paths and tool locations; review it before sha
 
 ### `pulse`: run tasks or pipelines
 
-`pulse [TARGET]` reads `.devpulse.conf` from the project directory and defaults to the pipeline or task named `dev`. It includes transitive dependencies automatically and runs shared dependencies and duplicate targets only once. Batch dependencies must exit successfully and daemon dependencies must pass readiness before downstream tasks start. Independent tasks can run concurrently within the limit.
+`pulse [TARGET]` reads `.devpulse.yaml` from the project directory and defaults to the pipeline or task named `dev`. It includes transitive dependencies automatically and runs shared dependencies and duplicate targets only once. Batch dependencies must exit successfully and daemon dependencies must pass readiness before downstream tasks start. Independent tasks can run concurrently within the limit.
 
 The entire configuration is validated before execution, including field types, unknown fields, duplicate task names, unknown dependencies, and dependency cycles. A target that names both a task and a pipeline is rejected. Configuration errors do not start tasks.
 
@@ -437,34 +439,30 @@ Non-interactive batch tasks and explicitly declared local daemons are supported.
 
 ### Local long-running processes
 
-Declare `type = daemon` to satisfy dependencies through readiness instead of successful exit. Omitting `type` or using `type = task` preserves batch behavior; batch tasks cannot configure daemon fields.
+Declare `type: daemon` to satisfy dependencies through readiness instead of successful exit. Omitting `type` or using `type: task` preserves batch behavior; batch tasks cannot configure daemon fields.
 
 This example assumes an existing Node test server. Adjust commands and the health endpoint to the project; it does not install Node or create server code:
 
-```hocon
-version = 1
-parallelism = 1
-tools = [
-  {
-    name = server
-    type = daemon
-    cmd = "node server.js"
-    ready {
-      cmd = "curl --fail --silent --max-time 2 http://127.0.0.1:3000/health"
-      interval = 500ms
-      timeout = 30s
-      checkTimeout = 2s
-    }
-    shutdownHook = false
-    stopTimeout = 5s
-  },
-  {
-    name = check
-    cmd = "node check.js"
-    needs = [server]
-  }
-]
-pipelines { dev { tasks = [check] } }
+```yaml
+version: 1
+parallelism: 1
+tasks:
+  server:
+    type: daemon
+    cmd: "node server.js"
+    ready:
+      cmd: "curl --fail --silent --max-time 2 http://127.0.0.1:3000/health"
+      interval: 500ms
+      timeout: 30s
+      checkTimeout: 2s
+    shutdownHook: false
+    stopTimeout: 5s
+  check:
+    cmd: "node check.js"
+    needs: [server]
+pipelines:
+  dev:
+    tasks: [check]
 ```
 
 | Field | Meaning |
@@ -498,7 +496,7 @@ java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>"
 java -jar devpulse-cli\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
-`stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Without a task name, it stops all recorded daemons in that run in reverse dependency order. It uses recorded stop settings, not the current `.devpulse.conf`, and does not clean other historical runs or delete logs/business data. PID and start time confirm ownership; reused PIDs are not terminated, and uncertain identities are refused.
+`stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Without a task name, it stops all recorded daemons in that run in reverse dependency order. It uses recorded stop settings, not the current `.devpulse.yaml`, and does not clean other historical runs or delete logs/business data. PID and start time confirm ownership; reused PIDs are not terminated, and uncertain identities are refused.
 
 Repeated cleanup of exited instances returns `0`, as do empty history or a selected run without daemons. A requested task without a recorded process, failed stop command, or unconfirmed cleanup returns `1`; interruption returns `130`. Manually stopping a daemon still used by an executing DAG triggers that run's failure policy.
 
@@ -558,43 +556,49 @@ To write configuration yourself, run `init` and edit the template's task command
 
 1. Run `gather` to obtain the environment prompt.
 2. Review the prompt, share it with your chosen local or cloud AI, and supply actual project scripts and requirements.
-3. Review the AI-generated HOCON configuration and manually save it as `.devpulse.conf` in the project directory.
+3. Review the AI-generated YAML configuration and manually save it as `.devpulse.yaml` in the project directory.
 4. Run `review` or `pulse --dry-run` to inspect dependencies and complete commands.
 5. After approval, run `pulse`, then use `status` to query results or logs.
 
 devpulse does not include AI calls; you decide whether to share the prompt with external services. Manually written configurations should also be reviewed before execution.
 
-### Configuration example (`.devpulse.conf`)
+### Configuration example (`.devpulse.yaml`)
 
-Configuration uses HOCON, not YAML. The following example matches the `init` template and can be executed by `pulse`, but only prints placeholder messages rather than running discovered project tasks:
+Task configuration uses YAML only. The following example matches the `init` template and can be executed by `pulse`, but only prints placeholder messages rather than running discovered project tasks:
 
-```hocon
-version = 1
-parallelism = 4
+```yaml
+version: 1
+parallelism: 4
 
-tools = [
-  {
-    name = check
-    cmd = "echo 'devpulse: replace with a project check'"
-  },
-  {
-    name = build
-    cmd = "echo 'devpulse: replace with a project build'"
-    needs = [check]
-  }
-]
+tasks:
+  check:
+    cmd: "echo 'devpulse: replace with a project check'"
+  build:
+    cmd: "echo 'devpulse: replace with a project build'"
+    needs: [check]
 
-pipelines {
-  dev {
-    description = "示例检查与构建 / Example check and build"
-    tasks = [check, build]
-  }
-}
+pipelines:
+  dev:
+    description: "示例检查与构建 / Example check and build"
+    tasks: [check, build]
 ```
 
-`tools` describes task names and commands, `needs` describes dependencies, `pipelines` groups tasks into pipelines, and `parallelism` describes the concurrency limit. The configuration's execution convention is non-login, non-interactive Bash; Windows uses Git Bash, without depending on user aliases or startup files. Review commands before actual execution; devpulse is not a sandbox.
+`tasks` is a mapping keyed by task name; each task has required `cmd`, optional `description`, and a `needs` list. `pipelines` groups target tasks with automatic dependency completion; declaration order does not imply sequential execution. `parallelism` is the concurrency limit, defaulting to `4`; `version` defaults to `1`, and `pipelines` may be omitted to execute tasks directly. Commands run through non-login, non-interactive Bash; Windows uses Git Bash, without depending on user aliases or startup files. Review commands before actual execution; devpulse is not a sandbox.
 
-Configuration supports local file and classpath includes and HOCON substitutions. It rejects URL/UNC network includes, include cycles, unknown tool or pipeline fields, and invalid dependencies. Missing optional includes are ignored; missing `required` includes fail. Root-level helper fields can be used for substitutions.
+Use `cmd: |` for multiline commands. Quote strings containing YAML-special content such as `: ` or `#`; prefer YAML single quotes for Windows paths and separately follow Bash quoting rules. Durations are strings such as `500ms` and `30s`; booleans use `true` or `false`.
+
+Only a single UTF-8 YAML mapping document is accepted, limited to 1 MiB and 64 collection nesting levels. Duplicate keys, non-string keys, unknown fields/dependencies, and cycles fail validation. Includes, custom tags, anchors, aliases, and merge keys are unsupported. There is no configuration substitution: `${...}` remains literal for Bash inside commands, with no system properties or environment variables filling configuration values.
+
+### Migrating from HOCON
+
+Legacy `.devpulse.conf` files are no longer read or automatically converted. A legacy-only project receives migration guidance; when both files exist, only `.devpulse.yaml` is read and the legacy content is ignored. Do not just rename the extension:
+
+1. Replace `tools = [{ name = build, cmd = "..." }]` with a `tasks` mapping keyed by `build`, removing `name`; replace HOCON `=` and braces with YAML colons and indentation.
+2. Preserve task names, commands, `needs`, `pipelines`, and daemon option meanings; task and pipeline references remain lists. Replace HOCON triple-quoted scripts with `cmd: |`.
+3. Inline former includes, remove root-level helper fields, and explicitly supply values formerly obtained through HOCON substitutions. `${...}` is no longer resolved by configuration loading; use Bash variables inside commands when appropriate.
+4. Save as `.devpulse.yaml`, run `review --plain` or `pulse --dry-run`, and verify complete commands and dependencies before execution. `init` creates a new template rather than migrating existing files.
+
+Jira HOCON configuration/templates and history/daemon metadata under `.devpulse` remain unchanged; existing records remain available for history queries and cleanup.
 
 ### Implementation notes
 

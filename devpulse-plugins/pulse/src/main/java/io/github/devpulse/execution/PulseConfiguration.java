@@ -2,25 +2,14 @@ package io.github.devpulse.execution;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
-import com.typesafe.config.ConfigIncludeContext;
-import com.typesafe.config.ConfigIncluder;
-import com.typesafe.config.ConfigIncluderClasspath;
-import com.typesafe.config.ConfigIncluderFile;
-import com.typesafe.config.ConfigIncluderURL;
 import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigObject;
 import com.typesafe.config.ConfigOrigin;
-import com.typesafe.config.ConfigParseOptions;
-import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigUtil;
 import com.typesafe.config.ConfigValueType;
-import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -74,47 +63,53 @@ public record PulseConfiguration(Path directory, int parallelism,
 
     public static PulseConfiguration load(Path directory) throws IOException {
         var root = directory.toAbsolutePath().normalize();
-        var file = root.resolve(".devpulse.conf");
+        var file = root.resolve(".devpulse.yaml");
         if (!Files.isDirectory(root)) {
             throw new IOException("Project directory does not exist: " + root);
         }
         if (!Files.isRegularFile(file)) {
+            if (Files.exists(root.resolve(".devpulse.conf"))) {
+                throw new IOException("Legacy .devpulse.conf is no longer supported. "
+                        + "Migrate it to .devpulse.yaml using the migration guide "
+                        + "in docs/core-cli.md; renaming alone is not sufficient.");
+            }
             throw new IOException("Configuration not found: " + file
                     + ". Run devpulse init first.");
         }
-        var options = ConfigParseOptions.defaults()
-                .setSyntax(ConfigSyntax.CONF)
-                .setIncluder(new LocalIncludes());
-        var defaults = ConfigFactory.parseResources("reference.conf", options);
-        var config = ConfigFactory.parseFile(file.toFile(),
-                options.setAllowMissing(false))
-                .withFallback(defaults).resolve();
+        var config = YamlConfiguration.load(file);
+        rejectUnknownFields(config, List.of("version", "parallelism", "tasks", "pipelines"));
+        config = config.withFallback(ConfigFactory.parseMap(Map.of(
+                "version", 1, "parallelism", 4, "pipelines", Map.of())));
         if (positiveInteger(config, "version") != 1) {
             throw invalid(config, "version", "Only version 1 is supported.");
         }
         var parallelism = positiveInteger(config, "parallelism");
-        requireType(config, "tools", ConfigValueType.LIST);
+        requireType(config, "tasks", ConfigValueType.OBJECT);
         var tasks = new LinkedHashMap<String, Task>();
-        for (var tool : config.getConfigList("tools")) {
-            rejectUnknownFields(tool, List.of("name", "cmd", "needs", "type",
+        var taskSection = config.getConfig("tasks");
+        for (var name : taskSection.root().keySet()) {
+            var path = ConfigUtil.quoteString(name);
+            requireType(taskSection, path, ConfigValueType.OBJECT);
+            var tool = taskSection.getConfig(path);
+            rejectUnknownFields(tool, List.of("description", "cmd", "needs", "type",
                     "ready", "shutdownHook", "stop", "stopTimeout"));
-            var name = nonBlankString(tool, "name");
-            if (!name.equals(name.strip())
+            if (name.isBlank() || !name.equals(name.strip())
                     || name.chars().anyMatch(Character::isISOControl)) {
-                throw invalid(tool, "name",
-                        "Task names cannot contain surrounding whitespace "
-                                + "or control characters.");
+                throw invalid(taskSection, path,
+                        "Task names must be nonblank without surrounding "
+                                + "whitespace or control characters.");
+            }
+            if (tool.hasPathOrNull("description")) {
+                requireType(tool, "description", ConfigValueType.STRING);
             }
             var task = new Task(name, nonBlankString(tool, "cmd"),
                     tool.hasPathOrNull("needs")
                             ? stringList(tool, "needs") : List.of(),
                     daemon(tool), tool.origin());
-            if (tasks.putIfAbsent(name, task) != null) {
-                throw invalid(tool, "name", "Duplicate task: " + name);
-            }
+            tasks.put(name, task);
         }
         if (tasks.isEmpty()) {
-            throw invalid(config, "tools", "At least one task is required.");
+            throw invalid(config, "tasks", "At least one task is required.");
         }
         for (var task : tasks.values()) {
             for (var dependency : task.needs()) {
@@ -261,103 +256,4 @@ public record PulseConfiguration(Path directory, int parallelism,
                 path, message);
     }
 
-    private static final class LocalIncludes implements ConfigIncluder,
-            ConfigIncluderFile, ConfigIncluderClasspath, ConfigIncluderURL {
-        private final ArrayDeque<String> active = new ArrayDeque<>();
-
-        @Override
-        public ConfigIncluder withFallback(ConfigIncluder fallback) {
-            return this;
-        }
-
-        @Override
-        public ConfigObject include(ConfigIncludeContext context,
-                String name) {
-            rejectRemote(name);
-            var basename = name.substring(Math.max(name.lastIndexOf('/'),
-                    name.lastIndexOf('\\')) + 1);
-            var filename = basename.contains(".") ? name : name + ".conf";
-            return parseRelative(context, filename);
-        }
-
-        @Override
-        public ConfigObject includeFile(ConfigIncludeContext context,
-                File file) {
-            rejectRemote(file.toString());
-            if (!file.isAbsolute()) {
-                return parseRelative(context, file.toString());
-            }
-            var key = file.toPath().toAbsolutePath().normalize().toString();
-            enter(key);
-            try {
-                return ConfigFactory.parseFile(file, localOptions(context))
-                        .root();
-            } finally {
-                active.removeLast();
-            }
-        }
-
-        @Override
-        public ConfigObject includeResources(ConfigIncludeContext context,
-                String resource) {
-            rejectRemote(resource);
-            enter("classpath:" + resource);
-            try {
-                return ConfigFactory.parseResources(resource,
-                        localOptions(context)).root();
-            } finally {
-                active.removeLast();
-            }
-        }
-
-        @Override
-        public ConfigObject includeURL(ConfigIncludeContext context, URL url) {
-            throw new ConfigException.Generic(
-                    "URL includes are not allowed: " + url);
-        }
-
-        private ConfigParseOptions localOptions(ConfigIncludeContext context) {
-            return context.parseOptions().setSyntax(ConfigSyntax.CONF)
-                    .setIncluder(this);
-        }
-
-        private ConfigObject parseRelative(ConfigIncludeContext context,
-                String filename) {
-            var source = context.relativeTo(filename);
-            if (source == null) {
-                if (context.parseOptions().getAllowMissing()) {
-                    return ConfigFactory.empty().root();
-                }
-                throw new ConfigException.Generic(
-                        "Cannot locate required include: " + filename);
-            }
-            enter(source.origin().description());
-            try {
-                return source.parse(localOptions(context));
-            } finally {
-                active.removeLast();
-            }
-        }
-
-        private void enter(String key) {
-            if (active.contains(key) || active.size() >= 32) {
-                throw new ConfigException.Generic(
-                        "Cyclic or excessively nested include: " + key);
-            }
-            active.addLast(key);
-        }
-
-        private static void rejectRemote(String name) {
-            if (name.startsWith("\\\\") || name.startsWith("//")) {
-                throw new ConfigException.Generic(
-                        "Network filesystem includes are not allowed: "
-                                + name);
-            }
-            if (name.matches("^[A-Za-z][A-Za-z0-9+.-]*:.*")
-                    && !name.matches("^[A-Za-z]:[\\\\/].*")) {
-                throw new ConfigException.Generic(
-                        "URL includes are not allowed: " + name);
-            }
-        }
-    }
 }
