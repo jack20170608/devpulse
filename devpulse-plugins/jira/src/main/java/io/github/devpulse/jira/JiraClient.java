@@ -114,6 +114,14 @@ public final class JiraClient {
 
     public JsonObject search(String jql, int limit, Integer startAt,
             String nextPageToken) throws IOException {
+        return search(jql, limit, startAt, nextPageToken,
+                java.util.List.of("summary", "status", "issuetype",
+                        "priority", "assignee", "updated"));
+    }
+
+    public JsonObject search(String jql, int limit, Integer startAt,
+            String nextPageToken, java.util.List<String> requestedFields)
+            throws IOException {
         if (jql == null || jql.isBlank()) {
             throw new IOException("Search JQL must not be blank.");
         }
@@ -138,8 +146,7 @@ public final class JiraClient {
         body.addProperty("jql", jql);
         body.addProperty("maxResults", limit);
         var fields = new JsonArray();
-        for (var field : new String[]{"summary", "status", "issuetype",
-                "priority", "assignee", "updated"}) {
+        for (var field : requestedFields) {
             fields.add(field);
         }
         body.add("fields", fields);
@@ -169,15 +176,32 @@ public final class JiraClient {
     }
 
     public JsonObject transitions(String key) throws IOException {
+        return transitions(key, false);
+    }
+
+    public JsonObject transitions(String key, boolean includeFields)
+            throws IOException {
         return object(request("GET", "issue/" + segment(key)
-                + "/transitions", null));
+                + "/transitions"
+                + (includeFields ? "?expand=transitions.fields" : ""), null));
     }
 
     public void transition(String key, String id) throws IOException {
+        transition(key, id, new JsonObject(), new JsonObject());
+    }
+
+    public void transition(String key, String id, JsonObject fields,
+            JsonObject updates) throws IOException {
         var body = new JsonObject();
         var transition = new JsonObject();
         transition.addProperty("id", id);
         body.add("transition", transition);
+        if (!fields.isEmpty()) {
+            body.add("fields", fields);
+        }
+        if (!updates.isEmpty()) {
+            body.add("update", updates);
+        }
         request("POST", "issue/" + segment(key) + "/transitions", body);
     }
 
@@ -230,11 +254,21 @@ public final class JiraClient {
         send(request);
     }
 
-    private JsonElement request(String method, String path, JsonObject data)
+    public JsonElement request(String method, String path, JsonObject data)
             throws IOException {
-        var builder = builder(path);
+        return request(method, path, data, false);
+    }
+
+    public JsonElement agile(String method, String path, JsonObject data)
+            throws IOException {
+        return request(method, path, data, true);
+    }
+
+    private JsonElement request(String method, String path, JsonObject data,
+            boolean agile) throws IOException {
+        var builder = builder(agile ? "rest/agile/1.0/" : api, path);
         if (data == null) {
-            builder.GET();
+            builder.method(method, HttpRequest.BodyPublishers.noBody());
         } else {
             builder.header("Content-Type", "application/json")
                     .method(method, HttpRequest.BodyPublishers.ofString(
@@ -250,7 +284,11 @@ public final class JiraClient {
     }
 
     private HttpRequest.Builder builder(String path) {
-        return HttpRequest.newBuilder(base.resolve(api + path))
+        return builder(api, path);
+    }
+
+    private HttpRequest.Builder builder(String prefix, String path) {
+        return HttpRequest.newBuilder(base.resolve(prefix + path))
                 .timeout(Duration.ofSeconds(60))
                 .header("Authorization", authorization)
                 .header("Accept", "application/json");

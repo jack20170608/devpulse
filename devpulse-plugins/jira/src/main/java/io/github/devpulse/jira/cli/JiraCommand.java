@@ -43,11 +43,15 @@ import picocli.CommandLine.Spec;
         description = "Manage Jira issues using HOCON and Markdown.",
         subcommands = {JiraCommand.Issue.class,
                 JiraInitCommand.class,
-                JiraCommand.Show.class, JiraCommand.Export.class,
+                JiraCommand.Export.class,
                 JiraCommand.Update.class, JiraCommand.Transitions.class,
                 JiraCommand.Transition.class, JiraCommand.Comment.class,
                 JiraCommand.CommentExport.class,
                 JiraCommand.CommentUpdate.class,
+                JiraIssueExtras.Me.class, JiraIssueExtras.Completion.class,
+                JiraAgileCommands.Epic.class, JiraAgileCommands.Sprint.class,
+                JiraCatalogCommands.Project.class, JiraCatalogCommands.Board.class,
+                JiraCatalogCommands.Release.class, JiraCatalogCommands.Open.class,
                 JiraCommand.Attach.class})
 public final class JiraCommand implements Runnable {
     @Spec
@@ -349,6 +353,11 @@ public final class JiraCommand implements Runnable {
             description = "Manage Jira issues.",
             subcommands = {JiraCreateCommand.class, JiraIssueListCommand.class,
                     JiraIssueEditCommand.class, JiraIssueAssignCommand.class,
+                    JiraIssueMoveCommand.class,
+                    JiraIssueExtras.Comment.class, JiraIssueExtras.Worklog.class,
+                    JiraIssueOperations.View.class, JiraIssueOperations.Link.class,
+                    JiraIssueOperations.Unlink.class, JiraIssueOperations.Clone.class,
+                    JiraIssueOperations.Delete.class,
                     IssueTemplate.class})
     static final class Issue implements Runnable {
         @Spec
@@ -357,23 +366,6 @@ public final class JiraCommand implements Runnable {
         @Override
         public void run() {
             spec.commandLine().usage(spec.commandLine().getOut());
-        }
-    }
-
-    @Command(name = "show", description = "Show issue key, summary, "
-            + "status, and updated time.")
-    static final class Show extends Action {
-        @Parameters(index = "0")
-        String key;
-
-        @Override
-        protected void execute() throws IOException {
-            var issue = client().issue(key);
-            var fields = object(issue.get("fields"));
-            print(string(issue, "key") + " "
-                    + string(fields, "summary"));
-            print("Status: " + string(object(fields.get("status")), "name"));
-            print("Updated: " + string(fields, "updated"));
         }
     }
 
