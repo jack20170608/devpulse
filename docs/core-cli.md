@@ -23,7 +23,7 @@ bash build.sh --clean
 java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
-根目录 Maven 项目包含外部依赖版本模块 `devpulse-dependencies`、内部 BOM `devpulse-bom`、共享环境库 `devpulse-core`、独立工具聚合模块 `devpulse-plugins`（`pulse`、`gather`、`jira`）、组合兼容入口 `devpulse-cli` 和发行模块 `devpulse-dist`。Pulse、Gather、Jira 分别生成独立可执行 JAR；组合入口生成 `devpulse-cli\target\devpulse.jar`，不进入单工具发行包。以下示例使用组合入口保持原有命令用法；单独运行 Pulse 请使用 `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`，相关命令通过 `pulse init|review|status|stop` 调用。安装说明见 [发行与安装](distribution.md)。Git Bash 中 `bash run.sh --help` 使用组合入口，`bash run-jira.sh --help` 只构建 Jira；脚本仅在其子进程中移除 `JAVA_TOOL_OPTIONS`。
+根目录 Maven 项目包含外部依赖版本模块 `devpulse-dependencies`、内部 BOM `devpulse-bom`、工作流计划与环境共享库 `devpulse-core`、独立工具聚合模块 `devpulse-plugins`（`pulse`、`gather`、`jira`）、组合兼容入口 `devpulse-cli` 和发行模块 `devpulse-dist`。Pulse、Gather、Jira 分别生成独立可执行 JAR；组合入口生成 `devpulse-cli\target\devpulse.jar`，不进入单工具发行包。以下示例使用组合入口保持原有命令用法；单独运行 Pulse 请使用 `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`，相关命令通过 `pulse init|review|status|stop` 调用。安装说明见 [发行与安装](distribution.md)。Git Bash 中 `bash run.sh --help` 使用组合入口，`bash run-jira.sh --help` 只构建 Jira；脚本仅在其子进程中移除 `JAVA_TOOL_OPTIONS`。
 
 ### 命令概览与帮助
 
@@ -324,7 +324,7 @@ bash build.sh --clean
 java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
-The root Maven reactor contains `devpulse-dependencies` for external versions, `devpulse-bom` for internal versions, the shared environment library `devpulse-core`, independent tools in `devpulse-plugins` (`pulse`, `gather`, and `jira`), the combined compatibility entry point `devpulse-cli`, and `devpulse-dist` for selective archives. Pulse, Gather, and Jira produce separate executable JARs; the combined entry point produces `devpulse-cli\target\devpulse.jar` and is not included in individual tool archives. The examples below use that entry point to preserve existing command syntax. To run Pulse alone, use `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`; its related commands are `pulse init|review|status|stop`. See [distribution and installation](distribution.md). In Git Bash, `bash run.sh --help` launches the combined entry point, while `bash run-jira.sh --help` builds only Jira. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
+The root Maven reactor contains `devpulse-dependencies` for external versions, `devpulse-bom` for internal versions, the workflow planning and shared environment library `devpulse-core`, independent tools in `devpulse-plugins` (`pulse`, `gather`, and `jira`), the combined compatibility entry point `devpulse-cli`, and `devpulse-dist` for selective archives. Pulse, Gather, and Jira produce separate executable JARs; the combined entry point produces `devpulse-cli\target\devpulse.jar` and is not included in individual tool archives. The examples below use that entry point to preserve existing command syntax. To run Pulse alone, use `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`; its related commands are `pulse init|review|status|stop`. See [distribution and installation](distribution.md). In Git Bash, `bash run.sh --help` launches the combined entry point, while `bash run-jira.sh --help` builds only Jira. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
 
 ### Command overview and help
 

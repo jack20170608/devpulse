@@ -5,7 +5,7 @@ import io.github.devpulse.environment.BashShell;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulseExecutor;
 import io.github.devpulse.execution.RunHistory;
-import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
@@ -65,7 +65,7 @@ public final class PulseCommand implements Callable<Integer> {
                 return 1;
             }
             var config = PulseConfiguration.load(directory);
-            var plan = TaskPlan.create(config, target);
+            var plan = config.plan(target);
             var concurrency = jobs == null ? config.parallelism() : jobs;
             out.println("Plan: " + target + " (" + plan.tasks().size()
                     + " tasks, parallelism " + concurrency + ")");
@@ -74,7 +74,7 @@ public final class PulseCommand implements Callable<Integer> {
                     out.println("[" + task.name() + "] needs: "
                             + task.needs());
                     out.println(task.command());
-                    task.daemonDetails().forEach(out::println);
+                    TaskDetails.daemonDetails(task).forEach(out::println);
                 }
                 out.flush();
                 return 0;

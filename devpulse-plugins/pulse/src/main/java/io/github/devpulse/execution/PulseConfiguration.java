@@ -3,63 +3,22 @@ package io.github.devpulse.execution;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigOrigin;
 import com.typesafe.config.ConfigUtil;
 import com.typesafe.config.ConfigValueType;
+import io.github.devpulse.execution.TaskDefinition.Daemon;
+import io.github.devpulse.execution.TaskDefinition.Readiness;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
 public record PulseConfiguration(Path directory, int parallelism,
-        Map<String, Task> tasks, Map<String, Pipeline> pipelines) {
-    public PulseConfiguration {
-        tasks = Collections.unmodifiableMap(new LinkedHashMap<>(tasks));
-        pipelines = Collections.unmodifiableMap(
-                new LinkedHashMap<>(pipelines));
-    }
-
-    public record Task(String name, String command, List<String> needs,
-            Daemon daemon, ConfigOrigin origin) {
-        public Task {
-            command = command.replace("\r\n", "\n");
-            needs = List.copyOf(needs);
-        }
-
-        public List<String> daemonDetails() {
-            if (daemon == null) {
-                return List.of();
-            }
-            return List.of("Type: daemon; needs waits for readiness",
-                    "Readiness / Bash: " + daemon.ready().command(),
-                    "Readiness timeout: " + daemon.ready().timeout()
-                            + "; interval: " + daemon.ready().interval()
-                            + "; check timeout: "
-                            + daemon.ready().checkTimeout(),
-                    "shutdownHook: " + daemon.shutdownHook(),
-                    "Stop / Bash: " + (daemon.stopCommand() == null
-                            ? "(terminate owned process tree)"
-                            : daemon.stopCommand()),
-                    "Stop timeout: " + daemon.stopTimeout());
-        }
-    }
-
-    public record Daemon(Readiness ready, boolean shutdownHook,
-            String stopCommand, Duration stopTimeout) {}
-
-    public record Readiness(String command, Duration interval,
-            Duration timeout, Duration checkTimeout) {}
-
-    public record Pipeline(List<String> tasks, ConfigOrigin origin) {
-        public Pipeline {
-            tasks = List.copyOf(tasks);
-        }
-    }
+        WorkflowDefinition workflow, Config source) {
 
     public static PulseConfiguration load(Path directory) throws IOException {
         var root = directory.toAbsolutePath().normalize();
@@ -85,7 +44,7 @@ public record PulseConfiguration(Path directory, int parallelism,
         }
         var parallelism = positiveInteger(config, "parallelism");
         requireType(config, "tasks", ConfigValueType.OBJECT);
-        var tasks = new LinkedHashMap<String, Task>();
+        var tasks = new ArrayList<TaskDefinition>();
         var taskSection = config.getConfig("tasks");
         for (var name : taskSection.root().keySet()) {
             var path = ConfigUtil.quoteString(name);
@@ -93,35 +52,16 @@ public record PulseConfiguration(Path directory, int parallelism,
             var tool = taskSection.getConfig(path);
             rejectUnknownFields(tool, List.of("description", "cmd", "needs", "type",
                     "ready", "shutdownHook", "stop", "stopTimeout"));
-            if (name.isBlank() || !name.equals(name.strip())
-                    || name.chars().anyMatch(Character::isISOControl)) {
-                throw invalid(taskSection, path,
-                        "Task names must be nonblank without surrounding "
-                                + "whitespace or control characters.");
-            }
             if (tool.hasPathOrNull("description")) {
                 requireType(tool, "description", ConfigValueType.STRING);
             }
-            var task = new Task(name, nonBlankString(tool, "cmd"),
+            tasks.add(new TaskDefinition(name, nonBlankString(tool, "cmd"),
                     tool.hasPathOrNull("needs")
                             ? stringList(tool, "needs") : List.of(),
-                    daemon(tool), tool.origin());
-            tasks.put(name, task);
-        }
-        if (tasks.isEmpty()) {
-            throw invalid(config, "tasks", "At least one task is required.");
-        }
-        for (var task : tasks.values()) {
-            for (var dependency : task.needs()) {
-                if (!tasks.containsKey(dependency)) {
-                    throw new ConfigException.BadValue(task.origin(), "needs",
-                            "Task " + task.name() + " has unknown dependency: "
-                                    + dependency);
-                }
-            }
+                    daemon(tool)));
         }
         requireType(config, "pipelines", ConfigValueType.OBJECT);
-        var pipelines = new LinkedHashMap<String, Pipeline>();
+        var pipelines = new LinkedHashMap<String, List<String>>();
         var section = config.getConfig("pipelines");
         for (var name : section.root().keySet()) {
             var path = ConfigUtil.quoteString(name);
@@ -131,22 +71,33 @@ public record PulseConfiguration(Path directory, int parallelism,
             if (pipeline.hasPathOrNull("description")) {
                 requireType(pipeline, "description", ConfigValueType.STRING);
             }
-            var targets = stringList(pipeline, "tasks");
-            if (targets.isEmpty()) {
-                throw invalid(pipeline, "tasks",
-                        "Pipeline " + name
-                                + " must contain at least one task.");
-            }
-            for (var target : targets) {
-                if (!tasks.containsKey(target)) {
-                    throw invalid(pipeline, "tasks",
-                            "Pipeline " + name + " has unknown task: "
-                                    + target);
-                }
-            }
-            pipelines.put(name, new Pipeline(targets, pipeline.origin()));
+            pipelines.put(name, stringList(pipeline, "tasks"));
         }
-        return new PulseConfiguration(root, parallelism, tasks, pipelines);
+        return new PulseConfiguration(root, parallelism,
+                new WorkflowDefinition(tasks, pipelines), config);
+    }
+
+    public TaskPlan plan(String target) throws IOException {
+        try {
+            return TaskPlan.create(workflow, target);
+        } catch (PlanningException exception) {
+            if (exception.scope() == PlanningException.Scope.TARGET) {
+                throw new IOException(exception.getMessage(), exception);
+            }
+            var section = switch (exception.scope()) {
+                case WORKFLOW -> source;
+                case TASK -> source.getConfig("tasks")
+                        .getConfig(ConfigUtil.quoteString(exception.name()));
+                case PIPELINE -> source.getConfig("pipelines")
+                        .getConfig(ConfigUtil.quoteString(exception.name()));
+                case TARGET -> throw new IllegalStateException(exception);
+            };
+            var origin = section.hasPathOrNull(exception.field())
+                    ? section.getValue(exception.field()).origin()
+                    : section.root().origin();
+            throw new ConfigException.BadValue(origin, exception.field(),
+                    exception.getMessage());
+        }
     }
 
     private static Daemon daemon(Config tool) {

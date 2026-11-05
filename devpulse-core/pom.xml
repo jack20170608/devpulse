@@ -11,5 +11,5 @@
         <relativePath>../devpulse-dependencies/pom.xml</relativePath>
     </parent>
     <artifactId>devpulse-core</artifactId>
-    <name>devpulse shared environment library</name>
+    <name>devpulse workflow planning and shared environment library</name>
 </project>

@@ -2,7 +2,6 @@ package io.github.devpulse.execution;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.environment.BashShell;
-import io.github.devpulse.execution.PulseConfiguration.Task;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
@@ -43,7 +42,7 @@ public final class DaemonManager {
 
     private record Record(Path directory, String runId, String taskId,
             String name, Path project, Path bash, Owner owner,
-            PulseConfiguration.Daemon configuration,
+            TaskDefinition.Daemon configuration,
             Instant readyAt, Instant stoppedAt) {
         Record ready() {
             return new Record(directory, runId, taskId, name, project,
@@ -82,7 +81,7 @@ public final class DaemonManager {
         this.project = project;
     }
 
-    public void start(Task task) throws IOException {
+    public void start(TaskDefinition task) throws IOException {
         var id = history.taskId(task.name());
         var directory = history.directory().resolve("daemons");
         Files.createDirectories(directory);
@@ -487,12 +486,12 @@ public final class DaemonManager {
                     || config.getLong("pid") <= 0) {
                 throw new IOException("Invalid daemon metadata: " + path);
             }
-            var ready = new PulseConfiguration.Readiness(
+            var ready = new TaskDefinition.Readiness(
                     config.getString("readyCommand"),
                     Duration.ofNanos(config.getLong("intervalNanos")),
                     Duration.ofNanos(config.getLong("timeoutNanos")),
                     Duration.ofNanos(config.getLong("checkTimeoutNanos")));
-            var daemon = new PulseConfiguration.Daemon(ready,
+            var daemon = new TaskDefinition.Daemon(ready,
                     config.getBoolean("shutdownHook"),
                     config.hasPath("stopCommand")
                             ? config.getString("stopCommand") : null,

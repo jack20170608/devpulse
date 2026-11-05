@@ -2,7 +2,7 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.execution.PulseConfiguration;
-import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.review.TaskDetails;
 import io.github.devpulse.review.ReviewTui;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -55,7 +55,7 @@ public final class ReviewCommand implements Callable<Integer> {
                 return 1;
             }
             var config = PulseConfiguration.load(directory);
-            var plan = TaskPlan.create(config, target);
+            var plan = config.plan(target);
             var concurrency = jobs == null ? config.parallelism() : jobs;
             if (!plain && ReviewTui.show(target, config, plan, concurrency)) {
                 return 0;
@@ -79,7 +79,7 @@ public final class ReviewCommand implements Callable<Integer> {
             for (var task : plan.tasks()) {
                 out.println(index++ + ". [" + task.name() + "]");
                 out.println(task.command());
-                task.daemonDetails().forEach(out::println);
+                TaskDetails.daemonDetails(task).forEach(out::println);
                 out.println();
             }
             out.println("Static review only: no commands executed. "

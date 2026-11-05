@@ -1,7 +1,6 @@
 package io.github.devpulse.execution;
 
 import io.github.devpulse.environment.BashShell;
-import io.github.devpulse.execution.PulseConfiguration.Task;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -158,7 +157,7 @@ public final class PulseExecutor {
         }
     }
 
-    private Result run(Task task, ExecutorService pool) {
+    private Result run(TaskDefinition task, ExecutorService pool) {
         if (task.daemon() != null) {
             return runDaemon(task, pool);
         }
@@ -275,7 +274,7 @@ public final class PulseExecutor {
         }
     }
 
-    private Result runDaemon(Task task, ExecutorService pool) {
+    private Result runDaemon(TaskDefinition task, ExecutorService pool) {
         try {
             synchronized (gate) {
                 if (failed) {

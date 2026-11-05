@@ -214,7 +214,7 @@ public final class ReviewTui {
         if (task.daemon() != null) {
             details.add(Line.empty());
             details.add(Line.styled("Daemon lifecycle:", ACCENT));
-            task.daemonDetails().forEach(value -> display(value).lines()
+            TaskDetails.daemonDetails(task).forEach(value -> display(value).lines()
                     .forEach(line -> details.add(Line.from(line))));
         }
         var wrapped = wrap(details, Math.max(1, area.width()));

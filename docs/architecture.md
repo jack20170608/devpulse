@@ -61,6 +61,25 @@
 
 **职责**：读取用户存放的 `.devpulse.yaml` 配置文件，智能计算依赖顺序，拉起本地系统进程执行。
 
+**独立计划 module**：`devpulse-core` 提供不可变的 `TaskDefinition`、`WorkflowDefinition` 和 `TaskPlan`，只依赖 JDK，不依赖 YAML、Typesafe Config 或 CLI。任务定义包含命令、依赖和可选的长驻进程选项；工作流定义包含任务列表与流水线目标。`TaskPlan.create` 校验完整定义，再为指定任务或流水线补齐传递依赖并生成拓扑有序的计划；不会读取配置、探测 Bash、执行命令或写入运行记录。
+
+```java
+import io.github.devpulse.execution.TaskDefinition;
+import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.execution.WorkflowDefinition;
+import java.util.List;
+import java.util.Map;
+
+var workflow = new WorkflowDefinition(
+        List.of(
+                new TaskDefinition("check", "echo check", List.of()),
+                new TaskDefinition("build", "echo build", List.of("check"))),
+        Map.of("dev", List.of("build")));
+var plan = TaskPlan.create(workflow, "dev");
+```
+
+`PlanningException` 通过 `scope()`、`name()` 和 `field()` 提供与配置格式无关的错误定位；Pulse 的 `PulseConfiguration.plan` 将其关联到原 YAML 文件和可用行号。长驻进程的终端说明由 Pulse 的 `TaskDetails` 生成，不进入核心定义。当前阶段仅下沉定义和计划；`PulseExecutor`、`RunHistory` 和 `DaemonManager` 仍在 Pulse，调度、失败策略与持久化格式不变。
+
 **实现步骤**：
 
 - **解析配置**：按配置加载规则读取 YAML 配置，构造配置模型。
@@ -120,7 +139,7 @@
 
 **职责**：静态校验任务或流水线的执行计划，在交互式 TUI 中供用户执行前审阅，不调用 AI。
 
-- **目标与校验**：`review` 默认选择 `dev`，`review <名称>` 支持流水线或单任务。复用 `PulseConfiguration.load` 和 `TaskPlan.create`，与 `pulse` 保持相同的完整配置校验、目标重名检查、循环依赖检测和传递依赖补齐规则。
+- **目标与校验**：`review` 默认选择 `dev`，`review <名称>` 支持流水线或单任务。复用 `PulseConfiguration.load` 和 `PulseConfiguration.plan`，后者调用 core 的 `TaskPlan.create`；与 `pulse` 保持相同的完整配置校验、目标重名检查、循环依赖检测和传递依赖补齐规则。
 - **TUI 与依赖展示**：使用 TamboUI `0.6.0`（本次接入时 Maven Central 最新正式版）的 `tamboui-tui` 与 `tamboui-jline3-backend`，版本统一定义在 `pom.xml`，不使用快照版本。左侧默认显示分层 DAG，可切换至按拓扑顺序排列的任务列表；右侧显示选中任务的直接前置依赖、计划内后继任务和完整 Bash 命令。DAG 中的编号对应任务列表顺序，长名称截断后可在详情中查看完整名称。
 - **DAG 布局与高亮**：自定义 TamboUI Widget 按最长依赖路径的深度 `L` 从左到右分层，同层按拓扑顺序从上到下排列；共享任务仅绘制一个节点，每条直接依赖均保留指向后继节点的连线。跨层长连线从节点行之间绕过中间节点；交叉线可能共享显示单元格，不代表新增依赖，右侧详情提供精确的直接依赖关系。选中节点为黄色，全部传递前置依赖及其路径为绿色，全部传递后继及其路径为品红色；无关节点与连线保持灰色。不自动消除所有交叉。
 - **计划信息与交互**：顶部显示目标、项目目录、任务数量、有效并发上限和颜色说明。上／下方向键选择任务，`Home`／`End` 选择首／末任务；左／右方向键水平平移 DAG，`w`／`s` 垂直平移，`r` 将视图定位到选中任务；`Tab` 切换 DAG 与任务列表，`PageUp`／`PageDown` 滚动右侧详情，`q` 退出。切换任务时自动定位图中节点并重置详情滚动位置；图形按视口裁剪，不覆盖相邻面板，长命令按终端显示宽度换行，控制字符以可见文本展示而不作为终端指令解释。依赖深度和拓扑顺序不代表固定执行批次或串行顺序，实际调度仍由依赖成功情况及并发上限决定。
@@ -130,7 +149,7 @@
 
 #### 8. 预定义 CLI 集成：Jira（`JiraCommand.java`）
 
-**模块与接口**：根目录 `pom.xml` 聚合各模块。`devpulse-dependencies` 管理外部依赖，`devpulse-bom` 管理可消费的内部产物版本；构建插件版本在根 POM 的 `pluginManagement`。`devpulse-core` 仅提供 Bash 和环境盘点共享代码，不再生成可执行 JAR；`devpulse-plugins/pulse` 包含工作流命令 `pulse`、`init`、`review`、`status`、`stop` 和调度实现，`devpulse-plugins/gather` 包含提示词命令，`devpulse-plugins/jira` 独立访问 Jira。各工具 JAR 仅依赖所需模块，不相互依赖；共享库不注册命令，也不引入动态插件加载。`devpulse-cli` 是保留 `devpulse <子命令>` 用法的组合式兼容产物，不加入单工具发行包。`devpulse-dist` 依赖工具产物并组装独立归档，供用户按需安装，不被工具反向依赖。运行模块继承 `devpulse-dependencies` 的本地相对父路径，内部 BOM 不作为运行时依赖。安装和发行细节见 [发行与安装](distribution.md)。
+**模块与接口**：根目录 `pom.xml` 聚合各模块。`devpulse-dependencies` 管理外部依赖，`devpulse-bom` 管理可消费的内部产物版本；构建插件版本在根 POM 的 `pluginManagement`。`devpulse-core` 提供独立工作流定义与计划构建，以及 Bash 和环境盘点共享代码，不生成可执行 JAR；`devpulse-plugins/pulse` 包含工作流命令 `pulse`、`init`、`review`、`status`、`stop`、YAML 到核心定义的转换和现有执行运行时，`devpulse-plugins/gather` 包含提示词命令，`devpulse-plugins/jira` 独立访问 Jira。各工具 JAR 仅依赖所需模块，不相互依赖；共享库不注册命令，也不引入动态插件加载。`devpulse-cli` 是保留 `devpulse <子命令>` 用法的组合式兼容产物，不加入单工具发行包。`devpulse-dist` 依赖工具产物并组装独立归档，供用户按需安装，不被工具反向依赖。运行模块继承 `devpulse-dependencies` 的本地相对父路径，内部 BOM 不作为运行时依赖。安装和发行细节见 [发行与安装](distribution.md)。
 
 **版本来源**：根 `pom.xml` 的 `<revision>` 是唯一的项目版本值。Maven 3 要求各子模块写出 `<parent><version>`，这里统一引用 `${revision}`，不重复填写版本号；内部模块依赖和 BOM 使用 `${project.version}`。构建继承的 Flatten Maven Plugin 仅解析 CI-friendly 版本占位符，保证以后安装或发布的 POM 可被其他 Maven 项目消费。外部依赖、构建插件、HOCON 配置格式的版本各有独立语义，不跟随项目版本递增。
 
@@ -228,6 +247,25 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 
 **Responsibility**: Read `.devpulse.yaml`, determine dependency order, and execute local subprocesses.
 
+**Independent planning module**: `devpulse-core` provides immutable `TaskDefinition`, `WorkflowDefinition`, and `TaskPlan`, depending only on the JDK rather than YAML, Typesafe Config, or the CLI. Task definitions contain commands, dependencies, and optional daemon settings; workflow definitions contain task lists and pipeline targets. `TaskPlan.create` validates the complete definition, expands transitive dependencies for a selected task or pipeline, and returns a topologically ordered plan without reading configuration, discovering Bash, executing commands, or writing run records.
+
+```java
+import io.github.devpulse.execution.TaskDefinition;
+import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.execution.WorkflowDefinition;
+import java.util.List;
+import java.util.Map;
+
+var workflow = new WorkflowDefinition(
+        List.of(
+                new TaskDefinition("check", "echo check", List.of()),
+                new TaskDefinition("build", "echo build", List.of("check"))),
+        Map.of("dev", List.of("build")));
+var plan = TaskPlan.create(workflow, "dev");
+```
+
+`PlanningException` exposes format-independent error locations through `scope()`, `name()`, and `field()`. Pulse's `PulseConfiguration.plan` associates these with the original YAML file and available line numbers. Pulse's `TaskDetails` formats daemon terminal descriptions rather than placing them in core definitions. This stage extracts definitions and planning only; `PulseExecutor`, `RunHistory`, and `DaemonManager` remain in Pulse, preserving scheduling, failure policy, and persistence formats.
+
 **Implementation steps**:
 
 - **Configuration**: Load YAML according to the configuration rules and construct configuration models.
@@ -287,7 +325,7 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 
 **Responsibility**: Statically validate a task or pipeline execution plan and provide an interactive TUI for user review before execution, without calling AI.
 
-- **Targets and validation**: `review` defaults to `dev`; `review <name>` accepts a pipeline or a single task. Reuse `PulseConfiguration.load` and `TaskPlan.create` for the same full configuration validation, target collision checks, cycle detection, and transitive dependency expansion as `pulse`.
+- **Targets and validation**: `review` defaults to `dev`; `review <name>` accepts a pipeline or a single task. Reuse `PulseConfiguration.load` and `PulseConfiguration.plan`, which calls core's `TaskPlan.create`, for the same full configuration validation, target collision checks, cycle detection, and transitive dependency expansion as `pulse`.
 - **TUI and dependencies**: Use TamboUI `0.6.0` (the latest Maven Central release when integrated), with `tamboui-tui` and `tamboui-jline3-backend`. Define the version centrally in `pom.xml` and do not use snapshots. The left pane defaults to a layered DAG and can switch to a task list in topological order; the right pane shows the selected task's direct prerequisites, downstream tasks within the plan, and complete Bash command. DAG node numbers match task-list order; full names remain available in details when graph labels are truncated.
 - **DAG layout and highlighting**: A custom TamboUI Widget lays out nodes left to right by longest dependency-path depth `L`, with nodes in each layer ordered top to bottom by topological order. Draw shared tasks only once and retain an arrow to the dependent node for every direct dependency. Route long cross-layer edges between node rows to avoid intermediate nodes. Crossing lines may share display cells without implying new dependencies; right-pane details provide the exact direct relationships. Highlight the selected node in yellow, all transitive prerequisites and their paths in green, and all transitive dependents and their paths in magenta; unrelated nodes and edges remain gray. Do not automatically eliminate all crossings.
 - **Plan information and interaction**: Show the target, project directory, task count, effective concurrency limit, and color legend at the top. Up/Down selects tasks; `Home`/`End` selects the first/last task. Left/Right pans the DAG horizontally; `w`/`s` pans vertically; `r` centers the view on the selection. `Tab` switches between DAG and task list; `PageUp`/`PageDown` scrolls right-pane details; `q` quits. Center the graph and reset detail scrolling when selection changes. Clip graph output to its viewport without overwriting adjacent panes, wrap long commands by terminal display width, and display control characters as visible text rather than terminal instructions. Dependency depth and topological order are not fixed execution batches or a sequential schedule; actual scheduling still depends on successful prerequisites and the concurrency limit.
@@ -297,7 +335,7 @@ CLI input -> standalone tool (or combined compatibility entry point) -> correspo
 
 #### 8. Built-in CLI integration: Jira (`JiraCommand.java`)
 
-**Module and interface**: The root `pom.xml` aggregates the modules. `devpulse-dependencies` manages external dependencies, `devpulse-bom` manages consumable internal artifact versions, and the root POM's `pluginManagement` manages build plugin versions. `devpulse-core` provides only shared Bash and environment inventory code and is no longer executable. `devpulse-plugins/pulse` contains the workflow commands `pulse`, `init`, `review`, `status`, and `stop` and their execution implementation; `devpulse-plugins/gather` contains prompt generation; `devpulse-plugins/jira` accesses Jira independently. Each tool JAR depends only on modules it needs, with no tool-to-tool dependency. The shared library does not register commands or load plugins dynamically. `devpulse-cli` preserves the combined `devpulse <subcommand>` entry point but is excluded from individual tool archives. `devpulse-dist` depends on tool artifacts and assembles selective archives; tools never depend on the distribution module. Runtime modules inherit `devpulse-dependencies` via local relative parent paths, and the internal BOM is not a runtime dependency. See [distribution and installation](distribution.md).
+**Module and interface**: The root `pom.xml` aggregates the modules. `devpulse-dependencies` manages external dependencies, `devpulse-bom` manages consumable internal artifact versions, and the root POM's `pluginManagement` manages build plugin versions. `devpulse-core` provides independent workflow definitions and planning alongside shared Bash and environment inventory code, without an executable entry point. `devpulse-plugins/pulse` contains the workflow commands `pulse`, `init`, `review`, `status`, and `stop`, YAML-to-core definition conversion, and the existing execution runtime; `devpulse-plugins/gather` contains prompt generation; `devpulse-plugins/jira` accesses Jira independently. Each tool JAR depends only on modules it needs, with no tool-to-tool dependency. The shared library does not register commands or load plugins dynamically. `devpulse-cli` preserves the combined `devpulse <subcommand>` entry point but is excluded from individual tool archives. `devpulse-dist` depends on tool artifacts and assembles selective archives; tools never depend on the distribution module. Runtime modules inherit `devpulse-dependencies` via local relative parent paths, and the internal BOM is not a runtime dependency. See [distribution and installation](distribution.md).
 
 **Version source**: The root `pom.xml`'s `<revision>` is the only project version value. Maven 3 still requires each child's `<parent><version>` element, so it references `${revision}` rather than repeating a literal version; internal module dependencies and the BOM use `${project.version}`. The inherited Flatten Maven Plugin resolves CI-friendly version placeholders so installed or deployed POMs remain consumable by other Maven projects. External dependency versions, build plugin versions, and the HOCON configuration schema version have separate meanings and do not advance with the project version.
 
