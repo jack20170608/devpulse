@@ -1,4 +1,4 @@
-package io.github.devpulse.environment;
+package io.github.devpulse.core.environment;
 
 import java.io.File;
 import java.io.IOException;

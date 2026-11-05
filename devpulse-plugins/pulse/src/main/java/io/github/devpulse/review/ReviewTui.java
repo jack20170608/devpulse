@@ -22,7 +22,7 @@ import dev.tamboui.widgets.list.ListState;
 import dev.tamboui.widgets.list.ListWidget;
 import dev.tamboui.widgets.paragraph.Paragraph;
 import io.github.devpulse.execution.PulseConfiguration;
-import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.core.execution.TaskPlan;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

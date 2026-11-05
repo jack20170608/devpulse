@@ -1,6 +1,6 @@
 package io.github.devpulse.review;
 
-import io.github.devpulse.execution.TaskDefinition;
+import io.github.devpulse.core.execution.TaskDefinition;
 import java.util.List;
 
 public final class TaskDetails {

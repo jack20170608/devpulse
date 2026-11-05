@@ -1,6 +1,9 @@
 package io.github.devpulse.execution;
 
-import io.github.devpulse.environment.BashShell;
+import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.core.execution.TaskDefinition;
+import io.github.devpulse.core.execution.TaskPlan;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;

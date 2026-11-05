@@ -6,7 +6,7 @@ import dev.tamboui.style.Style;
 import dev.tamboui.text.CharWidth;
 import dev.tamboui.text.GraphemeClusters;
 import dev.tamboui.widget.Widget;
-import io.github.devpulse.execution.TaskPlan;
+import io.github.devpulse.core.execution.TaskPlan;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;

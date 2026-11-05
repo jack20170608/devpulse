@@ -1,6 +1,6 @@
-package io.github.devpulse.execution;
+package io.github.devpulse.core.execution;
 
-import io.github.devpulse.execution.PlanningException.Scope;
+import io.github.devpulse.core.execution.PlanningException.Scope;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;

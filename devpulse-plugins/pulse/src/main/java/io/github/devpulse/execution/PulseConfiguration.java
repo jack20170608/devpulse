@@ -5,8 +5,13 @@ import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigUtil;
 import com.typesafe.config.ConfigValueType;
-import io.github.devpulse.execution.TaskDefinition.Daemon;
-import io.github.devpulse.execution.TaskDefinition.Readiness;
+import io.github.devpulse.core.execution.PlanningException;
+import io.github.devpulse.core.execution.TaskDefinition;
+import io.github.devpulse.core.execution.TaskDefinition.Daemon;
+import io.github.devpulse.core.execution.TaskDefinition.Readiness;
+import io.github.devpulse.core.execution.TaskPlan;
+import io.github.devpulse.core.execution.WorkflowDefinition;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 public record PulseConfiguration(Path directory, int parallelism,
-        WorkflowDefinition workflow, Config source) {
+                                 WorkflowDefinition workflow, Config source) {
 
     public static PulseConfiguration load(Path directory) throws IOException {
         var root = directory.toAbsolutePath().normalize();

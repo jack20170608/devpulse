@@ -1,4 +1,4 @@
-package io.github.devpulse.execution;
+package io.github.devpulse.core.execution;
 
 public final class PlanningException extends IllegalArgumentException {
     public enum Scope { WORKFLOW, TASK, PIPELINE, TARGET }

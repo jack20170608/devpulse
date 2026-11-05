@@ -1,7 +1,7 @@
 package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
-import io.github.devpulse.environment.BashShell;
+import io.github.devpulse.core.environment.BashShell;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulseExecutor;
 import io.github.devpulse.execution.RunHistory;

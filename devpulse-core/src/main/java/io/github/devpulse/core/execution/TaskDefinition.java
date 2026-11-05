@@ -1,4 +1,4 @@
-package io.github.devpulse.execution;
+package io.github.devpulse.core.execution;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;

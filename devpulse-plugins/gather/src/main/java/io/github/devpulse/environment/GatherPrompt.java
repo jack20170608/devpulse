@@ -1,5 +1,7 @@
 package io.github.devpulse.environment;
 
+import io.github.devpulse.core.environment.EnvironmentGatherer;
+
 import java.util.stream.Collectors;
 
 public final class GatherPrompt {
@@ -8,7 +10,7 @@ public final class GatherPrompt {
     private GatherPrompt() {}
 
     public static String render(EnvironmentGatherer.Facts facts,
-            Language language) {
+                                Language language) {
         var files = facts.projectFiles().isEmpty()
                 ? "(none)" : String.join(", ", facts.projectFiles());
         var tools = facts.tools().stream()
