@@ -1,0 +1,13 @@
+package io.github.devpulse.core;
+
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+public class FooTest {
+
+    @Test
+    void testFoo() {
+        assertThat(true).isTrue();
+    }
+}
