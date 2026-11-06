@@ -29,7 +29,7 @@
 用户终端输入 -> 各独立工具入口（或组合兼容入口） -> 对应命令实现
 ```
 
-#### 1. 工具入口（`PulseCLI.java`、`GatherCLI.java`、`JiraCommand.java`）
+#### 1. 工具入口（`PulseCLI.java`、`GatherCLI.java`、`JiraCommand.java`、`DepmapCLI.java`）
 
 **职责**：各自解析终端参数并执行所属工具命令；`devpulse-cli` 中的 `DevPulseCLI.java` 仅保留旧组合入口的参数分发。
 
@@ -173,6 +173,8 @@ try (var history = new RunHistory(directory).begin("dev", plan, 4)) {
 
 **版本来源**：根 `pom.xml` 的 `<revision>` 是唯一的项目版本值。Maven 3 要求各子模块写出 `<parent><version>`，这里统一引用 `${revision}`，不重复填写版本号；内部模块依赖和 BOM 使用 `${project.version}`。构建继承的 Flatten Maven Plugin 仅解析 CI-friendly 版本占位符，保证以后安装或发布的 POM 可被其他 Maven 项目消费。外部依赖、构建插件、HOCON 配置格式的版本各有独立语义，不跟随项目版本递增。
 
+**Depmap 依赖盘点**：`devpulse-plugins/depmap` 是独立可执行工具，不依赖其他工具或共享库，不加入组合入口和发行包。使用固定版本的内嵌 Maven 3.9.x 构建有效模型与 reactor 工作区，并分别收集项目依赖树、构建和报告插件依赖树；不启动 `mvn`，不执行构建任务或加载目标项目扩展。终端输出和 JSON 共享不可变报告模型，部分失败保留已有结果、明确标记不完整并返回非零退出码。外部依赖版本集中在 `devpulse-dependencies`，Shade 合并服务、Plexus 组件和 Sisu 索引。参数、输出结构与支持边界见 [Depmap 依赖盘点](plugins/depmap.md)。
+
 **Jira 实现**：通过 Java HTTP 客户端访问 Cloud REST v3 或 Data Center REST v2；站点、部署类型和凭据仅从环境变量读取，拒绝远程明文 HTTP，不重定向含授权头的请求。`init` 创建 HOCON 字段模板及同名 Markdown 描述文件；`create`、`issue view`、`export`、`update`、`transitions`、`transition`、`comment`、`comment-export`、`comment-update` 和 `attach` 提供基本的 Issue 管理。导出使用 `/editmeta` 限制字段，保留其原始结构并记录字段基线及描述哈希；Issue 与评论的回写仅上传修改字段，并在上传前检查 `updated`，但不承诺原子冲突控制。Cloud 支持有限且严格的 ADF/Markdown 转换；Data Center 描述及评论暂限纯文本，无法安全转换的富文本拒绝往返。具体选项、安全边界与示例见 [Jira CLI](plugins/jira.md)。
 
 #### 9. 本地长驻进程管理（`DaemonManager.java`、`StopCommand.java`）
@@ -235,7 +237,7 @@ The system contains tool entry points, an environment inventory module, a reusab
 CLI input -> standalone tool (or combined compatibility entry point) -> corresponding command implementation
 ```
 
-#### 1. Tool entry points (`PulseCLI.java`, `GatherCLI.java`, `JiraCommand.java`)
+#### 1. Tool entry points (`PulseCLI.java`, `GatherCLI.java`, `JiraCommand.java`, `DepmapCLI.java`)
 
 **Responsibility**: Parse arguments and execute the commands owned by each tool. `DevPulseCLI.java` in `devpulse-cli` only preserves dispatch through the old combined entry point.
 
@@ -378,6 +380,8 @@ try (var history = new RunHistory(directory).begin("dev", plan, 4)) {
 **Module and interface**: The root `pom.xml` aggregates the modules. `devpulse-dependencies` manages external dependencies, `devpulse-bom` manages consumable internal artifact versions, and the root POM's `pluginManagement` manages build plugin versions. `devpulse-core` provides independent workflow definitions, planning, execution runtime, run history, and daemon management alongside shared Bash and environment inventory code, without an executable entry point. `devpulse-plugins/pulse` contains the workflow commands `pulse`, `init`, `review`, `status`, and `stop`, YAML-to-core definition conversion, terminal presentation, and CLI lifecycle adaptation; `devpulse-plugins/gather` contains prompt generation; `devpulse-plugins/jira` accesses Jira independently. Each tool JAR depends only on modules it needs, with no tool-to-tool dependency. The shared library does not register commands or load plugins dynamically. `devpulse-cli` preserves the combined `devpulse <subcommand>` entry point but is excluded from individual tool archives. `devpulse-dist` depends on tool artifacts and assembles selective archives; tools never depend on the distribution module. Runtime modules inherit `devpulse-dependencies` via local relative parent paths, and the internal BOM is not a runtime dependency. See [distribution and installation](distribution.md).
 
 **Version source**: The root `pom.xml`'s `<revision>` is the only project version value. Maven 3 still requires each child's `<parent><version>` element, so it references `${revision}` rather than repeating a literal version; internal module dependencies and the BOM use `${project.version}`. The inherited Flatten Maven Plugin resolves CI-friendly version placeholders so installed or deployed POMs remain consumable by other Maven projects. External dependency versions, build plugin versions, and the HOCON configuration schema version have separate meanings and do not advance with the project version.
+
+**Depmap dependency inventory**: `devpulse-plugins/depmap` is a standalone executable, with no dependency on other tools or the shared library, and is excluded from the combined entry point and distribution archives. It uses pinned embedded Maven 3.9.x to build effective models and a reactor workspace, separately collecting project, build plugin, and report plugin dependency trees. It does not start `mvn`, execute build tasks, or load target project extensions. Terminal and JSON output share an immutable report model; partial failures retain collected results, explicitly mark them incomplete, and return a nonzero exit code. External versions are centralized in `devpulse-dependencies`; Shade merges services, Plexus components, and Sisu indexes. See [Depmap dependency inventory](plugins/depmap.md) for options, output structure, and supported boundaries.
 
 **Jira implementation**: Java's HTTP client accesses Cloud REST v3 or Data Center REST v2; site, deployment type, and credentials come only from environment variables. Remote plaintext HTTP is rejected and requests with authorization headers are not redirected. `init` creates a HOCON field template and adjacent Markdown description; `create`, `issue view`, `export`, `update`, `transitions`, `transition`, `comment`, `comment-export`, `comment-update`, and `attach` provide basic issue management. Export uses `/editmeta` to limit fields, preserving their original structure with a field baseline and description hash; issue and comment updates send only changes and check `updated` before uploading, but do not promise atomic conflict control. Cloud supports a strict subset of ADF/Markdown conversion; Data Center descriptions and comments are currently plain text only, and unsafe rich-text round-trips are refused. See [Jira CLI](plugins/jira.md) for options, safety boundaries, and examples.
 

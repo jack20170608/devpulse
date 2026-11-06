@@ -18,6 +18,11 @@
         <dependencies>
             <dependency>
                 <groupId>io.github.devpulse</groupId>
+                <artifactId>depmap</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.devpulse</groupId>
                 <artifactId>devpulse-core</artifactId>
                 <version>${project.version}</version>
             </dependency>

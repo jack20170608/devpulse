@@ -17,7 +17,7 @@ bash run-jira.sh --help
 java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 ```
 
-`build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|gather|jira|cli|dist` 按需构建，`--clean` 可清理所选模块的旧产物。`run.sh` 保留组合式 CLI 兼容入口；`run-jira.sh` 只构建和运行 Jira。两个启动脚本都复用 `build.sh`，不会修改父终端的环境变量。可选安装与发行包见 [发行与安装](docs/distribution.md)。运行 JAR 需要 Java 25 或更高版本；实际执行 `pulse`、`gather` 和 `status --tools` 还需要 Bash。
+`build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|gather|jira|depmap|cli|dist` 按需构建，`--clean` 可清理所选模块的旧产物。`run.sh` 保留组合式 CLI 兼容入口；`run-jira.sh` 只构建和运行 Jira。两个启动脚本都复用 `build.sh`，不会修改父终端的环境变量。可选安装与发行包见 [发行与安装](docs/distribution.md)。运行 JAR 需要 Java 25 或更高版本；实际执行 `pulse`、`gather` 和 `status --tools` 还需要 Bash。
 
 ### 使用 devpulse-dist 安装工具
 
@@ -55,6 +55,7 @@ jira --help
 | [核心 CLI 使用指南](docs/core-cli.md) | 安装要求、配置示例、`init` / `gather` / `pulse` / `review` / `status` / `stop` 及本地长驻进程 |
 | [发行与安装](docs/distribution.md) | 按需安装 Pulse 或 Jira、升级与卸载 |
 | [Jira 插件指南](docs/plugins/jira.md) | 认证、模板、Issue 操作与 Markdown 边界 |
+| [Depmap 依赖盘点](docs/plugins/depmap.md) | 独立 CLI、项目与插件依赖树、JSON 导出及 Maven 配置 |
 | [架构与实现设计](docs/architecture.md) | 模块组织、配置、调度、持久化及设计约束 |
 | [Copilot 仓库指令](.github/copilot-instructions.md) | 技术栈、编码、文档及构建规范 |
 
@@ -68,6 +69,7 @@ devpulse-plugins/        插件聚合模块
   pulse/                 独立的 Pulse CLI
   gather/                独立的 Gather CLI
   jira/                  独立的 Jira CLI
+  depmap/                独立的 Maven 依赖盘点 CLI
 devpulse-cli/            组合式 CLI 兼容入口
 devpulse-dist/           可选工具发行包
 ```
@@ -89,7 +91,7 @@ bash run-jira.sh --help
 java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 ```
 
-`build.sh` builds every module by default, or use `bash build.sh pulse|gather|jira|cli|dist` to build a selected target; `--clean` removes its previous output. `run.sh` preserves the combined CLI for compatibility, while `run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. See [distribution and installation](docs/distribution.md) for selective installation. Running the JARs requires Java 25 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
+`build.sh` builds every module by default, or use `bash build.sh pulse|gather|jira|depmap|cli|dist` to build a selected target; `--clean` removes its previous output. `run.sh` preserves the combined CLI for compatibility, while `run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. See [distribution and installation](docs/distribution.md) for selective installation. Running the JARs requires Java 25 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
 
 ### Install tools with devpulse-dist
 
@@ -127,6 +129,7 @@ Use `--prefix` to customize the installation directory and add its `bin` directo
 | [Core CLI guide](docs/core-cli.md) | Requirements, configuration, `init` / `gather` / `pulse` / `review` / `status` / `stop`, and local daemons |
 | [Distribution and installation](docs/distribution.md) | Selective Pulse or Jira installation, upgrades, and removal |
 | [Jira plugin guide](docs/plugins/jira.md) | Authentication, templates, issue operations, and Markdown limits |
+| [Depmap dependency inventory](docs/plugins/depmap.md) | Standalone CLI, project/plugin dependency trees, JSON export, and Maven configuration |
 | [Architecture and implementation](docs/architecture.md) | Modules, configuration, scheduling, persistence, and design constraints |
 | [Copilot repository instructions](.github/copilot-instructions.md) | Technology stack, coding, documentation, and build conventions |
 
@@ -140,6 +143,7 @@ devpulse-plugins/        Plugin aggregator
   pulse/                 Standalone Pulse CLI
   gather/                Standalone Gather CLI
   jira/                  Standalone Jira CLI
+  depmap/                Standalone Maven dependency inventory CLI
 devpulse-cli/            Combined compatibility CLI
 devpulse-dist/           Selective tool archives
 ```
