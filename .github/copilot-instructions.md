@@ -8,7 +8,7 @@
 
 - 所有文档均需提供中英文对照，中文在前，英文在后；两种语言的内容和结构应保持一致，修改时同步更新。
 - 在文档头部添加同页面语言导航：`[中文](#中文) | [English](#english)`，并使用 `## 中文` 和 `## English` 作为对应章节标题。
-- 根目录 `readme.MD` 作为简短入口；核心用法放在 `docs/core-cli.md`，架构设计放在 `docs/architecture.md`，插件指南放在 `docs/plugins/`。旧文档路径保留中英文迁移链接，避免重复维护正文。
+- 根目录 `readme.MD` 作为简短入口；架构按 Maven 模块拆分到 `docs/<模块路径>/architecture.md`，`docs/architecture.md` 仅作导航；使用说明放在对应源码模块根目录的 `README.md`，不放入 `src/main/java`。旧文档路径保留中英文迁移链接，避免重复维护正文。
 
 ### 技术栈
 
@@ -63,7 +63,7 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 - Provide Chinese and English versions of every document, with Chinese first and English second. Keep their content and structure consistent, and update both versions together.
 - Add same-page language navigation at the top: `[中文](#中文) | [English](#english)`, using `## 中文` and `## English` as the corresponding section headings.
-- Keep root `readme.MD` as a short entry point; put core usage in `docs/core-cli.md`, architecture in `docs/architecture.md`, and plugin guides under `docs/plugins/`. Keep bilingual links at former document paths instead of maintaining duplicate content.
+- Keep root `readme.MD` as a short entry point. Split architecture by Maven module into `docs/<module path>/architecture.md`, with `docs/architecture.md` serving only as an index. Put usage guides in each source module root as `README.md`, not under `src/main/java`. Keep bilingual links at former document paths instead of maintaining duplicate content.
 
 ### Technology stack
 

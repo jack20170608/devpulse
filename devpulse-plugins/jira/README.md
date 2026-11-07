@@ -1,786 +1,665 @@
-JiraCLI is an interactive command line tool for Atlassian Jira that will help you avoid using the Jira UI to some extent. This
-tool may not be able to do everything, but it has all the essential features required to improve your day-to-day workflow with Jira.
+# Jira 插件指南 / Jira plugin guide
 
-The tool started with the idea of making issue search and navigation as straightforward as possible. However, with the
-help of [outstanding supporters like you](#support-the-project), we evolved, and the tool now includes all necessary
-features like issue creation, cloning, linking, ticket transition, and much more.
+[中文](#中文) | [English](#english)
 
-> This tool is heavily inspired by the [GitHub CLI](https://github.com/cli/cli)
+## 中文
 
-## Supported platforms
-> [!NOTE]
-> Some features might work slightly differently in Jira Cloud versus on-premises installations due to the
-nature of the data. Yet, we've attempted to make the experience as similar as possible.
+[项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-plugins/jira/architecture.md)
 
-| Platform | <a href="#"><img alt="Linux" src="https://img.shields.io/badge/Linux-%E2%9C%93-dark--green?logo=linux&logoColor=white&style=flat-square" /></a><a href="#"><img alt="macOS" src="https://img.shields.io/badge/macOS-%E2%9C%93-dark--green?logo=apple&style=flat-square" /></a><a href="#"><img alt="FreeBSD" src="https://img.shields.io/badge/FreeBSD-%E2%9C%93-dark--green?logo=freebsd&style=flat-square" /></a><a href="#"><img alt="NetBSD" src="https://img.shields.io/badge/NetBSD-%E2%9C%93-dark--green?logo=netbsd&logoColor=white&style=flat-square" /></a><a href="#"><img alt="Windows" src="https://img.shields.io/badge/Windows-partial-yellow?logo=windows&style=flat-square" /></a> |
-| :------------- | :----------: |
-| **Jira**  | <a href="#"><img alt="Jira Cloud" src="https://img.shields.io/badge/Jira Cloud-%E2%9C%93-dark--green?logo=jira&style=flat-square" /></a><a href="#"><img alt="Jira Server" src="https://img.shields.io/badge/Jira Server-%E2%9C%93-dark--green?logo=jira&style=flat-square" /></a> |
+`devpulse-jira` 是 `devpulse-plugins` Maven 聚合模块下独立可运行的 `jira` 子模块与 Jira REST 客户端，支持 Jira Cloud（默认 REST v3）和 Data Center（默认 REST v2），可显式配置 API 版本。核心 `devpulse` 不加载或依赖它，也不需要 Bash 来执行 Jira JAR。根目录 `mvn clean package` 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`；`bash run-jira.sh` 仅构建该模块并启动。**未连接真实 Jira 实例验证**；先在测试项目中检查字段格式、权限与工作流。
 
-<sub><a href="./skills/jira-cli/SKILL.md">SKILL.md</a> ← for agents</sub>
+### 连接配置与认证
 
-JiraCLI works well with LLM-powered CLI tools like Claude Code, Codex, OpenCode, as well as shell-based automation.
+连接配置使用 UTF-8 HOCON，与 `issue create --file` 等命令的 issue 模板完全独立。读取优先级为：显式 `-c/--config` 指定的文件、**当前工作目录**的 `local_jira_config.conf`、用户 home 下 `.jira` 目录的 `local_jira_config.conf`。选择整份文件，不合并本地和全局配置；显式文件缺失或本地文件无效时直接报错，不跳过它改用全局配置。
 
-## Installation
-`jira-cli` is available as a downloadable packaged binary for Linux, macOS, and Windows from the [releases page](https://github.com/ankitpokhrel/jira-cli/releases).
-
-## Getting started
-
-#### Cloud server
-
-1. [Get a Jira API token](https://id.atlassian.com/manage-profile/security/api-tokens) and export it to your shell as
-   a `JIRA_API_TOKEN` variable. Add it to your shell configuration file, for instance, `$HOME/.bashrc`, so that the
-   variable is always available. Alternatively, you can also use `.netrc` file or `keychain` to set the token. Learn
-   more [here](https://github.com/ankitpokhrel/jira-cli/discussions/356).
-2. Run `jira init`, select installation type as `Cloud`, and provide required details to generate a config file required
-   for the tool.
-
-#### On-premises installation
-
-1. Export required environment variables:
-   - If you are using basic auth, export the `password` you use to login to Jira as a `JIRA_API_TOKEN` variable.
-   - If you are using personal access token (PAT), get the `token` from your Jira profile and export it as
-     a `JIRA_API_TOKEN` variable. In addition to this, set `JIRA_AUTH_TYPE` env to `bearer`.
-   - Add these ENVs to your shell configuration file, for instance, `$HOME/.bashrc`, so that they are always available.
-   - Alternatively, you can also use `.netrc` file or `keychain` to set the token. Learn
-     more [here](https://github.com/ankitpokhrel/jira-cli/discussions/356).
-2. Run `jira init`, select installation type as `Local`, and provide the required details to generate a config file required
-   for the tool.
-   - The most common auth type for an on-premises installation is `basic`. If you are using your Jira login credentials
-     (username and password), select the `basic` auth type.
-   - If you want to use `mtls` (client certificates), select auth type `mtls` and provide the CA Cert, client Key, and client cert.
-
-> [!IMPORTANT]
-> If your on-premises Jira installation is using a language other than `English`, then the issue/epic creation
-   may not work because the older version of Jira API doesn't return the untranslated name for `issuetypes`. In that case,
-   you will have to fill in `epic.name`, `epic.link` and `issue.types.*.handle` fields manually in the generated config
-   to get the expected behavior.
-
-See [FAQs](https://github.com/ankitpokhrel/jira-cli/discussions/categories/faqs) for frequently asked questions.
-
-#### Authentication types
-
-The tool supports `basic`, `bearer` (Personal Access Token), and `mtls` (Client Certificates) authentication types. Basic auth is used by
-default.
-
-* If you want to use PAT, you need to set `JIRA_AUTH_TYPE` as `bearer`.
-* If you want to use `mtls` run `jira init`. Select installation type `Local`, and then select authentication type as `mtls`.
-  * In case `JIRA_API_TOKEN` variable is set it will be used together with `mtls`.
-
-#### Shell completion
-Check `jira completion --help` for more info on setting up a Bash/Zsh shell completion.
-
-#### Multiple projects
-
-You can load a specific configuration file by using the `--config/-c` flag, or by setting the `JIRA_CONFIG_FILE` environment variable to specify the file's location.
-
-```sh
-$ JIRA_CONFIG_FILE=./local_jira_config.yaml jira issue list
-
-# Alternatively, use the `--config/-c` flag
-$ jira issue list -c ./local_jira_config.yaml
+```hocon
+url = "https://example.atlassian.net"
+mode = "cloud"                  # Data Center 使用 "dc"
+email = "user@example.com"       # Cloud 必填，Data Center 可省略
+project = "DEMO"                # create/list 的默认 project key
+# apiVersion = 3                # 可选：2 或 3；省略时 Cloud=3、Data Center=2
 ```
 
-## Usage
-The tool currently comes with an issue, epic, and sprint explorer. The flags are [POSIX-compliant](https://www.gnu.org/software/libc/manual/html_node/Argument-Syntax.html).
-You can combine available flags in any order to create a unique query. For example, the command below will give you high priority issues created this month
-with status `To Do` that are assigned to you and has the label `backend`.
-```sh
-jira issue list -yHigh -s"To Do" --created month -lbackend -a$(jira me)
-```
-
-### Navigation
-The lists are displayed in an interactive UI by default.
-- Use arrow keys or `j, k, h, l` characters to navigate through the list.
-- Use `g` and `G` to quickly navigate to the top and bottom respectively.
-- Use `CTRL + f` to scroll through a page downwards direction.
-- Use `CTRL + b` to scroll through a page in upwards direction.
-- Press `v` to view selected issue details.
-- Press `m` to transition the selected issue.
-- Press `CTRL + r` or `F5` to refresh the issues list.
-- Hit `ENTER` to open the selected issue in the browser.
-- Press `c` to copy issue URL to the system clipboard. This requires `xclip` / `xsel` on Linux.
-- Press `CTRL + k` to copy issue key to the system clipboard.
-- In an explorer view, press `w` or `TAB` to toggle focus between the sidebar and the contents screen.
-- Press `q` / `ESC` / `CTRL + c` to quit.
-- Press `?` to open the help window.
-
-### Resources
-- [FAQs](https://github.com/ankitpokhrel/jira-cli/discussions/categories/faqs)
-- [Introduction and Motivation](https://medium.com/@ankitpokhrel/introducing-jira-cli-the-missing-command-line-tool-for-atlassian-jira-fe44982cc1de)
-- [Getting Started with JiraCLI](https://www.mslinn.com/blog/2022/08/12/jiracli.html)
-
-## Commands
-### Issue
-Issues are displayed in an interactive table view by default. You can output the results in a plain view using the `--plain` flag.
-
-#### List
-The `list` command lets you search and navigate the issues. The issues are sorted by `created` field in descending order by default.
-
-```sh
-# List recent issues
-$ jira issue list
-
-# List issues created in last 7 days
-$ jira issue list --created -7d
-
-# List issues in status "To Do"
-$ jira issue list -s"To Do"
-
-# List recent issues in plain mode
-$ jira issue list --plain
-
-# List recent issues in raw JSON format
-$ jira issue list --raw
-
-# List recent issues in csv format
-$ jira issue list --csv
-
-# List issue in the same order as you see in the UI
-$ jira issue list --order-by rank --reverse
-
-# You can execute raw JQL within a given project context using `--jql/-q` option.
-# For instance, the following command will list issues in the current project whose
-# summary has a word cli.
-$ jira issue list -q "summary ~ cli"
-```
-
-Check some more examples/use-cases below.
-
-<details><summary>List issues that I am watching</summary>
-
-```sh
-jira issue list -w
-```
-</details>
-
-<details><summary>List issues assigned to me</summary>
-
-```sh
-jira issue list -a$(jira me)
-```
-</details>
-
-<details><summary>List issues assigned to a user and are reported by another user</summary>
-
-```sh
-jira issue list -a"User A" -r"User B"
-```
-</details>
-
-<details><summary>List issues assigned to me, is of high priority and is open</summary>
-
-```sh
-jira issue list -a$(jira me) -yHigh -sopen
-```
-</details>
-
-<details><summary>List issues assigned to no one and are created this week</summary>
-
-```sh
-jira issue list -ax --created week
-```
-</details>
-
-<details><summary>List issues with resolution won't do</summary>
-
-```sh
-jira issue list -R"Won't do"
-```
-</details>
-
-<details><summary>List issues whose status is not done and is created before 6 months and is assigned to someone</summary>
-
-```sh
-# Tilde (~) acts as a not operator
-jira issue list -s~Done --created-before -24w -a~x
-```
-</details>
-
-<details><summary>List issues created within an hour and updated in the last 30 minutes :stopwatch:</summary>
-
-```sh
-jira issue list --created -1h --updated -30m
-```
-</details>
-
-<details><summary>Give me issues that are of high priority, are in progress, were created this month, and have given labels :fire:</summary>
-
-```sh
-jira issue list -yHigh -s"In Progress" --created month -lbackend -l"high-prio"
-```
-</details>
-
-<details><summary>Wait, what was that ticket I opened earlier today? :tired_face:</summary>
-
- ```sh
- jira issue list --history
- ```
-</details>
-
-<details><summary>What was the first issue I ever reported on the current board? :thinking:</summary>
-
-```sh
-jira issue list -r$(jira me) --reverse
-```
-</details>
-
-<details><summary>What was the first bug I ever fixed in the current board? :beetle:</summary>
-
-```sh
-jira issue list -a$(jira me) -tBug -sDone -rFixed --reverse
-```
-</details>
-
-<details><summary>What issues did I report this week? :man_shrugging:</summary>
-
-```sh
-jira issue list -r$(jira me) --created week
-```
-</details>
-
-<details><summary>Am I watching any tickets in project XYZ? :monocle_face:</summary>
-
-```sh
-jira issue list -w -pXYZ
-```
-</details>
-
-#### Create
-The `create` command lets you create an issue.
-
-```sh
-# Create an issue using an interactive prompt
-$ jira issue create
-
-# Pass required parameters and use --no-input option to skip prompt
-$ jira issue create -tBug -s"New Bug" -yHigh -lbug -lurgent -b"Bug description" --fix-version v2.0 --no-input
-```
-
-To attach epic to an issue on creation, you can use `-P/--parent` field. We call it parent because the semantics of epic
-has been changed in `next-gen` project.
-
-```sh
-# Create an issue of type Story and attach it to epic with key EPIC-42
-$  jira issue create -tStory -s"Epic during creation" -PEPIC-42
-```
-
-![Create an issue](.github/assets/create.gif)
-
-You can use a `--custom` flag to set custom fields while creating the issue. See [this post](https://github.com/ankitpokhrel/jira-cli/discussions/346) for more details.
-
-The command supports both [GitHub-flavored](https://github.github.com/gfm/)
-and [Jira-flavored](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all) Markdown for writing
-description. You can load pre-defined templates using `--template` flag.
-
-```sh
-# Load description from template file
-$ jira issue create --template /path/to/template.tmpl
-
-# Get description from standard input
-$ jira issue create --template -
-
-# Or, use pipe to read input directly from standard input
-$ echo "Description from stdin" | jira issue create -s"Summary" -tTask
-```
-
-![Markdown render preview](.github/assets/markdown.jpg)
-> The preview above shows a Markdown template passed in JiraCLI and how it is rendered in the Jira UI.
-
-#### Edit
-The `edit` command lets you edit an issue.
-
-```sh
-$ jira issue edit ISSUE-1
-
-# Edit issue in the configured project
-$ jira issue edit ISSUE-1 -s"New Bug" -yHigh -lbug -lurgent -CBackend -b"Bug description"
-
-# Use --no-input option to disable interactive prompt
-$ jira issue edit ISSUE-1 -s"New updated summary" --no-input
-
-# Use minus (-) to remove label, component or fixVersion
-# For instance, to edit issue to
-#   - remove label p2, component FE, fixVersion v1.0
-#   - add label p1, component BE, fixVersion v2.0
-$ jira issue edit ISSUE-1 --label -p2 --label p1 --component -FE --component BE --fix-version -v1.0 --fix-version v2.0
-```
-
-#### Assign
-The `assign` command lets you assign a user to an issue.
-
-```sh
-# Assign user to an issue using an interactive prompt
-$ jira issue assign
-
-# Pass required parameters to skip prompt
-$ jira issue assign ISSUE-1 "Jon Doe"
-
-# Assign to self
-$ jira issue assign ISSUE-1 $(jira me)
-
-# Will prompt for selection if keyword suffix returns multiple entries
-$ jira issue assign ISSUE-1 suffix
-
-# Assign to default assignee
-$ jira issue assign ISSUE-1 default
-
-# Unassign
-$ jira issue assign ISSUE-1 x
-```
-
-![Assign issue to a user](.github/assets/assign.gif)
-
-#### Move/Transition
-The `move` command lets you transition an issue from one state to another.
-
-```sh
-# Move an issue using an interactive prompt
-$ jira issue move
-
-# Pass required parameters to skip prompt
-$ jira issue move ISSUE-1 "In Progress"
-```
-
-![Move an issue](.github/assets/move.gif)
-
-If your workflow allows to add comment, resolution or assignee while moving an issue, you can do so as shown below.
-See [this documentation](https://confluence.atlassian.com/jirakb/how-to-add-a-comment-during-a-transition-779160682.html) on how to setup your workflow to allow these fields.
-
-```sh
-# Move an issue and add comment
-$ jira issue move ISSUE-1 "In Progress" --comment "Started working on it"
-
-# Set resolution to fixed and assign to self while moving the issue
-$ jira issue move ISSUE-1 Done -RFixed -a$(jira me)
-```
-
-To transition the selected issue from the TUI, press `m`.
-
-#### View
-The `view` command lets you see issue details in a terminal. Atlassian document is roughly converted to Markdown
-and is nicely displayed in the terminal.
-
-The command uses `less` as a pager by default. To set your own pager, see https://github.com/ankitpokhrel/jira-cli/discussions/569.
-
-```sh
-$ jira issue view ISSUE-1
-```
-
-![View an issue](.github/assets/view.gif)
-
-The view screen will display linked issues and the latest comment after the description. Note that the displayed comment may
-not be the latest one if you for some reason have more than 5k comments in a ticket.
-
-```sh
-# Show 5 recent comments when viewing the issue
-$ jira issue view ISSUE-1 --comments 5
-```
-
-#### Link
-The `link` command lets you link two issues.
-
-```sh
-# Link an issue using an interactive prompt
-$ jira issue link
-
-# Pass required parameters to skip prompt
-$ jira issue link ISSUE-1 ISSUE-2 Blocks
-```
-
-##### Remote
-The `remote` command lets you add a remote web link to an issue.
-
-```sh
-# Adds a remote web link using an interactive prompt
-$ jira issue link remote
-
-# Pass required parameters to skip prompt
-$ jira issue link remote ISSUE-1 https://example.com "Example text"
-```
-
-#### Unlink
-The `unlink` command lets you unlink two linked issues.
-
-```sh
-# Unlink issues using interactive prompt
-$ jira issue unlink
-
-# Pass required parameters to skip prompt
-$ jira issue unlink ISSUE-1 ISSUE-2
-```
-
-#### Clone
-The `clone` command lets you clone an issue. You can update fields like summary, priority, assignee, labels, and
-components when cloning the issue. The command also allows you to replace a part of the string (case-sensitive)
-in summary and description using `--replace/-H` option.
-
-```sh
-# Clone an issue
-$ jira issue clone ISSUE-1
-
-# Clone issue and modify the summary, priority and assignee
-$ jira issue clone ISSUE-1 -s"Modified summary" -yHigh -a$(jira me)
-
-# Clone issue and replace text from summary and description
-$ jira issue clone ISSUE-1 -H"find me:replace with me"
-```
-
-#### Delete
-The `delete` command lets you delete an issue.
-
-```sh
-# Delete an issue using an interactive prompt
-$ jira issue delete
-
-# Pass required parameters to skip prompt
-$ jira issue delete ISSUE-1
-
-# Delete task along with all of its subtasks
-$ jira issue delete ISSUE-1 --cascade
-```
-
-#### Comment
-The `comment` command provides a list of sub-commands to manage issue comments.
-
-##### Add
-The `add` command lets you add a comment to an issue. The command supports both [GitHub-flavored](https://github.github.com/gfm/)
-and [Jira-flavored](https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all) Markdown for writing
-comment. You can load pre-defined templates using `--template` flag.
-
-```sh
-# Add a comment using an interactive prompt
-$ jira issue comment add
-
-# Pass required parameters to skip prompt
-$ jira issue comment add ISSUE-1 "My comment body"
-
-# Same as above but as an internal comment
-$ jira issue comment add ISSUE-1 "My comment body" --internal
-
-# Load comment from template file
-$ jira issue comment add ISSUE-1 --template /path/to/template.tmpl
-
-# Get comment from standard input
-$ jira issue comment add ISSUE-1 --template -
-
-# Or, use pipe to read input directly from standard input
-$ echo "Comment from stdin" | jira issue comment add ISSUE-1
-```
-
-> [!NOTE]
-> For the comment body, the positional argument always takes precedence over the `--template` flag if both of them are passed. In the
-example below, the body will be picked from positional argument instead of the template.
-```sh
-jira issue comment add ISSUE-42 "comment body positional" --template - <<'EOF'
-comment body template
-EOF
-```
-
-#### Worklog
-The `worklog` command provides a list of sub-commands to manage issue worklog (timelog).
-
-##### Add
-The `add` command lets you add a worklog to an issue. The command supports Markdown for worklog comments.
-
-```sh
-# Add a worklog using an interactive prompt
-$ jira issue worklog add
-
-# Pass required parameters and use --no-input to skip prompt
-$ jira issue worklog add ISSUE-1 "2d 3h 30m" --no-input
-
-# You can add a comment using --comment flag when adding a worklog
-$ jira issue worklog add ISSUE-1 "10m" --comment "This is a comment" --no-input
-```
-
-### Epic
-Epics are displayed in an explorer view by default. You can output the results in a table view using the `--table` flag.
-When viewing epic issues, you can use all filters available for the issue command.
-
-See [usage](#navigation) to learn more about UI interaction.
-
-#### List
-You can use all flags supported by `issue list` command here except for the issue type.
-
-```sh
-# List epics
-$ jira epic list
-
-# List epics in a table view
-$ jira epic list --table
-
-# List epics reported by me and are open
-$ jira epic list -r$(jira me) -sOpen
-
-# List issues in an epic
-$ jira epic list KEY-1
-
-# List all issue in an epic KEY-1 that is unassigned and has a high priority
-$ jira epic list KEY-1 -ax -yHigh
-
-# List high priority epics
-$ jira epic list KEY-1 -yHigh
-
-# List epic issues ordered by rank in ascending order
-$ jira epic list KEY-1 --order-by rank --reverse
-```
-
-#### Create
-Creating an epic is the same as creating the issue except you also need to provide an epic name.
-
-```sh
-# Create an issue using an interactive prompt
-$ jira epic create
-
-# Pass required parameters to skip prompt or use --no-input flag to skip prompt for non-mandatory params
-$ jira epic create -n"Epic epic" -s"Everything" -yHigh -lbug -lurgent -b"Epic description"
-```
-
-#### Add
-The `add` command allows you to add issues to the epic. You can add up to 50 issues to the epic at once.
-
-```sh
-# Add issues to the epic using an interactive prompt
-$ jira epic add
-
-# Pass required parameters to skip prompt
-$ jira epic add EPIC-KEY ISSUE-1 ISSUE-2
-```
-
-#### Remove
-The `remove` command allows you to remove issues from the epic. You can remove up to 50 issues from the epic at once.
-
-```sh
-# Remove issues to the epic using an interactive prompt
-$ jira epic remove
-
-# Pass required parameters to skip prompt
-$ jira epic remove ISSUE-1 ISSUE-2
-```
-
-### Sprint
-Sprints are displayed in an explorer view by default. You can output the results in a table view using the `--table` flag.
-When viewing sprint issues, you can use all filters available for the issue command. The tool only shows 25 recent sprints.
-
-See [usage](#navigation) to learn more about UI interaction.
-
-#### List
-You can use all flags supported by `issue list` command to filter issues in the sprint.
-
-```sh
-# List sprints in an explorer view
-$ jira sprint list
-
-# List sprints in a table view
-$ jira sprint list --table
-
-# List issues in the current active sprint
-$ jira sprint list --current
-
-# List issues in the current active sprint that are assigned to me
-$ jira sprint list --current -a$(jira me)
-
-# List issues in the previous sprint
-$ jira sprint list --prev
-
-# List issues in next planned sprint
-$ jira sprint list --next
-
-# List future and active sprints
-$ jira sprint list --state future,active
-
-# List issues in a particular sprint. You can use all flags supported by issue list command here.
-# To get sprint id use `jira sprint list` or `jira sprint list --table`
-$ jira sprint list SPRINT_ID
-
-# List high priority issues in a sprint are assigned to me
-$ jira sprint list SPRINT_ID -yHigh -a$(jira me)
-
-# List sprint issues ordered by rank in ascending order
-$ jira sprint list SPRINT_ID --order-by rank --reverse
-```
-
-#### Add
-The `add` command allows you to add issues to the sprint. You can add up to 50 issues to the sprint at once.
-
-```sh
-# Add issues to the sprint using interactive prompt
-$ jira sprint add
-
-# Pass required parameters to skip prompt
-$ jira sprint add SPRINT_ID ISSUE-1 ISSUE-2
-```
-
-### Releases
-
-Interact with releases (project versions).  
-Ensure the [feature is enabled](https://support.atlassian.com/jira-software-cloud/docs/enable-releases-and-versions/) on your instance.
-
-#### List
-
-```sh
-# List releases for default project
-$ jira release list
-
-# List releases for specific project
-$ jira release list --project 1000
-$ jira release list --project KEY
-```
-
-### Other commands
-
-<details><summary>Navigate to the project</summary>
-
-```sh
-jira open
-```
-</details>
-
-<details><summary>Navigate to the issue</summary>
-
-```sh
-jira open KEY-1
-```
-</details>
-
-<details><summary>List all projects you have access to</summary>
-
-```sh
-jira project list
-```
-</details>
-
-<details><summary>List all boards in a project</summary>
-
-```sh
-jira board list
-```
-</details>
-
-## Scripts
-Often times, you may want to use the output of the command to do something cool. However, the default interactive UI might not allow you to do that.
-The tool comes with the `--plain` flag that displays results in a simple layout that can then be manipulated from the shell script.
-
-Some example scripts are listed below.
-
-<details><summary>Tickets created per day this month</summary>
+仅认证令牌从环境变量读取，不在连接配置或 issue 模板中保存：
 
 ```bash
-#!/usr/bin/env bash
-
-tickets=$(jira issue list --created month --plain --columns created --no-headers | awk '{print $2}' | awk -F'-' '{print $3}' | sort -n | uniq -c)
-
-echo "${tickets}" | while IFS=$'\t' read -r line; do
-  day=$(echo "${line}" | awk '{print $2}')
-  count=$(echo "${line}" | awk '{print $1}')
-
-  printf "Day #%s: %s\n" "${day}" "${count}"
-done
-
-# Output
-Day #01: 19
-Day #02: 10
-Day #03: 21
-...
+export JIRA_API_TOKEN='your-api-token'          # Cloud API Token / Data Center PAT
 ```
-</details>
 
-<details><summary>Number of tickets per sprint</summary>
+使用全局 `-c/--config` 指定其他连接配置文件；该选项可以放在子命令前或后，相对路径仍以当前工作目录为基准：
 
 ```bash
-#!/usr/bin/env bash
-
-sprints=$(jira sprint list --table --plain --columns id,name --no-headers)
-
-echo "${sprints}" | while IFS=$'\t' read -r id name; do
-  count=$(jira sprint list "${id}" --plain --no-headers 2>/dev/null | wc -l)
-
-  printf "%10s: %3d\n" "${name}" $((count))
-done
-
-# Output
-Sprint 3:   55
-Sprint 2:   40
-Sprint 1:   30
-...
+bash run-jira.sh --config connection.conf issue list -p DEMO
+bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
-</details>
 
-<details><summary>Number of unique assignee per sprint</summary>
+`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。仅 `JIRA_API_TOKEN` 从环境变量读取，旧的 `DEVPULSE_JIRA_*` 环境变量不再使用。连接配置仅接受 `url`、`mode`、`email`、`apiVersion`、`project`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本、连接初始化和离线 issue 模板生成不需要已有连接配置或 token。旧 `.jira.conf` 不再自动读取，可改名为 `local_jira_config.conf`，或通过 `--config` 显式指定。
+
+`project` 是默认项目 key，初始化向导要求设置；手写的旧配置可省略它以保留原行为。`issue create` 的项目优先级是显式 `-p/--project`、issue 模板中的 `fields.project`、连接配置中的 `project`；`issue list` 优先使用显式 `-p`，否则使用默认项目。完整 `--jql` 不会自动附加默认项目条件。
+
+`apiVersion` 为可选的数值 `2` 或 `3`；未配置时保留原规则：`mode = "cloud"` 使用 3，`mode = "dc"` 使用 2。显式值覆盖默认选择，请求路径使用 `/rest/api/{apiVersion}/`，描述与评论按 API v2 文本或 API v3 ADF 格式处理；认证、用户标识和搜索分页方式仍由 `mode` 决定。指定版本并不保证 Jira 部署提供相应接口，例如 Data Center 通常不提供 v3，需确认服务器实际支持。
+
+使用 HTTPS；仅本机测试允许 HTTP。请勿将包含凭据的 shell 历史、环境转储、导出的 Jira 数据或附件提交到版本库。访问失败只显示 HTTP 状态码，不输出 Jira 的错误正文。
+
+### 初始化连接：`init`
 
 ```bash
-#!/usr/bin/env bash
+# 分步配置，保存到当前工作目录的 local_jira_config.conf
+bash run-jira.sh init
 
-sprints=$(jira sprint list --table --plain --columns id,name --no-headers)
+# 分步配置，保存到用户 home 下 .jira/local_jira_config.conf
+bash run-jira.sh init -g
 
-echo "${sprints}" | while IFS=$'\t' read -r id name; do
-  count=$(jira sprint list "${id}" --plain --columns assignee --no-headers 2>/dev/null | awk '{print $2}' | awk NF | sort -n | uniq | wc -l)
-
-  printf "%10s: %3d\n" "${name}" $((count))
-done
-
-# Output
-Sprint 3:   5
-Sprint 2:   4
-Sprint 1:   3
+# 脚本方式；省略 API 版本时仍按 mode 默认选择
+bash run-jira.sh init --no-input --url https://example.atlassian.net \
+  --mode cloud --email user@example.com --project DEMO
+bash run-jira.sh init -g --no-input --url https://jira.example.com \
+  --mode dc --api-version 2 --project DEMO
 ```
-</details>
 
-## Known Issues
+向导依次询问 URL、mode（默认 `cloud`）、可选 API 版本（按 Enter 使用 mode 默认值）、Cloud 邮箱和默认 project key；已通过参数提供的字段不再询问，输入无效会提示并重试。API 版本选择自动时不会写入 `apiVersion`，以后仍随 mode 推导。向导不请求 Jira、不读取或写入 token；在所有输入完成前取消，不会创建配置文件。没有终端时使用参数提供必填值；`--no-input` 显式禁止提示。
 
-1. Not all [Atlassian nodes](https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/#nodes) are
-   translated properly at the moment which can cause formatting issues sometimes.
+`-g/--global` 自动创建 home 下的 `.jira` 目录；不带 `-g` 时默认在当前目录创建。也可用全局 `--config FILE` 指定初始化输出文件，但不能与 `-g` 同时使用。已有目标文件一律拒绝覆盖。原 `init --file ISSUE.conf` 已迁移到 `issue template --file ISSUE.conf`，仍生成同名 `.conf` 和 `.md` issue 模板。
 
-## Feature requests
+### 命令
 
-Please [open a discussion](https://github.com/ankitpokhrel/jira-cli/discussions/categories/ideas) in `ideas` category for the proposed feature.
+```bash
+bash run-jira.sh init
+bash run-jira.sh issue template --file issue.conf
+# 编辑 issue.conf 中的 Jira REST fields 和相邻的 issue.md
+bash run-jira.sh issue create --file issue.conf
+bash run-jira.sh issue list -p DEMO
+bash run-jira.sh issue edit DEMO-1 --summary "Updated summary" --no-input
+bash run-jira.sh issue view DEMO-1
+bash run-jira.sh export DEMO-1 --file exported.conf
+# 编辑 exported.conf 的 fields 和相邻的 exported.md
+bash run-jira.sh update --file exported.conf
+bash run-jira.sh transitions DEMO-1
+bash run-jira.sh transition DEMO-1 11
+bash run-jira.sh comment DEMO-1 --file comment.md
+bash run-jira.sh comment-export DEMO-1 123 --file existing-comment.md
+# 编辑 existing-comment.md 后上传
+bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
+bash run-jira.sh attach DEMO-1 --file diagram.png
+```
 
-##### How these requests are usually prioritized?
+`init`、`issue template` 和 `export` 只创建新文件，不覆盖已有文件。创建时需要项目、类型和标题，项目可由连接配置提供；使用文件模式时描述取同名 `.md`。导出仅保留 Jira `/editmeta` 返回的可编辑字段及描述，其他字段不会被回写；自定义字段保持原始 JSON/HOCON 结构，需按该 Jira 实例的 REST 字段格式修改。`update` 比较导出时的字段，只发送修改过的字段；修改描述时将 Markdown 转成 Jira 内容格式。更新成功后重新导出再编辑。
 
-- The feature that is straightforward to implement, doesn't require too much mental power, and can be done even I am lazy will be picked first.
-- If the feature is something that I am missing in my day-to-day work, it might be done first.
-- Rest of the features will be picked based on the [number of votes](https://github.com/ankitpokhrel/jira-cli/discussions/categories/ideas) on the particular feature.
+`update` 和 `comment-update` 上传前比较导出时和当前 Jira 的 `updated` 值，发现变化默认拒绝；`--force` 显式跳过检查。评论导出创建 `.md` 与同名 `.conf` 元数据，成功更新后需要重新导出。**这是上传前检查，不是原子并发锁**：检查与更新之间若发生并发写入仍可能冲突。顶层 `transition` 使用 `transitions` 查到的**转换 ID**；`issue move` 还支持转换名称或目标状态名称。新评论、状态转换和附件不使用导出文件的并发检查。
 
-## Development
-1. Clone the repo.
-   ```sh
-   git clone git@github.com:ankitpokhrel/jira-cli.git
-   ```
+问题及评论导出会记录实际 `apiVersion`；更新时必须与当前配置一致，切换版本后需要重新导出，`--force` 不跳过此检查。没有该字段的旧导出按原规则解释为 Cloud v3 或 Data Center v2。
 
-2. Optional: If you want to run a Jira instance locally, you can use the following make recipe.
-   The trial license key can be generated from the "Licenses" section in the [Atlassian admin](https://my.atlassian.com).
-   ```sh
-   make jira.server
-   ```
+### 创建问题：`issue create`
 
-3. Make changes, build the binary, and test your changes.
-   ```sh
-   make deps install
-   ```
+借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。`issue` 分组还提供 `edit`、`assign`、`move`（别名 `transition`）、`list`、`view`、`link`、`unlink`、`clone`、`delete`、`comment add`、`worklog add` 和 `template`；原有顶层操作保持兼容。参考工具的全屏 TUI、导航快捷键及分页器不在本实现范围内。
 
-4. Run CI steps locally before submitting a PR.
-   ```sh
-   make ci
-   ```
+```bash
+# 在终端交互输入项目 key、问题类型、标题与可选的单行描述
+bash run-jira.sh issue create
 
-## Support the project
-Your suggestions and feedbacks are highly appreciated. Please feel free
-to [start a discussion](https://github.com/ankitpokhrel/jira-cli/discussions)
-or [create an issue](https://github.com/ankitpokhrel/jira-cli/issues/new) to share your experience with the tool or to
-discuss a feature/issue.
+# 非交互创建；类型、优先级等名称须匹配 Jira 实例的实际配置
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Bug -s "Fix login timeout" -y High \
+  -l backend -l urgent -C Backend --fix-version v2.0 \
+  --affects-version v1.0 -b "Login times out after 30 seconds."
 
-If you think this tool is useful, saves you a lot of work, and lets you sleep much better, then consider supporting the
-project by any of the following means:
+# 从 UTF-8 文件或标准输入读取多行描述
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Task -s "Document deployment" --template description.md
+printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
+  -p DEMO -t Task -s "Document deployment" --template -
 
-- [Star the repo](https://github.com/ankitpokhrel/jira-cli/stargazers).
-- Spread the word by sharing the project on social media or with friends.
-- [Report bugs](https://github.com/ankitpokhrel/jira-cli/issues/new/choose)
-  or [propose solutions](https://github.com/ankitpokhrel/jira-cli/issues).
-- [Donate a small amount](https://opencollective.com/jira-cli#backers).
+# 父任务、自指派与自定义字段（按实例要求使用原始 REST 字段 ID 和值）
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Sub-task -s "Add timeout handling" -P DEMO-1 -a me \
+  --custom 'customfield_10001=5' \
+  --custom 'customfield_10002={value="Backend"}'
 
-<div>
-   <br/>
-   <p align="center">
-      <sub>Made with 💚</sub>
-   </p>
-</div>
+# 保留文件模式；显式参数覆盖文件中的对应字段
+bash run-jira.sh issue create --file issue.conf -s "Updated summary"
+```
+
+必填项为项目（`-p/--project`）、类型（`-t/--type`）和标题（`-s/--summary`）；也可由 `--file` 的 `fields` 提供，项目和类型支持原始 REST `id` 对象。未显式提供项目且模板中没有该字段时使用连接配置的默认项目。终端中默认补问仍缺少的必填项；未指定描述来源时，再询问可选描述。`--no-input` 禁止所有提示；无终端时也不会等待交互，必填项缺失则在请求 Jira 前报错。创建会直接提交，不额外询问确认；脚本建议始终指定 `--no-input`。
+
+`-y/--priority` 设置优先级名称；`-l/--label`、`-C/--component`、`--fix-version` 和 `--affects-version` 可重复，显式提供时**替换**模板中的整个对应列表，不按逗号拆分。`-P/--parent` 设置父问题 key，是否可用由 Jira 的项目类型和层级决定。`-a/--assignee` 在 Cloud 使用账户 `accountId`，在 Data Center 使用用户名；特殊值 `me` 查询当前用户，`x` 取消指派，`default` 使用项目默认经办人。不按显示名模糊查找用户。
+
+描述优先级为 `-b/--body` 或 `--template`、`--file` 同名 `.md`、管道输入或交互输入；`--body` 与 `--template` 互斥。`--template -` 显式读取标准输入直至结束；没有其他描述来源且无终端时也会读取标准输入，支持 `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`。标准输入为空时不发送 `description` 字段；使用 `--file` 且未覆盖描述来源时仍要求相邻 `.md`。`fields.description` 不可用于传入描述。
+
+`--custom customfield_ID=HOCON_VALUE` 可重复，支持字符串、数字、布尔值、`null`、对象和数组；字符串含空格或特殊字符时应按 HOCON 规则加双引号，并使用 shell 引号保护整个参数。只接受原始 `customfield_数字` 标识，不解析显示名；显式值覆盖文件中同名字段。更复杂的字段配置仍建议使用 `--file`。本地校验必填项和输入格式，Jira 最终校验创建权限、字段可用性及额外必填字段；当前不自动发现创建元数据，也不提供编辑器或交互式用户/字段选择。描述转换仍受下面的 Markdown 边界限制。
+
+### 编辑问题：`issue edit`
+
+```bash
+# 无编辑参数时，在终端交互输入标题、优先级、经办人和单行描述
+# 每项按 Enter 保留原值；中断或输入结束不会提交
+bash run-jira.sh issue edit DEMO-1
+
+# 仅修改指定字段；传入编辑参数后不再补问其他字段
+bash run-jira.sh issue edit DEMO-1 --no-input \
+  -s "Fix intermittent login timeout" -y High -a me
+
+# 列表字段采用增删语义，不替换整个现有列表
+bash run-jira.sh issue edit DEMO-1 --no-input \
+  -l backend --label=-urgent -C Backend --component=-Frontend \
+  --fix-version v2.0 --fix-version=-v1.0 \
+  --affects-version v1.1 --affects-version=-v1.0
+
+# 从 UTF-8 文件或标准输入替换描述
+bash run-jira.sh issue edit DEMO-1 --no-input --template description.md
+printf 'Updated description.\n' | bash run-jira.sh issue edit DEMO-1 \
+  --no-input --template -
+
+# 取消指派、自定义字段、类型与父任务
+bash run-jira.sh issue edit DEMO-1 --no-input -a x \
+  --custom 'customfield_10001=8' \
+  --custom 'customfield_10002=null'
+bash run-jira.sh issue edit DEMO-1 --no-input -t Sub-task -P DEMO-2
+
+# 复用已有的导出/编辑/更新流程；KEY 必须与导出文件一致
+bash run-jira.sh export DEMO-1 --file exported.conf
+# 编辑 exported.conf 和相邻的 exported.md
+bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
+```
+
+`edit` 由独立的 `JiraIssueEditCommand` 实现，问题 key 或 ID 为必填位置参数；使用导出文件时必须与文件中的 `key` 完全一致。直接编辑支持标题（`-s`）、类型（`-t`）、优先级（`-y`）、经办人（`-a`）、父任务（`-P`）、描述以及原始 `customfield_数字` 自定义字段；自定义值的 HOCON 解析规则与创建相同。经办人使用 Cloud `accountId` 或 Data Center 用户名，支持 `me` 自指派和 `x` 取消指派，不支持 `default` 或按显示名查找。类型和父任务变更受 Jira 实例的编辑权限与层级规则限制；此命令不负责跨项目移动或状态流转。
+
+标签（`-l/--label`）、组件（`-C/--component`）、修复版本（`--fix-version`）、影响版本（`--affects-version`）均可重复：普通值表示新增，前缀 `-` 表示移除，建议用 `--label=-old` 这类等号写法避免与选项混淆。不按逗号拆分；重复的同向操作去重，同一值同时新增和移除会在请求 Jira 前报错。增删通过 Jira `update` 操作提交，不先读取整个列表再覆盖。未指定的字段保持不变；若需清空或替换整个列表，使用导出文件模式明确编辑对应数组。
+
+`-b/--body` 和 `--template` 互斥；`--template -` 显式读取标准输入直至结束。空描述文本或空描述文件会清空远端描述，未提供描述来源则不修改；交互模式中的空输入仅表示保留，不能用于清空。没有编辑参数时才交互询问标题、优先级、经办人与单行描述；按 Enter 保留，若全部保留则不提交。`--no-input` 或没有终端时，必须提供编辑参数或 `--file`。指定编辑参数会直接提交，不额外询问确认。
+
+直接编辑先读取当前问题，仅发送显式变更，跳过可识别的未变化字段；写入前通过 `/editmeta` 检查字段可编辑性及所需的 `set`、`add`、`remove` 操作，并再次比较问题的 `updated` 值，发现并发变化则拒绝提交。`--force` 只跳过更新时间检查，不绕过 Jira 字段权限。**更新时间检查不是原子并发锁**；检查与实际写入之间仍可能出现竞争。描述转换仍受下面的 Markdown 边界限制。
+
+`--file` 仅接受已有 `export` 生成的文件，复用顶层 `update` 的字段差异、模式及导出时更新时间检查；不与任何字段编辑参数混用。成功更新后需要重新导出。顶层 `update` 保持兼容，不新增顶层 `edit`。
+
+### 指派用户：`issue assign`
+
+```bash
+# 交互输入问题 key 和用户；多人匹配时按编号选择
+bash run-jira.sh issue assign
+# 仅补问用户
+bash run-jira.sh issue assign DEMO-1
+# 参数齐全且用户唯一时直接提交
+bash run-jira.sh issue assign DEMO-1 "Jon Doe"
+# 取消指派或指派给自己
+bash run-jira.sh issue assign DEMO-1 x
+bash run-jira.sh issue assign DEMO-1 me
+```
+
+普通用户通过当前问题的 `/user/assignable/search` 查询，支持显示名和 Data Center 用户名；Cloud 使用 `query`，Data Center 使用 `username`，写入时分别使用 `accountId` 和 `name`。优先采用名称或标识完全匹配的结果，否则要求搜索结果唯一。多人匹配时，有终端且未指定 `--no-input` 则提供编号选择；无终端或禁止交互时直接报错，不偷偷选择第一人。单次查询最多 50 人，达到上限则要求缩小搜索范围，避免根据截断结果误指派。
+
+`--no-input` 显式禁止交互，必须提供 KEY 和 USER；无终端且缺少参数时同样在请求 Jira 前报错。`me` 查询当前用户，`x` 通过空用户标识取消指派，均不搜索用户。命令使用专用 `PUT /issue/{key}/assignee`，不改动其他字段，也不使用导出文件的并发检查；Jira 最终校验指派权限及是否允许未指派。输入结束或选择前中断不会提交。
+
+### 状态流转：`issue move`
+
+```bash
+# 交互输入问题 key，并从当前可用转换中按编号选择
+bash run-jira.sh issue move
+# 指定 key 时仅选择转换；参数齐全且唯一匹配时直接提交
+bash run-jira.sh issue move DEMO-1
+bash run-jira.sh issue move DEMO-1 "In Progress" --no-input
+# 转换名称或转换 ID；issue transition 是同一命令的别名
+bash run-jira.sh issue transition DEMO-1 11 --no-input
+# 在同一次转换请求中添加评论、设置解决结果和经办人
+bash run-jira.sh issue move DEMO-1 Done -R Fixed -a me \
+  --comment "**Completed**" --no-input
+bash run-jira.sh issue move DEMO-1 Done --comment "*Completed*" \
+  --body-format wiki --no-input
+```
+
+此处的 move 表示工作流状态转换，**不是跨项目迁移**。命令先读取 `/issue/{key}/transitions?expand=transitions.fields`，按转换 ID、转换名称、目标状态名称的优先级精确匹配；名称不区分大小写，不做模糊匹配。找不到可用转换时拒绝提交；同一优先级有多个匹配时，终端交互允许按编号选择，`--no-input` 或无终端时必须改用唯一的转换 ID。菜单显示转换名称、ID 和目标状态，不会默认选择第一项。缺少参数且无法交互时，在请求 Jira 前报错；输入结束或选择前中断不会提交。
+
+`--comment` 使用 Markdown；v2 转成 Wiki，v3 转成 ADF，转换边界与正文相同。原生 Wiki 评论需显式添加 `--body-format wiki`，仅适用于 v2。`-R/--resolution` 依据转换元数据中的允许值匹配解决结果名称或 ID；没有允许值列表时按名称交给 Jira 校验。`-a/--assignee` 接受 Cloud `accountId` 或 Data Center 用户名，支持 `me` 自指派和 `x` 取消指派，不支持 `default` 或按显示名搜索。
+
+附带字段必须由所选转换的元数据公开，并支持对应的 `set` 或 `add` 操作，否则本地拒绝。解决结果、经办人和评论通过同一次 `POST /issue/{key}/transitions` 提交，不先单独修改字段或新增评论，避免转换失败后留下这些独立写入。其他工作流必填字段、权限及最终可用性由 Jira 校验；当前不自动补问额外必填字段，也不提供状态转换的导出时间并发检查。原有顶层 `transitions KEY` 和 `transition KEY ID` 保持兼容。
+
+### 查询问题：`issue list`
+
+```bash
+# 默认查询配置的项目；无默认项目且无筛选时查询最近 30 天创建的问题
+# 每次最多返回一页
+bash run-jira.sh issue list
+bash run-jira.sh issue list -p DEMO -s "In Progress" -a me
+bash run-jira.sh issue list -p DEMO -t Bug -y High -l backend -l urgent
+bash run-jira.sh issue list -p DEMO -s '~Done' -a x --created -7d
+bash run-jira.sh issue list -p DEMO -r me --updated -1d \
+  --order-by updated --reverse --limit 20
+
+# 完整 JQL（包括排序）；不能与筛选和排序参数混用
+bash run-jira.sh issue list --jql \
+  'project = DEMO AND (status = Open OR priority = High) ORDER BY updated DESC'
+
+# JSON 保留 Jira 的分页信息；纯文本模式输出 TSV，适合脚本
+bash run-jira.sh issue list -p DEMO --json
+bash run-jira.sh issue list -p DEMO --plain --no-headers
+
+# 将当前页导出为 CSV；也可使用已安装的 jira issue list --csv
+bash run-jira.sh issue list -p DEMO --csv > issues.csv
+bash run-jira.sh issue list -p DEMO --csv --no-headers
+
+# 下一页必须复用相同的查询、排序及 --limit
+# Cloud：使用上一页 nextPageToken
+bash run-jira.sh issue list -p DEMO --limit 20 --next-page-token 'TOKEN'
+# Data Center：使用上一页提示的偏移量
+bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
+```
+
+`list` 由独立的 `JiraIssueListCommand` 实现。支持项目、状态、类型、优先级、经办人、报告人、标签，以及创建/更新时间下界筛选。多个条件以 `AND` 组合，重复 `-l/--label` 表示必须具备所有指定标签；状态、类型、优先级可用 `~` 前缀排除。经办人使用 Cloud `accountId` 或 Data Center 用户名；`me` 表示当前用户，`x` 表示未指派，`~x` 表示已指派；报告人也支持 `me`。字段名称和日期解释以 Jira 实例为准，普通筛选值会转义为 JQL 字符串，不能通过筛选值注入额外查询。
+
+默认按 `created DESC` 排序；`--order-by` 支持 `created`、`updated`、`priority`、`key`、`rank`、`summary`、`status`、`assignee`、`issuetype`，`--reverse` 改为升序。`--created` 与 `--updated` 接受 Jira 日期、相对时间或 `day`/`today`、`week`、`month`、`year`，表示大于等于该时间或当前周期起点；`--created-before` 与 `--updated-before` 指定不包含边界的上限。`-w/--watching` 查询自己关注的问题，`--history` 使用 Jira 的最近浏览记录，`-R/--resolution` 筛选解决结果并支持 `~` 排除。**仅在没有默认项目、任何筛选及 JQL 时**默认添加 `created >= "-30d"`，以满足 Cloud 搜索必须具有查询限制的要求。`-q/--jql` 是完整查询，不能与显式筛选、`--order-by` 或 `--reverse` 混用，也不注入默认项目；Epic/Sprint 的范围限制仍会合并到自定义 JQL，保留其排序。
+
+默认表格列为问题 key、类型、状态、优先级、经办人、标题。`--columns key,created,reporter` 可按顺序选择列，还支持 `updated`、`resolution`、`labels`、`components`、`fixVersions`、`parent`；仅请求显示所需字段。缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出 TSV；`--csv` 输出 UTF-8 CSV，所有字段加双引号，双引号加倍，并保留逗号和换行。`--csv` 与 `--plain` 互斥。`--no-headers` 移除表头，空结果没有数据行。`--raw` 与 `--json` 等价，输出包含上述支持字段及分页元数据的原始 JSON 页；不能与 `--plain`、`--csv` 或 `--no-headers` 混用。
+
+每次调用仅请求一页，不自动遍历所有问题；`--limit` 默认为 50，范围为 1–100，Jira 仍可能返回更少的条目。在所选 API 版本下，Cloud 使用 `POST /search/jql` 与不透明的 `nextPageToken`；Data Center 使用 `POST /search` 与零起始的 `startAt`。两种分页参数不能跨模式使用。表格/TSV/CSV 模式在存在下一页时向标准错误输出续页提示，不混入标准输出的数据；JSON 模式直接保留服务器分页信息。查询结果受 Jira 权限限制，Cloud 最近写入的修改也可能不会立即出现在搜索中。
+
+### 查看、关联、克隆与删除
+
+```bash
+bash run-jira.sh issue view DEMO-1 --comments 5
+bash run-jira.sh issue view DEMO-1 --description-format raw --comments 0
+bash run-jira.sh issue view DEMO-1 --plain
+bash run-jira.sh issue link DEMO-1 DEMO-2 Blocks --no-input
+bash run-jira.sh issue link remote DEMO-1 https://example.com "Reference" --no-input
+bash run-jira.sh issue unlink DEMO-1 DEMO-2 --no-input
+bash run-jira.sh issue clone DEMO-1 -s "Cloned summary" -y High -a me \
+  -l backend -C Backend --fix-version 1.0 -H "old:new" --no-input
+bash run-jira.sh issue delete DEMO-1 --cascade --no-input
+```
+
+`view` 直接在终端输出描述、关联问题和最近评论，不启动分页器。description 默认转换为 Markdown：v2 将 Jira Wiki 的标题、强调、列表、链接、代码、引用及表格转换为 Markdown；v3 将 ADF 的对应节点及标记转换为 Markdown。`--description-format markdown` 可显式选择默认模式，`--description-format raw` 则保留 v2 原始 Wiki 文本或 v3 原始 ADF JSON，不转换 description；`--plain` 保持以前的文本展示，不能与 `--description-format` 混用。评论的展示方式不变。Markdown 展示为只读近似转换，未知节点保留可读内容或类型提示，不要求满足无损导出限制，也不影响导出/回传规则。`--comments` 默认 1，范围为 0–1000；`--raw/--json` 仍输出整份原始问题，而不是仅改变 description 格式。
+
+`link` 从 Jira 获取可用关联类型，支持类型名称或方向说明；`link remote` 添加外部网页链接。`unlink` 只删除指定两个问题之间实际存在的关联，若存在多个关联会逐个删除；多次请求不是原子操作，失败后应重新查询。`clone` 根据创建元数据复制可创建字段，不复制状态、历史或服务端管理字段；支持标题、优先级、经办人、标签、组件和修复版本覆盖。`-H/--replace old:new` 对标题及描述中的文本做区分大小写的替换。无法表示的可选自定义字段会计数警告后省略，缺少无默认值的必填字段则拒绝克隆；克隆不复制附件、评论或关联。
+
+这些命令缺少位置参数时可在终端补问；`--no-input` 禁止提示。**显式提供问题 key 的 `delete` 会直接删除**，`--cascade` 同时删除子任务；请在测试项目确认权限，谨慎使用。命令不会实际调用 Jira 管理界面的跨项目迁移功能。
+
+### 评论与工时
+
+```bash
+bash run-jira.sh issue comment add DEMO-1 "**Comment**" --no-input
+bash run-jira.sh issue comment add DEMO-1 --template comment.md --no-input
+printf 'Piped comment' | bash run-jira.sh issue comment add DEMO-1 --no-input
+bash run-jira.sh issue comment add DEMO-1 "Internal note" --internal --no-input
+bash run-jira.sh issue worklog add DEMO-1 "2d 3h 30m" \
+  --comment "Implementation" --no-input
+bash run-jira.sh issue worklog add DEMO-1 "10m" \
+  --started "2026-11-05T09:00:00+08:00" --no-input
+```
+
+评论正文优先级为位置参数、`--template`（`-` 表示标准输入）、自动管道输入或终端提示；位置参数存在时不读取模板。`--internal` 写入 Jira Service Management 的内部评论属性，实际支持及权限由部署决定。评论和工时备注都支持 `--body-format markdown|wiki`，Wiki 仅适用于 v2。工时使用 Jira 的 `w`、`d`、`h`、`m` 格式，不假定每天工时长度；未提供 `--started` 时取当前时间。没有提供的工时备注不会被自动补问。
+
+### Epic、Sprint 与目录命令
+
+```bash
+bash run-jira.sh epic list --table --plain
+bash run-jira.sh epic list DEMO-10 -a x --plain
+bash run-jira.sh epic create -n "Epic name" -s "Epic summary" --no-input
+bash run-jira.sh epic add DEMO-10 DEMO-1 DEMO-2 --no-input
+bash run-jira.sh epic remove DEMO-1 DEMO-2 --no-input
+bash run-jira.sh sprint list --board-id 1 --state future,active --table
+bash run-jira.sh sprint list --current --board-id 1 -a me --plain
+bash run-jira.sh sprint list --prev --board-id 1 --plain
+bash run-jira.sh sprint list --next --board-id 1 --plain
+bash run-jira.sh sprint list 7 --plain --columns key,summary
+bash run-jira.sh sprint add 7 DEMO-1 DEMO-2 --no-input
+bash run-jira.sh project list --plain
+bash run-jira.sh board list --project DEMO --plain
+bash run-jira.sh release list --project DEMO --plain
+bash run-jira.sh me
+bash run-jira.sh open DEMO-1 --print
+bash run-jira.sh open
+bash run-jira.sh completion bash
+bash run-jira.sh completion zsh
+```
+
+Epic 查询复用问题筛选和列选项，但不能指定问题类型；指定 Epic key 时列出其成员。Cloud 使用 `parent` 查询，Data Center 动态发现 Epic Link 字段；创建同样动态发现 Epic Name 字段，不硬编码自定义字段编号。Cloud 没有 Epic Name 字段时使用名称作为标题，冲突时拒绝；Data Center 缺少该字段则报错。Epic 和 Sprint 成员写入使用 Jira Software Agile API，每次接受 1–50 个不重复的问题 key 或 ID，受实例功能和权限限制。
+
+Sprint 显式 ID 或 `--current`、`--prev`、`--next` 复用问题筛选；无选择器时列出 Sprint 元数据，默认最近 25 个，支持 `--state`、`--columns`、`--plain`、`--raw/--json`、`--no-headers`。`--board-id/--board` 显式指定 Scrum 看板；省略时仅在默认项目唯一匹配一个 Scrum 看板时自动选择。多个活动或未来 Sprint 要求显式 ID；`--prev` 根据完成时间选择最近关闭的 Sprint。元数据查询会遍历看板及 Sprint 页以确定唯一性和最近记录，再本地分页；筛选结果中的问题仍使用问题查询的分页机制。Sprint 元数据不支持 CSV。
+
+`project list`、`board list`、`release list` 支持普通表格、TSV、自选列、原始 JSON 和分页；Cloud 使用分页接口，Data Center 的项目及版本数组在本地分页。`release list` 默认使用配置的项目。`me` 只输出 Cloud `accountId` 或 Data Center 用户名，便于 `-a "$(bash run-jira.sh me)"`。`open` 默认打开浏览器，失败则打印 URL；`--print/--print-url` 只输出链接，省略 key 时使用配置项目。`completion` 不需要配置或令牌，输出可供 Bash 或 Zsh 的 `bashcompinit` 加载的补全脚本。
+
+### Markdown 边界
+
+API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。
+
+API v2（包括显式选择 v2 的 Cloud）使用 Jira Wiki 格式而非 ADF。创建、直接编辑和新增评论默认以 Markdown 解析正文；支持段落、标题、加粗、斜体、行内代码、带或不带语言的代码块、简单及嵌套列表、引用、链接、图片和分隔线，并转换为 Wiki。HTML、带标题的链接/图片、多段落列表项及无法安全转换的内容会明确报错；不提供 GFM 表格、任务列表和删除线扩展转换。需要直接使用 Wiki 表格、宏、用户提及等原生格式时，添加 `--body-format wiki`，正文将原样提交，不进行 Markdown 解析或格式猜测。`*文字*` 在默认 Markdown 模式下为斜体，在 Wiki 模式下为加粗。Wiki 模式只适用于 API v2；API v3 保持 Markdown → ADF 的原有行为。
+
+```bash
+# 默认 Markdown，也可显式添加 --body-format markdown
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
+# 原生 Jira Wiki；文件扩展名不决定格式
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --body-format wiki --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
+```
+
+v2 的 `export` 和 `comment-export` 在 `.md` 文件中保留原始 Wiki 文本，不执行有损的 Wiki → Markdown 转换，并在 HOCON 元数据中记录 `bodyFormat = "wiki"`；v3 记录 `"markdown"`。`update`、`issue edit --file` 和 `comment-update` 默认使用导出的格式，也可通过 `--body-format markdown|wiki` 显式覆盖。旧导出文件没有该字段时仍默认为 Markdown。切换格式时应重写正文，而不是只修改格式标记。其他可编辑字段保留为原始结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
+
+## English
+
+[Project home](../../readme.MD) | [Architecture](../../docs/devpulse-plugins/jira/architecture.md)
+
+`devpulse-jira` is an independently executable `jira` child module under the `devpulse-plugins` Maven aggregator and a Jira REST client for Jira Cloud (REST v3 by default) and Data Center (REST v2 by default), with an explicit API version override. The core `devpulse` neither loads nor depends on it; the Jira JAR itself does not need Bash. From the repository root, `mvn clean package` produces `devpulse-plugins/jira/target/devpulse-jira.jar`; `bash run-jira.sh` builds only that module and launches it. **It has not been validated against a live Jira instance**; first check field shapes, permissions, and workflows in a test project.
+
+### Connection configuration and authentication
+
+Connection configuration uses UTF-8 HOCON and is separate from issue templates passed to commands such as `issue create --file`. Lookup order is: an explicit `-c/--config` file, `local_jira_config.conf` in the **current working directory**, then `local_jira_config.conf` in the user's home `.jira` directory. A whole file is selected, not merged with other files. A missing explicit file or invalid local file fails instead of being skipped in favor of global configuration.
+
+```hocon
+url = "https://example.atlassian.net"
+mode = "cloud"                  # Use "dc" for Data Center
+email = "user@example.com"       # Required for Cloud; optional for Data Center
+project = "DEMO"                # Default project key for create/list
+# apiVersion = 3                # Optional: 2 or 3; defaults to Cloud=3, Data Center=2
+```
+
+Only the authentication token comes from the environment; never put it in connection configuration or issue templates:
+
+```bash
+export JIRA_API_TOKEN='your-api-token'          # Cloud API Token / Data Center PAT
+```
+
+Use global `-c/--config` to select another connection file. It can appear before or after subcommands; relative paths still resolve against the current working directory:
+
+```bash
+bash run-jira.sh --config connection.conf issue list -p DEMO
+bash run-jira.sh issue list -p DEMO --config connection.conf
+```
+
+`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. Only `JIRA_API_TOKEN` is read from the environment; the old `DEVPULSE_JIRA_*` variables are no longer used. Connection configuration accepts only `url`, `mode`, `email`, `apiVersion`, and `project`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, connection initialization, and offline issue-template generation need neither existing connection configuration nor a token. The old `.jira.conf` is no longer discovered automatically; rename it to `local_jira_config.conf` or select it explicitly with `--config`.
+
+`project` is the default project key and is required by the initialization wizard; older handwritten configurations can omit it to preserve prior behavior. For `issue create`, precedence is explicit `-p/--project`, issue-template `fields.project`, then connection-configuration `project`. `issue list` uses explicit `-p` when supplied, otherwise the default project. Complete `--jql` queries do not receive an implicit project condition.
+
+`apiVersion` optionally accepts the number `2` or `3`. Omission preserves the original rule: `mode = "cloud"` selects 3, and `mode = "dc"` selects 2. An explicit value overrides that default, using `/rest/api/{apiVersion}/` paths and API v2 text or API v3 ADF for descriptions/comments. Authentication, user identifiers, and search pagination still follow `mode`. Selecting a version does not guarantee server support; for example, Data Center typically does not expose v3, so verify the deployment's available APIs.
+
+Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history containing credentials, environment dumps, exported Jira data, or attachments. HTTP failures display only the status code, not the Jira response body.
+
+### Initializing a connection: `init`
+
+```bash
+# Configure step by step; save local_jira_config.conf in the current directory
+bash run-jira.sh init
+
+# Configure step by step; save .jira/local_jira_config.conf in the user's home
+bash run-jira.sh init -g
+
+# Scripted setup; omitting the API version retains mode-based defaults
+bash run-jira.sh init --no-input --url https://example.atlassian.net \
+  --mode cloud --email user@example.com --project DEMO
+bash run-jira.sh init -g --no-input --url https://jira.example.com \
+  --mode dc --api-version 2 --project DEMO
+```
+
+The wizard asks for URL, mode (default `cloud`), optional API version (Enter uses the mode default), Cloud email, and default project key, in that order. Supplied flags skip the corresponding prompts; invalid interactive input is reported and retried. Choosing automatic API selection omits `apiVersion` from the file so it continues to follow the mode. The wizard never contacts Jira or reads/writes a token; cancelling before completing all inputs creates no configuration file. Without a terminal, supply required values as flags; `--no-input` explicitly disables prompts.
+
+`-g/--global` creates the home `.jira` directory automatically; without `-g`, the default destination is the current directory. Global `--config FILE` can select an initialization output file, but cannot be combined with `-g`. Existing destinations are never overwritten. The old `init --file ISSUE.conf` workflow has moved to `issue template --file ISSUE.conf`, which still creates adjacent `.conf` and `.md` issue-template files.
+
+### Commands
+
+```bash
+bash run-jira.sh init
+bash run-jira.sh issue template --file issue.conf
+# Edit Jira REST fields in issue.conf and the adjacent issue.md
+bash run-jira.sh issue create --file issue.conf
+bash run-jira.sh issue list -p DEMO
+bash run-jira.sh issue edit DEMO-1 --summary "Updated summary" --no-input
+bash run-jira.sh issue view DEMO-1
+bash run-jira.sh export DEMO-1 --file exported.conf
+# Edit fields in exported.conf and the adjacent exported.md
+bash run-jira.sh update --file exported.conf
+bash run-jira.sh transitions DEMO-1
+bash run-jira.sh transition DEMO-1 11
+bash run-jira.sh comment DEMO-1 --file comment.md
+bash run-jira.sh comment-export DEMO-1 123 --file existing-comment.md
+# Edit existing-comment.md before uploading
+bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
+bash run-jira.sh attach DEMO-1 --file diagram.png
+```
+
+`init`, `issue template`, and `export` create new files only; none overwrites existing files. Creation requires project, type, and summary; the connection configuration can supply the project. File-mode descriptions come from adjacent `.md` files. Export includes only fields reported editable by Jira `/editmeta`, plus the description; other fields are never uploaded. Custom fields retain their original JSON/HOCON structure and must follow the REST field format of the particular Jira instance. `update` compares fields with the exported baseline and sends only changes; edited descriptions are converted from Markdown to Jira content. Export again after a successful update.
+
+Before upload, `update` and `comment-update` compare Jira's current `updated` value with its value at export, refusing stale changes by default; `--force` explicitly bypasses this check. Comment export creates a `.md` file and adjacent `.conf` metadata; re-export after a successful update. **This preflight check is not an atomic concurrency lock**: a write between checking and updating can still race. Top-level `transition` uses the **transition ID** returned by `transitions`; `issue move` also accepts transition or destination status names. New comments, transitions, and attachments do not use the export file's concurrency check.
+
+Issue and comment exports record the effective `apiVersion`, which must match the current configuration when updating. Re-export after switching versions; `--force` does not bypass this check. Older exports without that field retain the original interpretation: Cloud v3 or Data Center v2.
+
+### Creating issues: `issue create`
+
+Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group also provides `edit`, `assign`, `move` (alias `transition`), `list`, `view`, `link`, `unlink`, `clone`, `delete`, `comment add`, `worklog add`, and `template`; existing top-level operations remain compatible. The reference tool's fullscreen TUI, navigation shortcuts, and pager are outside this implementation's scope.
+
+```bash
+# Interactively enter project key, issue type, summary, and optional single-line description
+bash run-jira.sh issue create
+
+# Non-interactive creation; type and priority names must match the Jira instance
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Bug -s "Fix login timeout" -y High \
+  -l backend -l urgent -C Backend --fix-version v2.0 \
+  --affects-version v1.0 -b "Login times out after 30 seconds."
+
+# Read multiline descriptions from a UTF-8 file or stdin
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Task -s "Document deployment" --template description.md
+printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
+  -p DEMO -t Task -s "Document deployment" --template -
+
+# Parent issue, self-assignment, and custom fields (raw REST IDs and instance-specific values)
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Sub-task -s "Add timeout handling" -P DEMO-1 -a me \
+  --custom 'customfield_10001=5' \
+  --custom 'customfield_10002={value="Backend"}'
+
+# Keep the file workflow; explicit flags override corresponding template fields
+bash run-jira.sh issue create --file issue.conf -s "Updated summary"
+```
+
+Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are required. They may also come from `--file`'s `fields`; project and type accept raw REST `id` objects. If no project flag or template field is supplied, the connection configuration's default project is used. In a terminal, remaining missing required values are prompted by default, followed by an optional description if no description source was supplied. `--no-input` disables all prompts; without a terminal, creation never waits for interactive input either, and missing required fields fail before contacting Jira. Creation submits directly without an additional confirmation; scripts should always specify `--no-input`.
+
+`-y/--priority` sets the priority name. Repeat `-l/--label`, `-C/--component`, `--fix-version`, and `--affects-version` for multiple values; explicit lists **replace** the entire corresponding template list and are not comma-separated. `-P/--parent` sets the parent issue key, subject to Jira's project type and hierarchy. `-a/--assignee` accepts a Cloud `accountId` or Data Center username; special values are `me` to look up the current user, `x` to unassign, and `default` for the project's default assignee. Display-name fuzzy lookup is not supported.
+
+Description precedence is `-b/--body` or `--template`, then the `.md` adjacent to `--file`, then piped or interactive input; `--body` and `--template` are mutually exclusive. `--template -` explicitly reads stdin until EOF. Without another description source or a terminal, creation also reads stdin, supporting `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`. Empty stdin omits `description`; `--file` still requires adjacent Markdown unless an explicit source overrides it. Do not supply descriptions through `fields.description`.
+
+Repeat `--custom customfield_ID=HOCON_VALUE` for strings, numbers, booleans, `null`, objects, or arrays. Double-quote strings containing spaces or special characters according to HOCON rules, and shell-quote the entire argument. Only raw `customfield_digits` identifiers are accepted, not display names; explicit values override matching file fields. Prefer `--file` for more complex fields. Local validation checks required fields and input shapes; Jira ultimately validates creation permissions, field availability, and additional required fields. Creation metadata discovery, editor integration, and interactive user/field selection are not currently provided. Description conversion remains subject to the Markdown limits below.
+
+### Editing issues: `issue edit`
+
+```bash
+# With no edit flags, interactively enter summary, priority, assignee, and a single-line description
+# Enter keeps each value; interruption or EOF does not submit
+bash run-jira.sh issue edit DEMO-1
+
+# Change only specified fields; supplying edits skips prompts for other fields
+bash run-jira.sh issue edit DEMO-1 --no-input \
+  -s "Fix intermittent login timeout" -y High -a me
+
+# List flags add/remove values rather than replacing the entire existing list
+bash run-jira.sh issue edit DEMO-1 --no-input \
+  -l backend --label=-urgent -C Backend --component=-Frontend \
+  --fix-version v2.0 --fix-version=-v1.0 \
+  --affects-version v1.1 --affects-version=-v1.0
+
+# Replace description from a UTF-8 file or stdin
+bash run-jira.sh issue edit DEMO-1 --no-input --template description.md
+printf 'Updated description.\n' | bash run-jira.sh issue edit DEMO-1 \
+  --no-input --template -
+
+# Unassign, set custom fields, or change type and parent
+bash run-jira.sh issue edit DEMO-1 --no-input -a x \
+  --custom 'customfield_10001=8' \
+  --custom 'customfield_10002=null'
+bash run-jira.sh issue edit DEMO-1 --no-input -t Sub-task -P DEMO-2
+
+# Reuse the existing export/edit/update workflow; KEY must match the export
+bash run-jira.sh export DEMO-1 --file exported.conf
+# Edit exported.conf and the adjacent exported.md
+bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
+```
+
+`edit` is implemented in the separate `JiraIssueEditCommand` class. An issue key or ID is a required positional argument; with an export file, it must exactly match the file's `key`. Direct edits support summary (`-s`), type (`-t`), priority (`-y`), assignee (`-a`), parent (`-P`), description, and raw `customfield_digits` fields, using the same HOCON custom-value rules as creation. Assignees use Cloud `accountId` or Data Center usernames, with `me` for self-assignment and `x` to unassign; `default` and display-name lookup are not supported. Type and parent changes are subject to Jira permissions and hierarchy rules; this command does not move issues between projects or transition status.
+
+Labels (`-l/--label`), components (`-C/--component`), fix versions (`--fix-version`), and affected versions (`--affects-version`) are repeatable: ordinary values add entries, and a `-` prefix removes them. Prefer equals syntax such as `--label=-old` to avoid option ambiguity. Values are not comma-separated. Duplicate operations in the same direction are deduplicated; adding and removing the same value fails before contacting Jira. Changes use Jira's `update` operations rather than reading and overwriting whole lists. Unspecified fields remain unchanged; use exported-file mode to explicitly clear or replace entire arrays.
+
+`-b/--body` and `--template` are mutually exclusive; `--template -` explicitly reads stdin until EOF. Empty description text or an empty description file clears the remote description; omitting a description source leaves it unchanged. Empty interactive input means keep, not clear. Only invocations without edit flags prompt for summary, priority, assignee, and a single-line description; Enter keeps each field, and keeping everything performs no write. With `--no-input` or no terminal, edit flags or `--file` are required. Supplying edits submits directly without an additional confirmation.
+
+Direct editing reads the current issue, sends only explicit changes, and skips recognizable unchanged fields. Before writing, it checks `/editmeta` for field editability and the required `set`, `add`, or `remove` operations, then compares the issue's `updated` value again and refuses concurrent changes. `--force` bypasses only the timestamp check, not Jira field permissions. **The timestamp check is not an atomic concurrency lock**; a write can still race between checking and submission. Description conversion remains subject to the Markdown limits below.
+
+`--file` accepts only an existing `export` file and reuses top-level `update`'s field-difference, mode, and exported-timestamp checks. It cannot be combined with any field edit flags. Export again after a successful update. Top-level `update` remains compatible; there is no top-level `edit` command.
+
+### Assigning users: `issue assign`
+
+```bash
+# Prompt for the issue key and user; select by number for multiple matches
+bash run-jira.sh issue assign
+# Prompt only for the user
+bash run-jira.sh issue assign DEMO-1
+# Complete inputs submit directly when the user match is unique
+bash run-jira.sh issue assign DEMO-1 "Jon Doe"
+# Unassign or assign to yourself
+bash run-jira.sh issue assign DEMO-1 x
+bash run-jira.sh issue assign DEMO-1 me
+```
+
+Regular users are resolved through `/user/assignable/search` for the current issue, supporting display names and Data Center usernames. Cloud uses `query` and Data Center uses `username`; assignment sends `accountId` and `name`, respectively. Exact name or identifier matches take precedence; otherwise, the search must return a unique user. Multiple matches offer numbered selection when a terminal is available and `--no-input` is absent; otherwise ambiguity fails without silently choosing the first user. Searches are limited to 50 users; reaching that limit requires a more specific query to avoid assigning from truncated results.
+
+`--no-input` explicitly disables prompts and requires both KEY and USER. Missing arguments without a terminal also fail before contacting Jira. `me` resolves the current user, while `x` unassigns using a null user identifier; neither searches users. This command uses the dedicated `PUT /issue/{key}/assignee`, leaves other fields untouched, and does not use exported-file concurrency checks. Jira ultimately validates assignment permissions and whether unassigned issues are allowed. End-of-input or interruption before selection does not submit changes.
+
+### Transitioning issues: `issue move`
+
+```bash
+# Prompt for the issue key and select an available transition by number
+bash run-jira.sh issue move
+# With a key, prompt only for the transition; complete unique inputs submit directly
+bash run-jira.sh issue move DEMO-1
+bash run-jira.sh issue move DEMO-1 "In Progress" --no-input
+# Transition name or ID; issue transition is an alias for the same command
+bash run-jira.sh issue transition DEMO-1 11 --no-input
+# Add a comment, set resolution, and assign in the same transition request
+bash run-jira.sh issue move DEMO-1 Done -R Fixed -a me \
+  --comment "**Completed**" --no-input
+bash run-jira.sh issue move DEMO-1 Done --comment "*Completed*" \
+  --body-format wiki --no-input
+```
+
+Here, move means a workflow state transition, **not migration between projects**. The command first reads `/issue/{key}/transitions?expand=transitions.fields`, matching exact transition ID, transition name, then destination status name in that priority order. Names are case-insensitive, not fuzzy-matched. Unavailable targets are rejected. Multiple matches at the same priority offer numbered selection in an interactive terminal; with `--no-input` or no terminal, use a unique transition ID instead. Menus display the transition name, ID, and destination status and never default to the first entry. Missing inputs without interactive access fail before contacting Jira. End-of-input or interruption before selection does not submit changes.
+
+`--comment` accepts Markdown, converted to Wiki for v2 or ADF for v3, subject to the same conversion limits as descriptions. Native Wiki comments require explicit `--body-format wiki` and API v2. `-R/--resolution` matches a resolution name or ID against allowed values in transition metadata; without an allowed-values list, it submits a name for Jira to validate. `-a/--assignee` accepts a Cloud `accountId` or Data Center username, supports `me` for self-assignment and `x` to unassign, and does not support `default` or display-name search.
+
+Extra fields must be exposed by the selected transition's metadata and support the corresponding `set` or `add` operation, or local validation rejects them. Resolution, assignee, and comment are submitted in one `POST /issue/{key}/transitions` request rather than separate edits or comment writes, avoiding those independent side effects if transition preparation fails. Jira validates other workflow-required fields, permissions, and final transition availability. Additional required fields are not prompted automatically, and transitions do not use exported-timestamp concurrency checks. Existing top-level `transitions KEY` and `transition KEY ID` remain compatible.
+
+### Listing issues: `issue list`
+
+```bash
+# Use the configured project; without a default project or filters, search the last 30 days
+# Return at most one page
+bash run-jira.sh issue list
+bash run-jira.sh issue list -p DEMO -s "In Progress" -a me
+bash run-jira.sh issue list -p DEMO -t Bug -y High -l backend -l urgent
+bash run-jira.sh issue list -p DEMO -s '~Done' -a x --created -7d
+bash run-jira.sh issue list -p DEMO -r me --updated -1d \
+  --order-by updated --reverse --limit 20
+
+# Complete JQL (including sorting); cannot be mixed with filter or sort flags
+bash run-jira.sh issue list --jql \
+  'project = DEMO AND (status = Open OR priority = High) ORDER BY updated DESC'
+
+# JSON preserves Jira pagination metadata; plain output is TSV for scripts
+bash run-jira.sh issue list -p DEMO --json
+bash run-jira.sh issue list -p DEMO --plain --no-headers
+
+# Export the current page as CSV; installed tools also support jira issue list --csv
+bash run-jira.sh issue list -p DEMO --csv > issues.csv
+bash run-jira.sh issue list -p DEMO --csv --no-headers
+
+# Reuse the same query, sorting, and --limit for the next page
+# Cloud: use nextPageToken from the previous page
+bash run-jira.sh issue list -p DEMO --limit 20 --next-page-token 'TOKEN'
+# Data Center: use the offset suggested by the previous page
+bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
+```
+
+`list` is implemented in the separate `JiraIssueListCommand` class. Filters cover project, status, type, priority, assignee, reporter, labels, and lower bounds on creation/update times. Conditions are combined with `AND`; repeating `-l/--label` requires every specified label. Prefix status, type, or priority with `~` to exclude it. Assignees use Cloud `accountId` or Data Center usernames; `me` means the current user, `x` means unassigned, and `~x` means assigned. Reporters also support `me`. Jira determines field names and date interpretation. Ordinary filter values are escaped as JQL strings and cannot inject additional query clauses.
+
+Sorting defaults to `created DESC`. `--order-by` accepts `created`, `updated`, `priority`, `key`, `rank`, `summary`, `status`, `assignee`, or `issuetype`; `--reverse` switches to ascending order. `--created` and `--updated` accept Jira dates, relative times, or `day`/`today`, `week`, `month`, and `year`, selecting values at or after the given time or current period boundary. `--created-before` and `--updated-before` provide exclusive upper bounds. `-w/--watching` selects watched issues, `--history` uses Jira's viewing history, and `-R/--resolution` filters resolutions with optional `~` exclusion. **Only when no default project, filters, or JQL are supplied**, the command adds `created >= "-30d"` to satisfy Cloud's restricted-query requirement. `-q/--jql` is a complete query and cannot be combined with explicit filters, `--order-by`, or `--reverse`; it does not receive an implicit default project. Epic/Sprint scopes still merge with custom JQL while preserving its ordering.
+
+Default table columns are issue key, type, status, priority, assignee, and summary. `--columns key,created,reporter` selects ordered columns; `updated`, `resolution`, `labels`, `components`, `fixVersions`, and `parent` are also supported. Only displayed fields are requested. Missing or inaccessible optional fields display `-`; control characters become spaces in table/TSV output. `--plain` emits TSV; `--csv` emits UTF-8 CSV with quoted fields, doubled embedded quotes, and preserved commas and line breaks. `--csv` and `--plain` are mutually exclusive. `--no-headers` removes headers; empty results have no data rows. Equivalent `--raw` and `--json` emit the original JSON page containing the supported fields above and pagination metadata; they cannot be combined with `--plain`, `--csv`, or `--no-headers`.
+
+Each invocation requests one page, never all issues automatically. `--limit` defaults to 50 and accepts 1–100; Jira may still return fewer items. Within the selected API version, Cloud uses `POST /search/jql` with an opaque `nextPageToken`; Data Center uses `POST /search` with zero-based `startAt`. Pagination flags cannot be used across modes. Table/TSV/CSV output writes a continuation hint to stderr when another page exists, keeping it separate from stdout data; JSON output preserves server pagination metadata directly. Results are limited by Jira permissions, and recent Cloud writes may not immediately appear in search results.
+
+### Viewing, linking, cloning, and deleting
+
+```bash
+bash run-jira.sh issue view DEMO-1 --comments 5
+bash run-jira.sh issue view DEMO-1 --description-format raw --comments 0
+bash run-jira.sh issue view DEMO-1 --plain
+bash run-jira.sh issue link DEMO-1 DEMO-2 Blocks --no-input
+bash run-jira.sh issue link remote DEMO-1 https://example.com "Reference" --no-input
+bash run-jira.sh issue unlink DEMO-1 DEMO-2 --no-input
+bash run-jira.sh issue clone DEMO-1 -s "Cloned summary" -y High -a me \
+  -l backend -C Backend --fix-version 1.0 -H "old:new" --no-input
+bash run-jira.sh issue delete DEMO-1 --cascade --no-input
+```
+
+`view` prints descriptions, linked issues, and recent comments directly without a pager. Description output defaults to Markdown: v2 converts Jira Wiki headings, emphasis, lists, links, code, quotes, and tables; v3 converts corresponding ADF nodes and marks. `--description-format markdown` explicitly selects the default, while `--description-format raw` preserves the original v2 Wiki text or v3 ADF JSON without description conversion. `--plain` retains the previous text display and cannot be combined with `--description-format`. Comment display is unchanged. Markdown presentation is a read-only approximation: unknown nodes retain readable content or a type placeholder, without imposing lossless-export restrictions or changing export/upload rules. `--comments` defaults to 1 and accepts 0–1000. `--raw/--json` still outputs the entire original issue rather than changing only the description format.
+
+`link` discovers available Jira link types and accepts type names or direction descriptions; `link remote` adds an external web link. `unlink` removes only actual links between the specified issues, removing each if multiple exist. Multiple requests are not atomic; query again after a failure. `clone` copies createable fields based on creation metadata rather than status, history, or server-managed fields, and supports summary, priority, assignee, label, component, and fix-version overrides. `-H/--replace old:new` replaces case-sensitive text in summary and description. Unsupported optional custom fields are omitted with a count warning; required fields without defaults cause cloning to fail. Attachments, comments, and links are not cloned.
+
+Missing positional inputs can be prompted in a terminal; `--no-input` disables prompts. **`delete` with an explicit issue key deletes directly**; `--cascade` also deletes subtasks. Verify permissions in a test project and use it carefully. These commands do not implement Jira's administrative cross-project migration.
+
+### Comments and worklogs
+
+```bash
+bash run-jira.sh issue comment add DEMO-1 "**Comment**" --no-input
+bash run-jira.sh issue comment add DEMO-1 --template comment.md --no-input
+printf 'Piped comment' | bash run-jira.sh issue comment add DEMO-1 --no-input
+bash run-jira.sh issue comment add DEMO-1 "Internal note" --internal --no-input
+bash run-jira.sh issue worklog add DEMO-1 "2d 3h 30m" \
+  --comment "Implementation" --no-input
+bash run-jira.sh issue worklog add DEMO-1 "10m" \
+  --started "2026-11-05T09:00:00+08:00" --no-input
+```
+
+Comment source precedence is positional text, `--template` (`-` means stdin), then automatic piped input or a terminal prompt. Positional text prevents template reads. `--internal` sets Jira Service Management's internal-comment property; actual support and permissions depend on the deployment. Comments and worklog notes support `--body-format markdown|wiki`, with Wiki limited to v2. Worklogs use Jira's `w`, `d`, `h`, and `m` syntax without assuming a working-day length. `--started` defaults to now. Omitted worklog notes are not prompted automatically.
+
+### Epics, sprints, and catalog commands
+
+```bash
+bash run-jira.sh epic list --table --plain
+bash run-jira.sh epic list DEMO-10 -a x --plain
+bash run-jira.sh epic create -n "Epic name" -s "Epic summary" --no-input
+bash run-jira.sh epic add DEMO-10 DEMO-1 DEMO-2 --no-input
+bash run-jira.sh epic remove DEMO-1 DEMO-2 --no-input
+bash run-jira.sh sprint list --board-id 1 --state future,active --table
+bash run-jira.sh sprint list --current --board-id 1 -a me --plain
+bash run-jira.sh sprint list --prev --board-id 1 --plain
+bash run-jira.sh sprint list --next --board-id 1 --plain
+bash run-jira.sh sprint list 7 --plain --columns key,summary
+bash run-jira.sh sprint add 7 DEMO-1 DEMO-2 --no-input
+bash run-jira.sh project list --plain
+bash run-jira.sh board list --project DEMO --plain
+bash run-jira.sh release list --project DEMO --plain
+bash run-jira.sh me
+bash run-jira.sh open DEMO-1 --print
+bash run-jira.sh open
+bash run-jira.sh completion bash
+bash run-jira.sh completion zsh
+```
+
+Epic listing reuses issue filters and columns except issue type, and lists members when an Epic key is provided. Cloud queries `parent`; Data Center discovers the Epic Link field dynamically. Creation similarly discovers Epic Name instead of hardcoding custom-field IDs. Without Epic Name, Cloud uses the name as summary and rejects conflicts; Data Center reports the missing field. Epic and Sprint membership writes use Jira Software's Agile API and accept 1–50 distinct issue keys or IDs, subject to deployment capabilities and permissions.
+
+Explicit sprint IDs and `--current`, `--prev`, or `--next` reuse issue filters. Without a selector, Sprint metadata defaults to the latest 25 entries and supports `--state`, `--columns`, `--plain`, `--raw/--json`, and `--no-headers`. `--board-id/--board` explicitly selects a Scrum board; omission selects automatically only when the default project has exactly one matching Scrum board. Multiple active or future sprints require an explicit ID; `--prev` selects the most recently completed closed sprint. Metadata queries traverse board and sprint pages to establish uniqueness and recency, then paginate locally; issue results retain issue-search pagination. Sprint metadata does not support CSV.
+
+`project list`, `board list`, and `release list` support tables, TSV, selected columns, raw JSON, and pagination. Cloud uses paginated APIs; Data Center project/version arrays are paginated locally. `release list` defaults to the configured project. `me` prints only the Cloud `accountId` or Data Center username for uses such as `-a "$(bash run-jira.sh me)"`. `open` launches a browser, printing the URL if unavailable; `--print/--print-url` only prints it, and an omitted key selects the configured project. `completion` requires no config or token and emits scripts for Bash or Zsh's `bashcompinit`.
+
+### Markdown limits
+
+API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped.
+
+API v2, including Cloud explicitly configured for v2, uses Jira Wiki rather than ADF. Creation, direct editing, and new comments parse bodies as Markdown by default, converting paragraphs, headings, bold, italic, inline code, labelled or unlabelled code blocks, simple and nested lists, quotes, links, images, and thematic breaks to Wiki. HTML, titled links/images, multi-paragraph list items, and content that cannot be converted safely produce explicit errors. GFM table, task-list, and strikethrough extension conversion is not provided. For native Wiki tables, macros, user mentions, and other native syntax, add `--body-format wiki` to submit the body unchanged, without Markdown parsing or format guessing. `*text*` means italic in default Markdown mode and bold in Wiki mode. Wiki mode requires API v2; API v3 retains its existing Markdown → ADF behavior.
+
+```bash
+# Markdown by default; --body-format markdown is also accepted
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
+# Native Jira Wiki; the file extension does not determine the format
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --body-format wiki --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
+```
+
+For v2, `export` and `comment-export` preserve the original Wiki text in the `.md` file rather than attempting a lossy Wiki → Markdown conversion, and record `bodyFormat = "wiki"` in HOCON metadata; v3 records `"markdown"`. `update`, `issue edit --file`, and `comment-update` use the exported format by default; `--body-format markdown|wiki` overrides it explicitly. Legacy exports without this field still default to Markdown. Rewrite the body when switching formats rather than merely changing the format marker. Other editable fields retain their raw structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.

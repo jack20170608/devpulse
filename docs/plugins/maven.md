@@ -4,8 +4,8 @@
 
 ## 中文
 
-工具已更名为 `depmap`，请参阅 [Depmap 依赖盘点指南](depmap.md#中文)。
+本文已迁移，请参阅 [Depmap 使用说明（原 Maven 工具）](../../devpulse-plugins/depmap/README.md#中文)。
 
 ## English
 
-The tool has been renamed to `depmap`. See the [Depmap dependency inventory guide](depmap.md#english).
+This document has moved. See [Depmap guide (formerly Maven)](../../devpulse-plugins/depmap/README.md#english).
