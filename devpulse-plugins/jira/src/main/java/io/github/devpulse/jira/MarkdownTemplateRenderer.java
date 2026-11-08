@@ -18,25 +18,24 @@ public final class MarkdownTemplateRenderer {
         var configuration = new Configuration(Configuration.VERSION_2_3_34);
         configuration.setDefaultEncoding(StandardCharsets.UTF_8.name());
         configuration.setOutputFormat(PlainTextOutputFormat.INSTANCE);
-        var objectWrapper = new DefaultObjectWrapperBuilder(
-            Configuration.VERSION_2_3_34);
+
+        var objectWrapper = new DefaultObjectWrapperBuilder(Configuration.VERSION_2_3_34);
         objectWrapper.setExposureLevel(BeansWrapper.EXPOSE_PROPERTIES_ONLY);
+
         configuration.setObjectWrapper(objectWrapper.build());
-        configuration.setTemplateExceptionHandler(
-            TemplateExceptionHandler.RETHROW_HANDLER);
+        configuration.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
         configuration.setLogTemplateExceptions(false);
         configuration.setWrapUncheckedExceptions(true);
         configuration.setFallbackOnNullLoopVariable(false);
-        configuration.setNewBuiltinClassResolver(
-            TemplateClassResolver.ALLOWS_NOTHING_RESOLVER);
+        configuration.setNewBuiltinClassResolver(TemplateClassResolver.ALLOWS_NOTHING_RESOLVER);
         configuration.setAPIBuiltinEnabled(false);
         configuration.setNumberFormat("computer");
         configuration.setBooleanFormat("c");
         try (var reader = Files.newBufferedReader(template,
             StandardCharsets.UTF_8)) {
-            var compiled = new Template(template.getFileName().toString(),
-                reader, configuration);
+            var compiled = new Template(template.getFileName().toString(), reader, configuration);
             var result = new StringWriter();
+
             compiled.process(parameters, result);
             return result.toString();
         } catch (TemplateException exception) {

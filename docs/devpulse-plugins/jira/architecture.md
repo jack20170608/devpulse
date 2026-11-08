@@ -24,7 +24,7 @@ HTTP 客户端不跟随重定向，设置连接及请求超时；拒绝远程明
 
 直接创建及编辑按 Jira 实例元数据解析字段；导出保留 `/editmeta` 返回的可编辑字段及原始结构，并保存字段基线、描述哈希、API 版本和正文格式。更新只发送已修改字段，上传前校验 `updated`；这是非原子的冲突检查，不能承诺与其他客户端写入互斥。
 
-v3 使用 ADF，上传和导出只支持严格的 Markdown 子集，不能无损表示的节点拒绝往返。v2 直接写入默认将 Markdown 转为 Jira Wiki，也可显式提交原生 Wiki；导出保留原始 Wiki，并记录格式，避免有损转换。查看命令的近似 Markdown 渲染只读，不改变导出或上传规则。
+v3 使用 ADF，上传和导出只支持严格的 Markdown 子集，不能无损表示的节点拒绝往返；暂不支持 ADF 表格上传。`JiraMarkdown` 使用 CommonMark 的 GFM 表格扩展解析 Markdown，v2 将表格转换为 Wiki 表头和数据行，不保留列对齐标记。v2 直接写入默认将 Markdown 转为 Jira Wiki，也可显式提交原生 Wiki；导出保留原始 Wiki，并记录格式，避免有损转换。查看命令的近似 Markdown 渲染只读，不改变导出或上传规则。
 
 评论、附件、工时、关联、克隆及状态流转由各自 API 执行，不共享导出文件的冲突检查；多请求操作不提供跨请求事务。完整命令、权限限制、分页与格式边界统一维护在模块使用说明中。
 
@@ -50,6 +50,6 @@ The HTTP client follows no redirects and sets connection and request timeouts. R
 
 Direct creation and editing resolve fields against Jira instance metadata. Exports retain editable `/editmeta` fields and their original structure, storing field baselines, description hashes, API version, and body format. Updates send only modified fields and check `updated` before uploading; this non-atomic conflict check cannot guarantee exclusion of other clients' writes.
 
-v3 uses ADF; uploads and exports support a strict Markdown subset and reject nodes that cannot round-trip losslessly. Direct v2 writes convert Markdown to Jira Wiki by default or accept explicitly selected native Wiki. Exports preserve original Wiki and record its format to avoid lossy conversion. Approximate Markdown rendering in view commands is read-only and does not change export/upload rules.
+v3 uses ADF; uploads and exports support a strict Markdown subset and reject nodes that cannot round-trip losslessly; ADF table uploads are not yet supported. `JiraMarkdown` parses Markdown with CommonMark's GFM tables extension, converting tables to Wiki headers and data rows for v2 without preserving column alignment markers. Direct v2 writes convert Markdown to Jira Wiki by default or accept explicitly selected native Wiki. Exports preserve original Wiki and record its format to avoid lossy conversion. Approximate Markdown rendering in view commands is read-only and does not change export/upload rules.
 
 Comments, attachments, worklogs, links, clones, and transitions use their respective APIs without sharing exported-file conflict checks. Multi-request operations provide no cross-request transaction. Complete commands, permission limits, pagination, and format boundaries live in the module usage guide.

@@ -5,6 +5,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
+import org.commonmark.ext.gfm.tables.TableBlock;
+import org.commonmark.ext.gfm.tables.TableCell;
+import org.commonmark.ext.gfm.tables.TableHead;
+import org.commonmark.ext.gfm.tables.TablesExtension;
 import org.commonmark.node.BulletList;
 import org.commonmark.node.BlockQuote;
 import org.commonmark.node.Code;
@@ -45,15 +50,17 @@ public final class JiraMarkdown {
             }
             return new com.google.gson.JsonPrimitive(markdown);
         }
+        var document = Parser.builder()
+                .extensions(List.of(TablesExtension.create()))
+                .build().parse(markdown);
         if (!adf) {
             return new com.google.gson.JsonPrimitive(wikiBlocks(
-                    Parser.builder().build().parse(markdown)));
+                    document));
         }
         var doc = new JsonObject();
         doc.addProperty("type", "doc");
         doc.addProperty("version", 1);
         var content = new JsonArray();
-        var document = Parser.builder().build().parse(markdown);
         for (var block = document.getFirstChild(); block != null;
                 block = block.getNext()) {
             content.add(block(block));
@@ -94,6 +101,10 @@ public final class JiraMarkdown {
     }
 
     private static JsonObject block(Node node) throws IOException {
+        if (node instanceof TableBlock) {
+            throw new IOException("Markdown tables require REST API v2; "
+                    + "ADF table uploads are not supported for REST API v3.");
+        }
         if (node instanceof Paragraph paragraph) {
             return container("paragraph", children(paragraph));
         }
@@ -370,6 +381,7 @@ public final class JiraMarkdown {
                     + wikiInline(heading);
             case BulletList list -> wikiList(list, "");
             case OrderedList list -> wikiList(list, "");
+            case TableBlock table -> wikiTable(table);
             case BlockQuote quote -> {
                 if (quote.getParent() instanceof BlockQuote) {
                     throw unsupportedWiki();
@@ -382,6 +394,31 @@ public final class JiraMarkdown {
             case ThematicBreak ignored -> "----";
             default -> throw unsupportedWiki();
         };
+    }
+
+    private static String wikiTable(TableBlock table) throws IOException {
+        var rows = new ArrayList<String>();
+        for (var section = table.getFirstChild(); section != null;
+                section = section.getNext()) {
+            var separator = section instanceof TableHead ? "||" : "|";
+            for (var row = section.getFirstChild(); row != null;
+                    row = row.getNext()) {
+                var cells = new ArrayList<String>();
+                for (var cell = row.getFirstChild(); cell != null;
+                        cell = cell.getNext()) {
+                    if (!(cell instanceof TableCell)) {
+                        throw unsupportedWiki();
+                    }
+                    var text = wikiInline(cell, true);
+                    if (text.contains("\n") || text.contains("\r")) {
+                        throw unsupportedWiki();
+                    }
+                    cells.add(text);
+                }
+                rows.add(separator + String.join(separator, cells) + separator);
+            }
+        }
+        return String.join("\n", rows);
     }
 
     private static String wikiList(Node list, String prefix)
@@ -418,25 +455,32 @@ public final class JiraMarkdown {
     }
 
     private static String wikiInline(Node parent) throws IOException {
+        return wikiInline(parent, false);
+    }
+
+    private static String wikiInline(Node parent, boolean tableCell)
+            throws IOException {
         var result = new StringBuilder();
         for (var node = parent.getFirstChild(); node != null;
                 node = node.getNext()) {
             result.append(switch (node) {
                 case Text text -> wikiEscaped(text.getLiteral());
-                case StrongEmphasis strong -> "*" + wikiInline(strong) + "*";
-                case Emphasis emphasis -> "_" + wikiInline(emphasis) + "_";
+                case StrongEmphasis strong -> "*" + wikiInline(strong, tableCell) + "*";
+                case Emphasis emphasis -> "_" + wikiInline(emphasis, tableCell) + "_";
                 case Code code -> {
                     if (code.getLiteral().contains("}}")) {
                         throw unsupportedWiki();
                     }
-                    yield "{{" + code.getLiteral() + "}}";
+                    yield "{{" + (tableCell
+                            ? code.getLiteral().replace("|", "\\|")
+                            : code.getLiteral()) + "}}";
                 }
                 case Link link -> {
                     requireWikiDestination(link.getDestination());
                     if (link.getTitle() != null && !link.getTitle().isEmpty()) {
                         throw unsupportedWiki();
                     }
-                    yield "[" + wikiInline(link) + "|"
+                    yield "[" + wikiInline(link, tableCell) + "|"
                             + link.getDestination() + "]";
                 }
                 case Image image -> {
