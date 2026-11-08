@@ -79,7 +79,7 @@ public final class ReviewCommand implements Callable<Integer> {
             for (var task : plan.tasks()) {
                 out.println(index++ + ". [" + task.name() + "]");
                 out.println(task.command());
-                TaskDetails.daemonDetails(task).forEach(out::println);
+                TaskDetails.daemonDetails(task, plan.daemonOptions().get(task.name())).forEach(out::println);
                 out.println();
             }
             out.println("Static review only: no commands executed. "

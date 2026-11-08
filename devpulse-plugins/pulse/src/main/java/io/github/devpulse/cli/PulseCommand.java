@@ -2,8 +2,9 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.core.environment.BashShell;
-import io.github.devpulse.core.execution.RunHistory;
-import io.github.devpulse.core.execution.WorkflowRun;
+import io.github.devpulse.core.bash.BashTaskAdapter;
+import io.github.devpulse.core.bash.RunHistory;
+import io.github.devpulse.core.bash.WorkflowRun;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
@@ -74,22 +75,26 @@ public final class PulseCommand implements Callable<Integer> {
                     out.println("[" + task.name() + "] needs: "
                             + task.needs());
                     out.println(task.command());
-                    TaskDetails.daemonDetails(task).forEach(out::println);
+                    TaskDetails.daemonDetails(task, plan.daemonOptions().get(task.name())).forEach(out::println);
                 }
                 out.flush();
                 return 0;
             }
             var shell = BashShell.discover(bash);
             try (var history = new RunHistory(config.directory())
-                    .begin(target, plan, concurrency)) {
+                    .begin(target, plan.graph(), concurrency)) {
                 out.println("Run ID: " + history.id());
                 out.flush();
-                var run = new WorkflowRun(shell, config.directory(), out,
-                        history, plan, concurrency);
+                var adapter = new BashTaskAdapter(shell, config.directory(), out, history);
+                var run = new WorkflowRun(plan.workflow(adapter), history, concurrency);
                 var hook = Thread.ofPlatform().unstarted(run::cancel);
                 Runtime.getRuntime().addShutdownHook(hook);
                 try {
-                    return run.execute().state() == RunHistory.State.SUCCESS ? 0 : 1;
+                    var result = run.execute();
+                    out.println("[pulse] Finished: " + result.succeeded() + " succeeded, "
+                            + result.failed() + " failed, " + result.skipped() + " skipped.");
+                    out.flush();
+                    return result.state() == RunHistory.State.SUCCESS ? 0 : 1;
                 } finally {
                     try {
                         Runtime.getRuntime().removeShutdownHook(hook);

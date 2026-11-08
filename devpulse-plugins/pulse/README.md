@@ -69,7 +69,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\y
 
 任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录。普通任务的输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志；长驻进程的合并输出直接写入日志文件，不在控制台实时转发，以便 CLI 返回后仍能输出。普通任务以 Bash 退出码判断结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
 
-发现失败后不再启动新任务，等待已启动任务结束，并汇总成功、失败和跳过数量。全部成功返回 `0`；配置、任务或持久化失败返回 `1`；执行被中断时返回 `130`。取消时尽力清理已知任务进程及其可见后代。
+普通任务失败后跳过其后继，独立分支继续；Daemon 就绪后失效会取消正在执行的受影响后继并跳过未启动的后继。日志、启动或持久化基础设施故障会取消本次运行。全部节点成功且 Daemon 最后检测正常返回 `0`；配置、任务、健康或持久化失败返回 `1`；协调线程中断返回 `130`。取消时尽力清理批任务进程及其可见后代，不停止 Daemon。所有执行由 core 的 `DagRun` 统一调度。
 
 支持非交互批任务和显式声明的本地长驻进程，不提供普通批任务超时或沙箱。运行前必须审核命令；并发上限限制批任务和长驻进程的启动等待阶段，不限制已就绪的长驻进程数量、探测进程或任务内部的并发。
 
@@ -91,7 +91,6 @@ tasks:
       interval: 500ms
       timeout: 30s
       checkTimeout: 2s
-    shutdownHook: false
     stopTimeout: 5s
   check:
     cmd: "node check.js"
@@ -105,19 +104,20 @@ pipelines:
 |------|------|
 | `ready.cmd` | 必填；退出码 `0` 表示就绪，命令必须是快速、只读检查 |
 | `ready.interval` | 检查间隔，默认 `500ms` |
-| `ready.timeout` | 初次启动等待总时限，默认 `30s` |
+| `ready.timeout` | 启动及初次就绪等待总时限，默认 `30s` |
 | `ready.checkTimeout` | 每次检查的时限，默认 `2s`；启动阶段受剩余总时限约束 |
-| `shutdownHook` | 默认 `false`：CLI 返回后保留进程；`true`：运行结束、失败或可处理的退出时自动清理 |
 | `stop` | 可选 Bash 停止命令；未配置时终止已确认身份的进程及可见后代 |
 | `stopTimeout` | 停止命令和退出等待的宽限时间，默认 `5s`；随后尽力强制终止并再确认最多 `2s` |
 
 检查或停止命令超时后，回收该命令进程及可见后代可额外等待最多 `2s`；这段回收时间不包含在配置的命令时限内。
 
-长驻进程命令必须保持前台运行，不使用 `&`、`nohup` 或自行 fork/脱离进程树。达到就绪后释放普通执行槽，因此 `--jobs 1` 也能运行依赖服务器的检查。执行期间持续检查存活和就绪状态：意外退出（包括退出码 `0`）、检查失败或超时使本次运行失败，停止启动新任务，等待已经启动的批任务结束。不自动重启，也不接管已有实例或复用被占用的端口。
+长驻进程命令必须保持前台运行，不使用 `&`、`nohup` 或自行 fork/脱离进程树。达到就绪后释放普通执行槽，因此 `--jobs 1` 也能运行依赖服务器的检查。DAG 在执行期间持续检查存活和就绪状态：意外退出（包括退出码 `0`）、检查失败或超时会跳过未启动的传递后继，并取消仍在执行的受影响任务；独立分支继续。依赖它的已就绪 Daemon 被标记为不可用并停止监测，但不会被停止。结束前进行最终健康检查，不自动重启，也不接管已有实例或复用被占用的端口。
 
-开启 hook 的进程按计划的逆依赖顺序清理；未开启 hook 的进程即使启动检查失败或下游失败，也保留供手动清理。初始化元数据失败时，会尽力终止尚未可靠记录的进程，避免产生无法管理的实例。强制杀死 CLI、断电或已脱离进程树的进程不保证自动清理。
+工作流成功、失败、取消或启动检查超时后均不停止已记录的 Daemon，由用户通过 `stop` 手动管理；`shutdownHook` 配置已移除，出现该字段会报错。监测随运行结束，不存在独立后台调度器。初始化元数据失败时，会尽力终止尚未可靠记录的进程，避免产生无法管理的实例。强制杀死 CLI、断电或已脱离进程树的进程不保证回收。
 
-检查和停止命令可使用 `DEVPULSE_DAEMON_PID`、`DEVPULSE_RUN_ID` 和 `DEVPULSE_TASK_NAME`。停止命令应只操作对应实例；不要按名称批量终止进程，也不要自动删除数据库数据目录或 volume。停止命令失败或超时后仍尽力回收已记录进程，返回失败并保留诊断。
+历史任务状态 `READY` 保留就绪阶段成功的事实；`status` 另行展示本次运行记录的健康变化和按需检测的实时状态。Daemon 后续失效不会覆盖已完成节点结果，但会使本次工作流失败；历史健康只代表记录时刻。后续批任务重试/超时配置、通用 DAG 持久化恢复、条件分支、动态图、子工作流和显式 Daemon 重启路线见 [核心使用说明](../../devpulse-core/README.md)。
+
+检查和停止命令可使用 `DEVPULSE_DAEMON_PID`、`DEVPULSE_DAEMON_INSTANCE_ID`、`DEVPULSE_RUN_ID` 和 `DEVPULSE_TASK_NAME`。停止命令应只操作对应实例；不要按名称批量终止进程，也不要自动删除数据库数据目录或 volume。停止命令失败或超时后仍尽力回收已记录进程，返回失败并保留诊断。监测时限由 DAG 唯一管理，实例记录保存实际策略；显式启动重试保留旧实例身份、独立脚本和手动停止入口，任务日志追加。
 
 ### `stop`：手动清理长驻进程
 
@@ -125,16 +125,19 @@ pipelines:
 # 停止最新运行的所有长驻进程
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop
 
-# 停止指定运行中的单个长驻进程
+# 停止指定运行中 server 任务的全部实例
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>"
+
+# 只停止 server 的指定实例（实例 ID 可从 status 获取）
+java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>" --instance "<instance-id>"
 
 # 停止其他项目的指定运行
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
-`stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；省略任务名时按逆依赖顺序清理该运行的所有已记录长驻进程。它使用保存的停止配置，不依赖当前 `.devpulse.yaml`；不会清理其他历史运行，也不会删除日志或业务数据。进程身份通过 PID 和启动时间核验，PID 已复用时不终止新进程，身份无法确认时拒绝清理。
+`stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；任务级停止处理该任务全部记录实例，省略任务名按逆依赖顺序处理全部任务。`--instance <ID>` 必须与任务名一起使用，只停止属于该任务的指定实例。停止使用已保存配置，不依赖当前 `.devpulse.yaml`，不清理其他历史运行或删除日志、业务数据。PID 和启动时间用于核验身份，身份不确定时拒绝清理；单个实例清理失败仍继续处理其他实例并汇报失败。旧单实例记录仍可查询和停止。
 
-已退出实例重复清理返回 `0`；不存在任何运行或所选运行没有长驻进程也返回 `0`。指定任务未记录进程、停止命令失败或无法确认清理结果返回 `1`；中断返回 `130`。手动停止仍被执行中的 DAG 使用的长驻进程，会触发该运行的故障策略。
+已退出实例重复清理返回 `0`；不存在任何运行或所选运行没有长驻进程也返回 `0`。指定任务未记录进程、停止命令失败或无法确认清理结果返回 `1`；中断返回 `130`。手动停止仍被执行中的 DAG 使用的长驻进程，会触发受影响分支的取消与跳过。
 
 ### `review`：执行前审阅计划
 
@@ -152,13 +155,13 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 ```
 
-交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、hook 和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `pulse --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
+交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、用户管理生命周期和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `pulse --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
 
 成功返回 `0`，配置、目标或界面错误返回 `1`，中断返回 `130`。拓扑顺序和依赖深度不是固定执行批次；静态校验通过不代表命令安全或工具可用。
 
 ### `status`：查询运行状态和日志
 
-每次实际执行 `pulse` 都生成独立运行 ID，在项目的 `.devpulse\runs\<run-id>` 下保存 `state.conf`、运行锁和任务日志。`status` 默认查看开始时间最新的运行，显示整体及各任务的状态、退出码、错误、UTC 起止时间和耗时。
+每次实际执行 `pulse` 都生成独立运行 ID，在项目的 `.devpulse\runs\<run-id>` 下保存 `state.conf`、运行锁和任务日志。`status` 默认查看开始时间最新的运行，显示整体及各任务的状态、退出码、错误、UTC 起止时间和耗时；长驻进程按实例展示 ID、尝试编号、PID 和实时状态，包含旧启动尝试，不覆盖历史工作流结果。
 
 | 参数 | 作用 |
 |------|------|
@@ -180,7 +183,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 
 任务历史状态区分 `PENDING`、`RUNNING`、`READY`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED` 和 `INTERRUPTED`。`READY` 表示长驻进程在执行时达到就绪，不代表后来始终存活。读取遗留的未完成记录时，通过运行锁及执行器身份判断是否已退出；确认退出后保存中断状态，无法确认时保留记录并警告，不自动续跑或接管进程。
 
-详情查询单独显示长驻进程的实时状态、PID 和 hook：`STARTING`、`READY`、`NOT_READY`、`EXITED`、`STOPPED` 或 `UNKNOWN`。仅在进程身份匹配时执行保存的就绪检查，Bash 不可用或身份无法确认时显示 `UNKNOWN`。整体运行状态仍表示该次流水线的结果，不因 CLI 返回后的变化追溯改写。`--list` 和 `--log` 只读取历史或日志，不执行就绪检查。
+详情查询单独显示长驻进程的实时状态和 PID：`STARTING`、`READY`、`NOT_READY`、`EXITED`、`STOPPED` 或 `UNKNOWN`。仅在进程身份匹配时执行保存的就绪检查，Bash 不可用或身份无法确认时显示 `UNKNOWN`。整体运行状态仍表示该次流水线的结果，不因 CLI 返回后的变化追溯改写。`--list` 和 `--log` 只读取历史或日志，不执行就绪检查。
 
 时间以 UTC 显示到秒，耗时自动使用 `ms`、`s`、`m` 或 `h`；运行中标注 `(running)`，取消或中断的估计耗时以 `~` 标记。未启动或无法计算的时间显示 `-`。
 
@@ -303,7 +306,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\y
 
 Tasks run through non-login, non-interactive Bash in the project configuration directory. Batch output and errors are merged, prefixed in the console, and saved as UTF-8 logs. Daemon output is merged and redirected directly to its log, without live console forwarding, so output continues after CLI exit. Bash's exit code determines batch results; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly when needed.
 
-After observing a failure, no new tasks start. Already started tasks finish, and a summary reports successful, failed, and skipped counts. All tasks succeeding returns `0`; configuration, task, or persistence failures return `1`; execution interruption returns `130`. Cancellation makes a best-effort attempt to terminate known task processes and their visible descendants.
+Ordinary task failures skip descendants while independent branches continue. Daemon faults after readiness cancel running affected descendants and skip unstarted descendants. Logging, startup, or persistence infrastructure faults cancel the run. Successful nodes and last-observed healthy daemons return `0`; configuration, task, health, or persistence failures return `1`; coordinator interruption returns `130`. Cancellation attempts batch/visible-descendant cleanup without stopping daemons. Core's `DagRun` handles all scheduling.
 
 Non-interactive batch tasks and explicitly declared local daemons are supported. There is no ordinary batch-task timeout or sandbox. Review commands before execution. The concurrency limit covers batch tasks and daemon startup waits, not already-ready daemons, probe processes, or internal task concurrency.
 
@@ -325,7 +328,6 @@ tasks:
       interval: 500ms
       timeout: 30s
       checkTimeout: 2s
-    shutdownHook: false
     stopTimeout: 5s
   check:
     cmd: "node check.js"
@@ -339,19 +341,20 @@ pipelines:
 |-------|---------|
 | `ready.cmd` | Required; exit code `0` means ready. Use a fast, read-only check |
 | `ready.interval` | Check interval, default `500ms` |
-| `ready.timeout` | Overall initial startup wait, default `30s` |
+| `ready.timeout` | Overall startup and initial readiness wait, default `30s` |
 | `ready.checkTimeout` | Individual check timeout, default `2s`, bounded by remaining startup time |
-| `shutdownHook` | Default `false` retains the process after CLI exit; `true` cleans up on completion, failure, or handled exit |
 | `stop` | Optional Bash stop command; otherwise terminate identity-confirmed processes and visible descendants |
 | `stopTimeout` | Stop-command and exit-wait grace period, default `5s`; followed by best-effort forced termination and up to `2s` confirmation |
 
 After a check or stop command times out, reclaiming that command and its visible descendants may take up to an additional `2s`, outside the configured command timeout.
 
-Daemon commands must remain foreground processes: do not use `&`, `nohup`, or fork/detach themselves. Readiness releases the normal execution slot, so `--jobs 1` can run a check depending on a server. While the pipeline executes, liveness and readiness are monitored. Unexpected exit, including code `0`, failed checks, or check timeouts fail the run and stop new tasks while already-started batch tasks finish. There is no automatic restart, existing-instance takeover, or reuse of occupied ports.
+Daemon commands must remain foreground processes: do not use `&`, `nohup`, or fork/detach themselves. Readiness releases the normal execution slot, so `--jobs 1` can run a check depending on a server. The DAG monitors liveness and readiness during execution. Unexpected exit, including code `0`, failed checks, or timeouts skip unstarted transitive descendants and cancel running affected tasks; independent branches continue. Dependent ready daemons become unavailable and stop being monitored, but are not stopped. Final health checks precede completion. There is no automatic restart, existing-instance takeover, or reuse of occupied ports.
 
-Hook-enabled daemons are cleaned up in reverse plan dependency order. Daemons without hooks remain available for manual cleanup even after startup checks or downstream tasks fail. If initial metadata cannot be reliably recorded, startup attempts to terminate the untracked process. Forced CLI termination, power loss, and detached descendants are not guaranteed to be cleaned up.
+Success, failure, cancellation, and startup check timeouts never stop recorded daemons; users manage them through `stop`. The `shutdownHook` setting is removed and rejected if present. Monitoring ends with the run; there is no separate background scheduler. If initial metadata cannot be reliably recorded, startup attempts to terminate the untracked process. Forced CLI termination, power loss, and detached descendants are not guaranteed to be reclaimed.
 
-Checks and stop commands receive `DEVPULSE_DAEMON_PID`, `DEVPULSE_RUN_ID`, and `DEVPULSE_TASK_NAME`. Stop commands must target only the corresponding instance; do not kill processes by name or automatically delete database directories/volumes. Failed or timed-out stop commands still trigger best-effort process reclamation and return failure with diagnostics.
+Historical task `READY` preserves successful startup/readiness. `status` separately displays recorded health transitions and on-demand live checks. Later daemon faults do not overwrite completed node outcomes, but fail the workflow; historical health describes only its observation time. The roadmap for batch retry/timeout configuration, general DAG persistence/recovery, conditional branches, dynamic graphs, subworkflows, and explicit daemon restart is in the [core usage guide](../../devpulse-core/README.md).
+
+Checks and stop commands receive `DEVPULSE_DAEMON_PID`, `DEVPULSE_DAEMON_INSTANCE_ID`, `DEVPULSE_RUN_ID`, and `DEVPULSE_TASK_NAME`. Stop commands must target only the corresponding instance; do not kill processes by name or automatically delete database directories/volumes. Failed or timed-out stop commands still trigger best-effort process reclamation and return failure with diagnostics. DAG alone owns monitoring limits, and instance records persist the actual policy. Explicit startup retries retain earlier identities, independent scripts, and manual-stop access; task logs append.
 
 ### `stop`: manually clean up daemons
 
@@ -359,16 +362,19 @@ Checks and stop commands receive `DEVPULSE_DAEMON_PID`, `DEVPULSE_RUN_ID`, and `
 # Stop all daemons in the latest run
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop
 
-# Stop one daemon in a selected run
+# Stop every instance of the server task in a selected run
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>"
+
+# Stop only one server instance (obtain its ID from status)
+java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>" --instance "<instance-id>"
 
 # Stop a selected run in another project
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
-`stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Without a task name, it stops all recorded daemons in that run in reverse dependency order. It uses recorded stop settings, not the current `.devpulse.yaml`, and does not clean other historical runs or delete logs/business data. PID and start time confirm ownership; reused PIDs are not terminated, and uncertain identities are refused.
+`stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Task-level stopping handles every recorded instance of that task; omission processes all tasks in reverse dependency order. `--instance <ID>` requires a task name and targets only an instance belonging to that task. Recorded stop settings are used without requiring the current `.devpulse.yaml`, cleaning other runs, or deleting logs/business data. PID/start time confirm identity; uncertain identity is refused. A failed instance cleanup does not prevent processing other instances and returns diagnostics. Legacy single-instance records remain queryable and stoppable.
 
-Repeated cleanup of exited instances returns `0`, as do empty history or a selected run without daemons. A requested task without a recorded process, failed stop command, or unconfirmed cleanup returns `1`; interruption returns `130`. Manually stopping a daemon still used by an executing DAG triggers that run's failure policy.
+Repeated cleanup of exited instances returns `0`, as do empty history or a selected run without daemons. A requested task without a recorded process, failed stop command, or unconfirmed cleanup returns `1`; interruption returns `130`. Manually stopping a daemon still used by an executing DAG triggers affected-branch cancellation and skipping.
 
 ### `review`: review plans before execution
 
@@ -386,13 +392,13 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 ```
 
-An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, hooks, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `pulse --dry-run` also show all lifecycle commands without running checks or cleanup.
+An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, user-managed lifecycle, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `pulse --dry-run` also show all lifecycle commands without running checks or cleanup.
 
 Success returns `0`, configuration, target, or interface errors return `1`, and interruption returns `130`. Topological order and dependency depth are not fixed execution batches; valid configuration does not guarantee command safety or tool availability.
 
 ### `status`: query run status and logs
 
-Every actual `pulse` execution creates an independent run ID, storing `state.conf`, a run lock, and task logs under the project's `.devpulse\runs\<run-id>`. By default, `status` shows the run with the latest start time, including overall and task states, exit codes, errors, UTC start/finish times, and durations.
+Every actual `pulse` execution creates an independent run ID, storing `state.conf`, a run lock, and task logs under the project's `.devpulse\runs\<run-id>`. By default, `status` shows the run with the latest start time, including overall and task states, exit codes, errors, UTC start/finish times, and durations. Daemons are shown per instance with ID, attempt, PID, and live state, including earlier startups without overwriting historical workflow outcomes.
 
 | Option | Effect |
 |--------|--------|
@@ -414,7 +420,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 
 Historical task states distinguish `PENDING`, `RUNNING`, `READY`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. `READY` records that a daemon became ready during execution, not that it remains alive later. Reading unfinished records checks the run lock and executor identity. Confirmed exit persists an interrupted result; uncertainty preserves the record and prints a warning. There is no automatic resume or process takeover.
 
-Detailed queries separately show live daemon state, PID, and hook: `STARTING`, `READY`, `NOT_READY`, `EXITED`, `STOPPED`, or `UNKNOWN`. Recorded checks run only for matching process identities; unavailable Bash or unconfirmed identity yields `UNKNOWN`. The overall run state remains the pipeline outcome and is not retroactively changed after CLI exit. `--list` and `--log` read only history/logs without readiness probes.
+Detailed queries separately show live daemon state and PID: `STARTING`, `READY`, `NOT_READY`, `EXITED`, `STOPPED`, or `UNKNOWN`. Recorded checks run only for matching process identities; unavailable Bash or unconfirmed identity yields `UNKNOWN`. The overall run state remains the pipeline outcome and is not retroactively changed after CLI exit. `--list` and `--log` read only history/logs without readiness probes.
 
 Times are displayed in UTC to whole seconds, with durations using `ms`, `s`, `m`, or `h` automatically. Active runs show `(running)`; estimated durations for cancellation or interruption are marked `~`. Unstarted or unavailable times display `-`.
 

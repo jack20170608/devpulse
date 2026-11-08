@@ -1,9 +1,10 @@
 package io.github.devpulse.cli;
 
-import io.github.devpulse.core.execution.DaemonManager;
-import io.github.devpulse.core.execution.RunHistory;
+import io.github.devpulse.core.bash.DaemonManager;
+import io.github.devpulse.core.bash.RunHistory;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -22,7 +23,7 @@ public final class StopCommand implements Callable<Integer> {
     private CommandSpec spec;
 
     @Parameters(index = "0", arity = "0..1", paramLabel = "TASK",
-            description = "Daemon to stop; defaults to all daemons "
+            description = "Daemon whose recorded instances to stop; defaults to all daemons "
                     + "in the selected run, in reverse dependency order.")
     private String task;
 
@@ -34,11 +35,18 @@ public final class StopCommand implements Callable<Integer> {
             description = "Select a recorded run instead of the latest.")
     private String run;
 
+    @Option(names = "--instance", paramLabel = "ID",
+            description = "Stop one instance of TASK instead of all its instances.")
+    private String instance;
+
     @Override
     public Integer call() {
         var out = spec.commandLine().getOut();
         var err = spec.commandLine().getErr();
         try {
+            if (instance != null && task == null) {
+                throw new IOException("--instance requires a task name.");
+            }
             var history = new RunHistory(directory);
             RunHistory.Snapshot snapshot;
             if (run == null) {
@@ -52,11 +60,12 @@ public final class StopCommand implements Callable<Integer> {
                 snapshot = history.get(run).snapshot();
             }
             var path = history.runDirectory(snapshot);
-            var selected = snapshot.tasks().reversed().stream()
-                    .filter(value -> task == null
-                            || task.equals(value.name()))
-                    .filter(value -> DaemonManager.recorded(path, value.id()))
-                    .toList();
+            var selected = new ArrayList<RunHistory.TaskState>();
+            for (var value : snapshot.tasks().reversed()) {
+                if ((task == null || task.equals(value.name())) && DaemonManager.recorded(path, value.id())) {
+                    selected.add(value);
+                }
+            }
             if (selected.isEmpty()) {
                 if (task != null) {
                     throw new IOException(
@@ -68,13 +77,21 @@ public final class StopCommand implements Callable<Integer> {
             var failed = false;
             for (var daemon : selected) {
                 try {
-                    DaemonManager.stop(path, daemon.id());
+                    if (instance == null) {
+                        DaemonManager.stop(path, daemon.id());
+                    } else {
+                        DaemonManager.stop(path, daemon.id(), instance);
+                    }
                     out.println("[" + daemon.name()
-                            + "] Stopped (or already exited).");
+                            + "] " + (instance == null ? "All instances" : "Instance " + instance)
+                            + " stopped (or already exited).");
                 } catch (IOException exception) {
                     failed = true;
                     err.println("[" + daemon.name() + "] "
                             + exception.getMessage());
+                    for (var suppressed : exception.getSuppressed()) {
+                        err.println("[" + daemon.name() + "] " + suppressed.getMessage());
+                    }
                 }
             }
             return failed ? 1 : 0;

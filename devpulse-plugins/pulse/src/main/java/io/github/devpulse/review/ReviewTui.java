@@ -22,7 +22,7 @@ import dev.tamboui.widgets.list.ListState;
 import dev.tamboui.widgets.list.ListWidget;
 import dev.tamboui.widgets.paragraph.Paragraph;
 import io.github.devpulse.execution.PulseConfiguration;
-import io.github.devpulse.core.execution.TaskPlan;
+import io.github.devpulse.execution.PulsePlan;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -34,7 +34,7 @@ public final class ReviewTui {
     private static final Style ACCENT = Style.create().cyan().bold();
     private final String target;
     private final PulseConfiguration configuration;
-    private final TaskPlan plan;
+    private final PulsePlan plan;
     private final int jobs;
     private final ListState selection = new ListState();
     private final DagWidget dag;
@@ -46,7 +46,7 @@ public final class ReviewTui {
     private IOException renderingFailure;
 
     private ReviewTui(String target, PulseConfiguration configuration,
-            TaskPlan plan, int jobs) {
+            PulsePlan plan, int jobs) {
         this.target = target;
         this.configuration = configuration;
         this.plan = plan;
@@ -63,7 +63,7 @@ public final class ReviewTui {
     }
 
     public static boolean show(String target,
-            PulseConfiguration configuration, TaskPlan plan, int jobs)
+            PulseConfiguration configuration, PulsePlan plan, int jobs)
             throws IOException, InterruptedException {
         try (var terminal = TerminalBuilder.builder()
                 .system(true)
@@ -214,7 +214,8 @@ public final class ReviewTui {
         if (task.daemon() != null) {
             details.add(Line.empty());
             details.add(Line.styled("Daemon lifecycle:", ACCENT));
-            TaskDetails.daemonDetails(task).forEach(value -> display(value).lines()
+            TaskDetails.daemonDetails(task, plan.daemonOptions().get(task.name()))
+                    .forEach(value -> display(value).lines()
                     .forEach(line -> details.add(Line.from(line))));
         }
         var wrapped = wrap(details, Math.max(1, area.width()));

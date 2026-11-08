@@ -1,70 +1,51 @@
 package io.github.devpulse.core.dag;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 public final class DagWorkflow {
-    record Node<T>(TaskKey<T> key, List<TaskKey<?>> needs, DagTask<T> task,
-            TaskOptions options) {}
+    sealed interface Action<T> permits Batch, Daemon {}
+    record Batch<T>(DagTask<T> task) implements Action<T> {}
+    record Daemon<T>(DagDaemon<T> task, DaemonOptions options) implements Action<T> {}
+    record Node<T>(TaskKey<T> key, Action<T> action, TaskOptions options) {}
 
     private final Map<String, Node<?>> nodes;
-    private final List<TaskKey<?>> topologicalOrder;
+    private final DagGraph graph;
 
-    private DagWorkflow(Map<String, Node<?>> definitions) {
-        if (definitions.isEmpty()) {
-            throw new IllegalArgumentException("A workflow must contain at least one task.");
-        }
+    private DagWorkflow(Map<String, Node<?>> definitions, DagGraph graph) {
         nodes = Collections.unmodifiableMap(new LinkedHashMap<>(definitions));
-        var remaining = new LinkedHashMap<String, Integer>();
-        var dependents = new LinkedHashMap<String, List<String>>();
-        for (var node : nodes.values()) {
-            remaining.put(node.key().id(), node.needs().size());
-            for (var dependency : node.needs()) {
-                var prerequisite = nodes.get(dependency.id());
-                if (prerequisite == null || !prerequisite.key().equals(dependency)) {
-                    throw new IllegalArgumentException("Unknown dependency or result type mismatch: "
-                            + node.key().id() + " -> " + dependency);
-                }
-                dependents.computeIfAbsent(dependency.id(), ignored -> new ArrayList<>())
-                        .add(node.key().id());
-            }
-        }
-        var ready = new ArrayDeque<String>();
-        remaining.forEach((id, count) -> {
-            if (count == 0) {
-                ready.addLast(id);
-            }
-        });
-        var order = new ArrayList<TaskKey<?>>();
-        while (!ready.isEmpty()) {
-            var id = ready.removeFirst();
-            order.add(nodes.get(id).key());
-            for (var next : dependents.getOrDefault(id, List.of())) {
-                if (remaining.compute(next, (key, value) -> value - 1) == 0) {
-                    ready.addLast(next);
-                }
-            }
-        }
-        if (order.size() != nodes.size()) {
-            var unresolved = remaining.entrySet().stream()
-                    .filter(entry -> entry.getValue() > 0).map(Map.Entry::getKey).toList();
-            throw new IllegalArgumentException("Dependency cycle; unresolved tasks: " + unresolved);
-        }
-        topologicalOrder = List.copyOf(order);
+        this.graph = graph;
     }
 
     public static Builder builder() {
-        return new Builder();
+        return new Builder(null);
+    }
+
+    public static Builder builder(DagGraph graph) {
+        return new Builder(Objects.requireNonNull(graph, "graph"));
+    }
+
+    public DagGraph graph() {
+        return graph;
     }
 
     public List<TaskKey<?>> topologicalOrder() {
-        return topologicalOrder;
+        return graph.topologicalOrder();
+    }
+
+    public boolean isDaemon(TaskKey<?> key) {
+        graph.node(key);
+        return nodes.get(key.id()).action() instanceof Daemon<?>;
+    }
+
+    public DagWorkflow select(List<? extends TaskKey<?>> roots) {
+        var selected = graph.select(roots);
+        var subset = new LinkedHashMap<String, Node<?>>();
+        selected.topologicalOrder().forEach(key -> subset.put(key.id(), nodes.get(key.id())));
+        return new DagWorkflow(subset, selected);
     }
 
     public DagRun newRun(int parallelism) {
@@ -81,11 +62,20 @@ public final class DagWorkflow {
 
     public static final class Builder {
         private final Map<String, Node<?>> nodes = new LinkedHashMap<>();
+        private final DagGraph graph;
+        private final DagGraph.Builder planning;
 
-        private Builder() {}
+        private Builder(DagGraph graph) {
+            this.graph = graph;
+            planning = graph == null ? DagGraph.builder() : null;
+        }
 
         public <T> Builder task(TaskKey<T> key, DagTask<T> task) {
-            return task(key, List.of(), task, TaskOptions.DEFAULT);
+            return task(key, needs(key), task, TaskOptions.DEFAULT);
+        }
+
+        public <T> Builder task(TaskKey<T> key, DagTask<T> task, TaskOptions options) {
+            return task(key, needs(key), task, options);
         }
 
         public <T> Builder task(TaskKey<T> key, List<? extends TaskKey<?>> needs,
@@ -95,24 +85,61 @@ public final class DagWorkflow {
 
         public <T> Builder task(TaskKey<T> key, List<? extends TaskKey<?>> needs,
                 DagTask<T> task, TaskOptions options) {
-            Objects.requireNonNull(key, "key");
             Objects.requireNonNull(task, "task");
+            return add(key, needs, new Batch<>(task), options);
+        }
+
+        public <T> Builder daemon(TaskKey<T> key, DagDaemon<T> daemon) {
+            return daemon(key, needs(key), daemon, DaemonOptions.DEFAULT, TaskOptions.DEFAULT);
+        }
+
+        public <T> Builder daemon(TaskKey<T> key, DagDaemon<T> daemon, DaemonOptions options) {
+            return daemon(key, needs(key), daemon, options, TaskOptions.DEFAULT);
+        }
+
+        public <T> Builder daemon(TaskKey<T> key, DagDaemon<T> daemon,
+                DaemonOptions options, TaskOptions attempts) {
+            return daemon(key, needs(key), daemon, options, attempts);
+        }
+
+        public <T> Builder daemon(TaskKey<T> key, List<? extends TaskKey<?>> needs,
+                DagDaemon<T> daemon, DaemonOptions options) {
+            return daemon(key, needs, daemon, options, TaskOptions.DEFAULT);
+        }
+
+        public <T> Builder daemon(TaskKey<T> key, List<? extends TaskKey<?>> needs,
+                DagDaemon<T> daemon, DaemonOptions options, TaskOptions attempts) {
+            Objects.requireNonNull(daemon, "daemon");
+            Objects.requireNonNull(options, "options");
+            return add(key, needs, new Daemon<>(daemon, options), attempts);
+        }
+
+        private <T> Builder add(TaskKey<T> key, List<? extends TaskKey<?>> needs,
+                Action<T> action, TaskOptions options) {
+            Objects.requireNonNull(key, "key");
             Objects.requireNonNull(options, "options");
             List<TaskKey<?>> dependencies = List.copyOf(needs);
-            if (new LinkedHashSet<>(dependencies).size() != dependencies.size()) {
-                throw new IllegalArgumentException("Duplicate dependencies for " + key.id());
+            if (planning != null) {
+                planning.node(key, dependencies);
+            } else if (!graph.node(key).needs().equals(dependencies)) {
+                throw new IllegalArgumentException("Dependencies differ from the planned graph: " + key);
             }
-            if (dependencies.stream().anyMatch(dependency -> dependency.id().equals(key.id()))) {
-                throw new IllegalArgumentException("Task cannot depend on itself: " + key.id());
-            }
-            if (nodes.putIfAbsent(key.id(), new Node<>(key, dependencies, task, options)) != null) {
+            if (nodes.putIfAbsent(key.id(), new Node<>(key, action, options)) != null) {
                 throw new IllegalArgumentException("Duplicate task ID: " + key.id());
             }
             return this;
         }
 
         public DagWorkflow build() {
-            return new DagWorkflow(nodes);
+            var planned = graph == null ? planning.build() : graph;
+            if (nodes.size() != planned.topologicalOrder().size()) {
+                throw new IllegalArgumentException("Every planned task must have an execution action.");
+            }
+            return new DagWorkflow(nodes, planned);
+        }
+
+        private List<TaskKey<?>> needs(TaskKey<?> key) {
+            return graph == null ? List.of() : graph.node(key).needs();
         }
     }
 }

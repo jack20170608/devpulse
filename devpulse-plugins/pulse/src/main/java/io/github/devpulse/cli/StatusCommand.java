@@ -1,8 +1,8 @@
 package io.github.devpulse.cli;
 
-import io.github.devpulse.core.environment.EnvironmentGatherer;
-import io.github.devpulse.core.execution.RunHistory;
-import io.github.devpulse.core.execution.DaemonManager;
+import io.github.devpulse.gatherer.EnvironmentGatherer;
+import io.github.devpulse.core.bash.RunHistory;
+import io.github.devpulse.core.bash.DaemonManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.ParameterException;
@@ -174,25 +175,34 @@ public final class StatusCommand implements Callable<Integer> {
             if (task.error() != null) {
                 out.println("  " + task.error());
             }
+            if (task.daemonHealth() != null) {
+                out.println("  Recorded daemon health: " + task.daemonHealth()
+                        + "; observed: " + time(task.daemonCheckedAt()));
+                if (task.daemonError() != null) {
+                    out.println("  " + task.daemonError());
+                }
+            }
         }
         var directory = history.runDirectory(snapshot);
-        var daemons = snapshot.tasks().stream()
-                .filter(task -> DaemonManager.recorded(directory, task.id()))
-                .toList();
+        var daemons = new ArrayList<RunHistory.TaskState>();
+        for (var task : snapshot.tasks()) {
+            if (DaemonManager.recorded(directory, task.id())) {
+                daemons.add(task);
+            }
+        }
         if (!daemons.isEmpty()) {
             out.println();
             out.println("Daemon processes (live checks; "
                     + "run state records the pipeline outcome):");
-            out.printf("%-24s %-12s %-10s %s%n",
-                    "TASK", "STATE", "PID", "SHUTDOWN_HOOK");
+            out.printf("%-24s %-36s %-7s %-12s %s%n", "TASK", "INSTANCE", "ATTEMPT", "STATE", "PID");
             for (var daemon : daemons) {
-                var observation = DaemonManager.observe(directory,
-                        daemon.id());
-                out.printf("%-24s %-12s %-10s %s%n",
-                        daemon.name(), observation.state(), observation.pid(),
-                        observation.shutdownHook());
-                if (observation.detail() != null) {
-                    out.println("  " + observation.detail());
+                for (var instance : DaemonManager.instances(directory, daemon.id())) {
+                    var observation = instance.observation();
+                    out.printf("%-24s %-36s %-7s %-12s %s%n", daemon.name(), instance.id(),
+                            instance.attempt(), observation.state(), observation.pid());
+                    if (observation.detail() != null) {
+                        out.println("  " + observation.detail());
+                    }
                 }
             }
         }

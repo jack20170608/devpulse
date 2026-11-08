@@ -13,7 +13,7 @@
     <dependencies>
         <dependency>
             <groupId>io.github.devpulse</groupId>
-            <artifactId>devpulse-core</artifactId>
+            <artifactId>gatherer</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

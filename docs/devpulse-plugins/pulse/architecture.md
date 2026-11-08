@@ -8,7 +8,9 @@
 
 ### 模块边界
 
-Pulse 负责 YAML 配置适配、picocli 命令与终端展示；任务定义、计划、Bash 执行、运行历史和长驻进程管理由 [devpulse-core](../../devpulse-core/architecture.md) 提供。Pulse 将核心结果映射为 CLI 退出码，并负责 CLI 退出钩子。
+Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 命令与终端展示；[devpulse-core](../../devpulse-core/architecture.md) 提供唯一的 `DagGraph` 图规划、`DagWorkflow` 执行定义、Bash Adapter、运行历史和长驻进程管理。`PulsePlan` 仅保存选定图及配置展示信息，不实现图算法。Pulse 将核心结果映射为 CLI 退出码，并负责 CLI 退出钩子。
+
+监测参数直接解析为 DAG 的 `DaemonOptions`，Bash Adapter 从启动上下文取得实际策略；退出码由 Adapter 明确记录，不猜测 Java 整数结果。Pulse 负责汇总终端文案。Daemon 每次启动保存独立实例 ID、尝试编号、脚本及身份，`status` 显示所有实例；任务级 `stop` 停止全部实例，`stop TASK --instance <ID>` 只停止指定实例，工作流结束不自动停止。
 
 ### 配置格式与加载
 
@@ -29,12 +31,12 @@ Pulse 负责 YAML 配置适配、picocli 命令与终端展示；任务定义、
 - **目标选择**：`pulse` 默认选择 `dev`；`pulse <名称>` 支持流水线或单任务。目标同时是任务名和流水线名时拒绝执行，要求用户消除重名。
 - **构建有向无环图（DAG）**：将 `tasks` 映射中的每个任务视作一个节点（Vertex），将它们之间的 `needs` 依赖关系视作有向边（Edge）。
 - **依赖补齐**：流水线的 `tasks` 声明最终目标，自动补齐全部传递依赖；共享依赖和重复目标在本次执行中只运行一次。列表顺序不代表依赖顺序。
-- **拓扑排序与循环依赖检测**：采用 Kahn 算法或 DFS 算法检查依赖图。如果发现循环依赖（例如 A 依赖 B，B 又依赖 A），在启动任何命令前报错；执行时仅将所有依赖均已满足的任务加入就绪队列：普通任务成功退出，长驻进程通过就绪检查；在并发上限内调度。
+- **拓扑排序与循环依赖检测**：统一使用 core 的 `DagGraph` 检查完整图并补齐目标依赖，不在 Pulse 重复实现图算法。循环依赖在启动命令前报错；执行时由 `DagRun` 在并发上限内调度依赖均已满足的任务：普通任务成功退出，长驻进程通过就绪检查。运行时将 Bash 实现绑定到同一图，不再转换或重新规划依赖。
 - **底层进程控制器**：复用 Bash 基础组件拉起本地命令，工作目录为项目配置所在目录。合并错误流和标准流（`redirectErrorStream(true)`），普通任务以 UTF-8 持续读取并输出带任务名前缀的日志，长驻进程直接写入日志文件。工具必须已安装且能被 Bash 找到；执行权限与当前用户相同，不提供沙箱。
 - **并发上限**：默认最多同时运行 4 个批任务或长驻进程启动等待；支持配置 `parallelism` 与 `pulse --jobs` 覆盖，优先级为命令行参数高于项目配置、高于默认值。取值必须为正整数，并在执行前校验；该限制不控制已就绪长驻进程数量、探测进程或外部任务内部的并发。
-- **失败处理**：以 Bash 退出码判断任务结果；`0` 成功，非零失败。长脚本提前成功退出时，允许输入管道因 Bash 关闭标准输入而产生的写入 I/O 异常，不误判为失败；日志读取和持久化失败仍需报错。不隐式启用 `errexit` 或 `pipefail`，需要时由任务命令显式设置。观察到失败后停止启动新任务，等待所有已启动任务结束，返回非零退出码并汇总成功、失败和跳过数量。
+- **失败处理**：以 Bash 退出码判断批任务结果；提前 `exit 0` 关闭输入不误判为失败。不隐式启用 `errexit` 或 `pipefail`。普通失败跳过后继，Daemon 失效取消运行中的受影响后继并跳过未启动后继，独立分支继续；日志、启动或持久化基础设施失败取消运行。`WorkflowRun` 消费装配完成的 DAG 的事件与结果，保存历史并汇总成功、失败和跳过数量，不建图或管理进程。
 - **命令选项**：`--directory` 指定项目目录，`--bash` 指定 Bash，`--jobs` 覆盖并发上限；`--dry-run` 校验完整配置并显示补齐依赖后的计划及命令，不探测 Bash、不启动任务。
-- **执行边界**：支持非交互批任务与显式配置的本地长驻进程，不提供普通批任务超时、自动重启或常驻调度平台。取消时尽力终止批任务及可见后代；长驻进程是否清理由 `shutdownHook` 控制。不保证回收已脱离进程树的后台进程。
+- **执行边界**：Bash 配置暂不提供批任务重试/超时、Daemon 自动重启或常驻调度平台。取消时 Adapter 尽力回收批任务及可见后代，不停止 Daemon；`shutdownHook` 已移除，用户通过 `stop` 管理。核心支持 JVM 或外部进程的 Daemon Handle，仅处理就绪和健康，不处理自动清理。后续路线见 [核心使用说明](../../../devpulse-core/README.md)。
 
 ### 配置初始化模块（`InitCommand.java`）
 
@@ -49,7 +51,7 @@ Pulse 负责 YAML 配置适配、picocli 命令与终端展示；任务定义、
 
 **职责**：静态校验任务或流水线的执行计划，在交互式 TUI 中供用户执行前审阅，不调用 AI。
 
-- **目标与校验**：`review` 默认选择 `dev`，`review <名称>` 支持流水线或单任务。复用 `PulseConfiguration.load` 和 `PulseConfiguration.plan`，后者调用 core 的 `TaskPlan.create`；与 `pulse` 保持相同的完整配置校验、目标重名检查、循环依赖检测和传递依赖补齐规则。
+- **目标与校验**：`review` 默认选择 `dev`，`review <名称>` 支持流水线或单任务。复用 `PulseConfiguration.load` 和 `PulseConfiguration.plan`，后者通过 `PulsePlan` 委托 core 的 `DagGraph` 规划；与 `pulse` 保持相同的完整配置校验、目标重名检查、循环依赖检测和传递依赖补齐规则。
 - **TUI 与依赖展示**：使用 TamboUI 的 `tamboui-tui` 与 `tamboui-jline3-backend`，版本统一由 `devpulse-dependencies/pom.xml` 管理，不使用快照版本。左侧默认显示分层 DAG，可切换至按拓扑顺序排列的任务列表；右侧显示选中任务的直接前置依赖、计划内后继任务和完整 Bash 命令。DAG 中的编号对应任务列表顺序，长名称截断后可在详情中查看完整名称。
 - **DAG 布局与高亮**：自定义 TamboUI Widget 按最长依赖路径的深度 `L` 从左到右分层，同层按拓扑顺序从上到下排列；共享任务仅绘制一个节点，每条直接依赖均保留指向后继节点的连线。跨层长连线从节点行之间绕过中间节点；交叉线可能共享显示单元格，不代表新增依赖，右侧详情提供精确的直接依赖关系。选中节点为黄色，全部传递前置依赖及其路径为绿色，全部传递后继及其路径为品红色；无关节点与连线保持灰色。不自动消除所有交叉。
 - **计划信息与交互**：顶部显示目标、项目目录、任务数量、有效并发上限和颜色说明。上／下方向键选择任务，`Home`／`End` 选择首／末任务；左／右方向键水平平移 DAG，`w`／`s` 垂直平移，`r` 将视图定位到选中任务；`Tab` 切换 DAG 与任务列表，`PageUp`／`PageDown` 滚动右侧详情，`q` 退出。切换任务时自动定位图中节点并重置详情滚动位置；图形按视口裁剪，不覆盖相邻面板，长命令按终端显示宽度换行，控制字符以可见文本展示而不作为终端指令解释。依赖深度和拓扑顺序不代表固定执行批次或串行顺序，实际调度仍由依赖成功情况及并发上限决定。
@@ -73,7 +75,9 @@ Pulse 负责 YAML 配置适配、picocli 命令与终端展示；任务定义、
 
 ### Module boundaries
 
-Pulse owns YAML adaptation, picocli commands, and terminal presentation. [devpulse-core](../../devpulse-core/architecture.md) provides definitions, planning, Bash execution, history, and daemon management. Pulse maps core results to CLI exit codes and owns CLI shutdown hooks.
+Pulse owns YAML adaptation, pipeline target resolution, task assembly, picocli commands, and terminal presentation. [devpulse-core](../../devpulse-core/architecture.md) provides the single `DagGraph` planner, `DagWorkflow` execution definitions, the Bash Adapter, history, and daemon management. `PulsePlan` only stores the selected graph and configuration presentation metadata, with no graph algorithms. Pulse maps core results to CLI exit codes and owns CLI shutdown hooks.
+
+Monitoring parameters parse directly into DAG `DaemonOptions`; the Bash Adapter reads actual policy from startup context and explicitly records exit codes without guessing integer Java results. Pulse prints summary text. Every daemon startup records its independent instance ID, attempt number, scripts, and identity. `status` shows all instances; task-level `stop` stops all instances, while `stop TASK --instance <ID>` targets one. Workflow completion never stops them automatically.
 
 ### Configuration format and loading
 
@@ -94,12 +98,12 @@ Pulse owns YAML adaptation, picocli commands, and terminal presentation. [devpul
 - **Target selection**: `pulse` defaults to `dev`; `pulse <name>` accepts either a pipeline or a single task. Reject targets that name both a task and a pipeline and require the collision to be resolved.
 - **DAG construction**: Treat each task in the `tasks` mapping as a vertex and each `needs` relationship as a directed edge.
 - **Dependency expansion**: Pipeline `tasks` declare final targets. Include all transitive dependencies automatically and run shared dependencies or duplicate targets once per invocation. List order does not define dependency order.
-- **Ordering and cycle detection**: Validate the dependency graph using Kahn's algorithm or DFS. Report cycles before starting commands. Only enqueue tasks whose dependencies are all satisfied: successful batch exit or successful daemon readiness. Schedule within the concurrency limit.
+- **Ordering and cycle detection**: Use core's `DagGraph` to validate the full graph and expand target dependencies without duplicating graph algorithms in Pulse. Report cycles before starting commands. `DagRun` schedules within the concurrency limit once all prerequisites succeed or reach daemon readiness. Runtime assembly binds Bash actions to the same graph without converting or replanning dependencies.
 - **Process execution**: Reuse the Bash component with the project configuration directory as the working directory. Merge standard error and output using `redirectErrorStream(true)`. Continuously read UTF-8 batch output with task-name prefixes; redirect daemon output directly to log files. Tools must be installed and discoverable by Bash. Commands run with the current user's permissions; no sandbox is provided.
 - **Concurrency**: Allow at most 4 concurrent batch tasks or daemon startup waits by default. Support `parallelism` and `pulse --jobs`, with CLI options overriding project configuration and defaults. Validate positive integers before execution. This does not limit ready daemons, probe processes, or concurrency inside external tasks.
-- **Failure policy**: Use the Bash exit code: zero means success, nonzero means failure. When a long script exits successfully before consuming all input, tolerate input-write I/O errors caused by Bash closing stdin rather than misclassifying the task as failed; output reading and persistence failures must still be reported. Do not implicitly enable `errexit` or `pipefail`; commands may set them explicitly. Once failure is observed, stop launching new tasks, wait for started tasks to finish, return a nonzero exit code, and summarize succeeded, failed, and skipped counts.
+- **Failure policy**: Use batch exit codes; early `exit 0` closing stdin is not a failure. Do not implicitly enable `errexit` or `pipefail`. Ordinary failure skips descendants; daemon faults cancel running affected descendants and skip unstarted descendants while independent branches continue. Logging, startup, or persistence infrastructure faults cancel the run. `WorkflowRun` consumes events and results from the assembled DAG, persisting history and summarizing succeeded, failed, and skipped counts without constructing graphs or managing processes.
 - **Options**: `--directory` selects the project, `--bash` selects Bash, and `--jobs` overrides concurrency. `--dry-run` validates the whole configuration and prints the expanded plan and commands without discovering Bash or starting tasks.
-- **Execution boundaries**: Support non-interactive batch tasks and explicitly configured local daemons, not ordinary batch timeouts, automatic restart, or a persistent scheduling platform. Cancellation attempts to terminate batches and visible descendants; daemon cleanup follows `shutdownHook`. Detached descendants are not guaranteed to be reclaimed.
+- **Execution boundaries**: Bash configuration does not yet expose batch retries/timeouts, automatic daemon restart, or a persistent scheduler. The Adapter attempts batch/visible-descendant cleanup on cancellation without stopping daemons. `shutdownHook` is removed; users invoke `stop`. Core Handles may represent JVM threads or external processes and provide readiness/health, not automatic cleanup. See the [core usage roadmap](../../../devpulse-core/README.md).
 
 ### Configuration initializer (`InitCommand.java`)
 
@@ -114,7 +118,7 @@ Pulse owns YAML adaptation, picocli commands, and terminal presentation. [devpul
 
 **Responsibility**: Statically validate a task or pipeline execution plan and provide an interactive TUI for user review before execution, without calling AI.
 
-- **Targets and validation**: `review` defaults to `dev`; `review <name>` accepts a pipeline or a single task. Reuse `PulseConfiguration.load` and `PulseConfiguration.plan`, which calls core's `TaskPlan.create`, for the same full configuration validation, target collision checks, cycle detection, and transitive dependency expansion as `pulse`.
+- **Targets and validation**: `review` defaults to `dev`; `review <name>` accepts a pipeline or a single task. Reuse `PulseConfiguration.load` and `PulseConfiguration.plan`, which delegates planning through `PulsePlan` to core's `DagGraph`, for the same full configuration validation, target collision checks, cycle detection, and transitive dependency expansion as `pulse`.
 - **TUI and dependencies**: Use TamboUI's `tamboui-tui` and `tamboui-jline3-backend`, with versions managed centrally in `devpulse-dependencies/pom.xml` and no snapshots. The left pane defaults to a layered DAG and can switch to a task list in topological order; the right pane shows the selected task's direct prerequisites, downstream tasks within the plan, and complete Bash command. DAG node numbers match task-list order; full names remain available in details when graph labels are truncated.
 - **DAG layout and highlighting**: A custom TamboUI Widget lays out nodes left to right by longest dependency-path depth `L`, with nodes in each layer ordered top to bottom by topological order. Draw shared tasks only once and retain an arrow to the dependent node for every direct dependency. Route long cross-layer edges between node rows to avoid intermediate nodes. Crossing lines may share display cells without implying new dependencies; right-pane details provide the exact direct relationships. Highlight the selected node in yellow, all transitive prerequisites and their paths in green, and all transitive dependents and their paths in magenta; unrelated nodes and edges remain gray. Do not automatically eliminate all crossings.
 - **Plan information and interaction**: Show the target, project directory, task count, effective concurrency limit, and color legend at the top. Up/Down selects tasks; `Home`/`End` selects the first/last task. Left/Right pans the DAG horizontally; `w`/`s` pans vertically; `r` centers the view on the selection. `Tab` switches between DAG and task list; `PageUp`/`PageDown` scrolls right-pane details; `q` quits. Center the graph and reset detail scrolling when selection changes. Clip graph output to its viewport without overwriting adjacent panes, wrap long commands by terminal display width, and display control characters as visible text rather than terminal instructions. Dependency depth and topological order are not fixed execution batches or a sequential schedule; actual scheduling still depends on successful prerequisites and the concurrency limit.

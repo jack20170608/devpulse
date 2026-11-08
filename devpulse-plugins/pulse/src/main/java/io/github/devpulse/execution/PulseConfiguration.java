@@ -5,25 +5,32 @@ import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigUtil;
 import com.typesafe.config.ConfigValueType;
-import io.github.devpulse.core.execution.PlanningException;
-import io.github.devpulse.core.execution.TaskDefinition;
-import io.github.devpulse.core.execution.TaskDefinition.Daemon;
-import io.github.devpulse.core.execution.TaskDefinition.Readiness;
-import io.github.devpulse.core.execution.TaskPlan;
-import io.github.devpulse.core.execution.WorkflowDefinition;
+import io.github.devpulse.core.bash.BashTaskDefinition;
+import io.github.devpulse.core.bash.BashTaskDefinition.Daemon;
+import io.github.devpulse.core.dag.DaemonOptions;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
 public record PulseConfiguration(Path directory, int parallelism,
-                                 WorkflowDefinition workflow, Config source) {
+                                 List<BashTaskDefinition> tasks,
+                                 Map<String, List<String>> pipelines,
+                                 Map<String, DaemonOptions> daemonOptions, Config source) {
+    public PulseConfiguration {
+        tasks = List.copyOf(tasks);
+        var copy = new LinkedHashMap<String, List<String>>();
+        pipelines.forEach((name, targets) -> copy.put(name, List.copyOf(targets)));
+        pipelines = Collections.unmodifiableMap(copy);
+        daemonOptions = Map.copyOf(daemonOptions);
+    }
 
     public static PulseConfiguration load(Path directory) throws IOException {
         var root = directory.toAbsolutePath().normalize();
@@ -49,21 +56,30 @@ public record PulseConfiguration(Path directory, int parallelism,
         }
         var parallelism = positiveInteger(config, "parallelism");
         requireType(config, "tasks", ConfigValueType.OBJECT);
-        var tasks = new ArrayList<TaskDefinition>();
+        var tasks = new ArrayList<BashTaskDefinition>();
+        var daemonOptions = new LinkedHashMap<String, DaemonOptions>();
         var taskSection = config.getConfig("tasks");
         for (var name : taskSection.root().keySet()) {
             var path = ConfigUtil.quoteString(name);
             requireType(taskSection, path, ConfigValueType.OBJECT);
             var tool = taskSection.getConfig(path);
             rejectUnknownFields(tool, List.of("description", "cmd", "needs", "type",
-                    "ready", "shutdownHook", "stop", "stopTimeout"));
+                    "ready", "stop", "stopTimeout"));
             if (tool.hasPathOrNull("description")) {
                 requireType(tool, "description", ConfigValueType.STRING);
             }
-            tasks.add(new TaskDefinition(name, nonBlankString(tool, "cmd"),
+            var daemon = daemon(tool);
+            if (daemon != null) {
+                var ready = tool.getConfig("ready");
+                daemonOptions.put(name, new DaemonOptions(
+                        duration(ready, "timeout", DaemonOptions.DEFAULT.readyTimeout()),
+                        duration(ready, "interval", DaemonOptions.DEFAULT.checkInterval()),
+                        duration(ready, "checkTimeout", DaemonOptions.DEFAULT.checkTimeout())));
+            }
+            tasks.add(new BashTaskDefinition(name, nonBlankString(tool, "cmd"),
                     tool.hasPathOrNull("needs")
                             ? stringList(tool, "needs") : List.of(),
-                    daemon(tool)));
+                    daemon));
         }
         requireType(config, "pipelines", ConfigValueType.OBJECT);
         var pipelines = new LinkedHashMap<String, List<String>>();
@@ -79,12 +95,12 @@ public record PulseConfiguration(Path directory, int parallelism,
             pipelines.put(name, stringList(pipeline, "tasks"));
         }
         return new PulseConfiguration(root, parallelism,
-                new WorkflowDefinition(tasks, pipelines), config);
+                tasks, pipelines, daemonOptions, config);
     }
 
-    public TaskPlan plan(String target) throws IOException {
+    public PulsePlan plan(String target) throws IOException {
         try {
-            return TaskPlan.create(workflow, target);
+            return PulsePlan.create(tasks, pipelines, daemonOptions, target);
         } catch (PlanningException exception) {
             if (exception.scope() == PlanningException.Scope.TARGET) {
                 throw new IOException(exception.getMessage(), exception);
@@ -112,7 +128,7 @@ public record PulseConfiguration(Path directory, int parallelism,
             throw invalid(tool, "type", "Expected task or daemon.");
         }
         if (type.equals("task")) {
-            for (var field : List.of("ready", "shutdownHook", "stop",
+            for (var field : List.of("ready", "stop",
                     "stopTimeout")) {
                 if (tool.hasPathOrNull(field)) {
                     throw invalid(tool, field,
@@ -125,16 +141,7 @@ public record PulseConfiguration(Path directory, int parallelism,
         var ready = tool.getConfig("ready");
         rejectUnknownFields(ready,
                 List.of("cmd", "interval", "timeout", "checkTimeout"));
-        var readiness = new Readiness(nonBlankString(ready, "cmd"),
-                duration(ready, "interval", Duration.ofMillis(500)),
-                duration(ready, "timeout", Duration.ofSeconds(30)),
-                duration(ready, "checkTimeout", Duration.ofSeconds(2)));
-        if (tool.hasPathOrNull("shutdownHook")) {
-            requireType(tool, "shutdownHook", ConfigValueType.BOOLEAN);
-        }
-        return new Daemon(readiness,
-                tool.hasPath("shutdownHook")
-                        && tool.getBoolean("shutdownHook"),
+        return new Daemon(nonBlankString(ready, "cmd"),
                 tool.hasPathOrNull("stop")
                         ? nonBlankString(tool, "stop") : null,
                 duration(tool, "stopTimeout", Duration.ofSeconds(5)));

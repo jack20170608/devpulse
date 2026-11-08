@@ -1,4 +1,4 @@
-package io.github.devpulse.core.execution;
+package io.github.devpulse.core.bash;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
@@ -14,6 +14,8 @@ import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigResolveOptions;
 import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueFactory;
+import io.github.devpulse.core.dag.DagDaemon;
+import io.github.devpulse.core.dag.DagGraph;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -45,7 +47,8 @@ public final class RunHistory {
 
     public record TaskState(String id, String name, List<String> needs,
             State state, Instant startedAt, Instant finishedAt,
-            Integer exitCode, String error) {
+            Integer exitCode, String error, DagDaemon.Health daemonHealth,
+            String daemonError, Instant daemonCheckedAt) {
         public TaskState {
             needs = List.copyOf(needs);
         }
@@ -57,7 +60,8 @@ public final class RunHistory {
         private TaskState finish(State result, Instant time, Integer code,
                 String reason) {
             return new TaskState(id, name, needs, result, startedAt, time,
-                    code, reason);
+                    code == null ? exitCode : code, reason,
+                    daemonHealth, daemonError, daemonCheckedAt);
         }
     }
 
@@ -84,7 +88,7 @@ public final class RunHistory {
         runs = project.resolve(".devpulse").resolve("runs");
     }
 
-    public Writer begin(String target, TaskPlan plan, int parallelism)
+    public Writer begin(String target, DagGraph graph, int parallelism)
             throws IOException {
         var id = UUID.randomUUID().toString();
         var directory = runs.resolve(id);
@@ -95,9 +99,10 @@ public final class RunHistory {
         try {
             lock = channel.lock();
             var owner = ProcessHandle.current();
-            var tasks = plan.tasks().stream().map(task -> new TaskState(
-                    UUID.randomUUID().toString(), task.name(), task.needs(),
-                    State.PENDING, null, null, null, null)).toList();
+            var tasks = graph.topologicalOrder().stream().map(key -> new TaskState(
+                    UUID.randomUUID().toString(), key.id(),
+                    graph.node(key).needs().stream().map(dependency -> dependency.id()).toList(),
+                    State.PENDING, null, null, null, null, null, null, null)).toList();
             var snapshot = new Snapshot(id, target, project.toString(),
                     parallelism, owner.pid(),
                     owner.info().startInstant().orElse(null), Instant.now(),
@@ -245,7 +250,11 @@ public final class RunHistory {
                         task.hasPath("exitCode")
                                 ? task.getInt("exitCode") : null,
                         task.hasPath("error")
-                                ? task.getString("error") : null));
+                                ? task.getString("error") : null,
+                        task.hasPath("daemonHealth")
+                                ? DagDaemon.Health.valueOf(task.getString("daemonHealth")) : null,
+                        task.hasPath("daemonError") ? task.getString("daemonError") : null,
+                        time(task, "daemonCheckedAt")));
             }
             var pid = config.getLong("executorPid");
             var parallelism = config.getInt("parallelism");
@@ -299,6 +308,10 @@ public final class RunHistory {
             put(item, "finishedAt", task.finishedAt());
             put(item, "exitCode", task.exitCode());
             put(item, "error", task.error());
+            put(item, "daemonHealth", task.daemonHealth() == null
+                    ? null : task.daemonHealth().name());
+            put(item, "daemonError", task.daemonError());
+            put(item, "daemonCheckedAt", task.daemonCheckedAt());
             return item;
         }).toList());
         writeData(directory.resolve("state.conf"), data);
@@ -406,17 +419,37 @@ public final class RunHistory {
                 throw new IOException("Run has already ended.");
             }
             var task = task(name);
+            if (task.state() == State.RUNNING) {
+                return;
+            }
             update(new TaskState(task.id(), name, task.needs(), State.RUNNING,
-                    Instant.now(), null, null, null));
+                    Instant.now(), null, null, null,
+                    task.daemonHealth(), task.daemonError(), task.daemonCheckedAt()));
             save();
         }
 
         public synchronized BufferedWriter openLog(String name)
                 throws IOException {
+            return openLog(name, false);
+        }
+
+        synchronized BufferedWriter openLog(String name, boolean append)
+                throws IOException {
             return Files.newBufferedWriter(
                     directory.resolve(task(name).logPath()),
-                    StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
+                    StandardCharsets.UTF_8,
+                    append ? StandardOpenOption.APPEND : StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE);
+        }
+
+        public synchronized void processExited(String name, int exitCode) throws IOException {
+            if (snapshot.state() == State.RUNNING) {
+                var task = task(name);
+                update(new TaskState(task.id(), name, task.needs(), task.state(),
+                        task.startedAt(), task.finishedAt(), exitCode, task.error(),
+                        task.daemonHealth(), task.daemonError(), task.daemonCheckedAt()));
+                save();
+            }
         }
 
         public synchronized void completed(String name, State state,
@@ -431,6 +464,17 @@ public final class RunHistory {
         public synchronized void ended(State state) throws IOException {
             if (snapshot.state() == State.RUNNING) {
                 snapshot = finish(snapshot, state);
+                save();
+            }
+        }
+
+        public synchronized void daemonChecked(String name, DagDaemon.Health health,
+                String error, Instant time) throws IOException {
+            if (snapshot.state() == State.RUNNING) {
+                var task = task(name);
+                update(new TaskState(task.id(), name, task.needs(), task.state(),
+                        task.startedAt(), task.finishedAt(), task.exitCode(), task.error(),
+                        health, error, time));
                 save();
             }
         }

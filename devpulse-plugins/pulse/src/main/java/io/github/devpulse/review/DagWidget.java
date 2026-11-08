@@ -6,7 +6,7 @@ import dev.tamboui.style.Style;
 import dev.tamboui.text.CharWidth;
 import dev.tamboui.text.GraphemeClusters;
 import dev.tamboui.widget.Widget;
-import io.github.devpulse.core.execution.TaskPlan;
+import io.github.devpulse.execution.PulsePlan;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,7 +42,7 @@ final class DagWidget implements Widget {
     private int viewportHeight;
     private boolean centerPending = true;
 
-    DagWidget(TaskPlan plan) {
+    DagWidget(PulsePlan plan) {
         var rows = new HashMap<Integer, Integer>();
         for (var task : plan.tasks()) {
             var depth = task.needs().stream()
