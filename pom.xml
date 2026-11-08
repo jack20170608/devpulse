@@ -12,6 +12,7 @@
     <modules>
         <module>devpulse-dependencies</module>
         <module>devpulse-bom</module>
+        <module>devpulse-common</module>
         <module>devpulse-core</module>
         <module>devpulse-plugins</module>
         <module>devpulse-cli</module>
