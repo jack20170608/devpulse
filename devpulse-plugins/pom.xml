@@ -21,4 +21,12 @@
         <module>depmap</module>
     </modules>
 
+    <dependencies>
+        <dependency>
+            <groupId>io.github.devpulse</groupId>
+            <artifactId>devpulse-common</artifactId>
+            <version>${revision}</version>
+        </dependency>
+    </dependencies>
+
 </project>
