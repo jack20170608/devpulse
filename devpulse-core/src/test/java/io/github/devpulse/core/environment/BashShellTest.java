@@ -38,4 +38,13 @@ public class BashShellTest {
 
     }
 
+//    @Test
+//    @Disabled
+//    void testSleep() throws Exception {
+//        var bash = BashShell.discover(null);
+//        var root = Path.of(".").toAbsolutePath().normalize();
+//        var output = bash.capture("sleep 6 && echo 'done'", root);
+//        System.out.println(output);
+//    }
+
 }
