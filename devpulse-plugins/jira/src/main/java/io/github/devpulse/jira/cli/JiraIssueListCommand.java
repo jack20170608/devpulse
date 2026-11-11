@@ -57,7 +57,7 @@ public class JiraIssueListCommand extends JiraCommand.Action {
     String updatedBefore;
     @Option(names = "--columns", split = ",", paramLabel = "COLUMN,...",
             description = "key,type,status,priority,assignee,summary,reporter,"
-                    + "created,updated,resolution,labels,components,fixVersions,parent.")
+                    + "created,updated,resolution,labels,components,fixVersions,parent,epic.")
     List<String> columns;
     @Option(names = {"-q", "--jql"}, paramLabel = "JQL",
             description = "Complete JQL, including optional ORDER BY; "
@@ -102,27 +102,35 @@ public class JiraIssueListCommand extends JiraCommand.Action {
             throw wrong("--csv cannot be combined with --plain.");
         }
         var selectedColumns = columns == null
-                ? List.of("key", "type", "status", "priority", "assignee", "summary")
+                ? List.of("key", "type", "status", "priority", "assignee", "epic", "summary")
                 : columns.stream().map(value -> value.toLowerCase(Locale.ROOT)).toList();
         for (var column : selectedColumns) {
             if (!List.of("key", "type", "status", "priority", "assignee", "summary",
                     "reporter", "created", "updated", "resolution", "labels",
-                    "components", "fixversions", "parent").contains(column)) {
+                    "components", "fixversions", "parent", "epic").contains(column)) {
                 throw wrong("Unsupported --columns value; see list --help.");
             }
         }
         var query = query();
         var jira = client();
-        var requested = selectedColumns.stream().filter(column -> !column.equals("key"))
+        var epicField = (raw || selectedColumns.contains("epic")) && !jira.cloud()
+                ? JiraAgileCommands.epicField(jira, "Epic Link",
+                        "com.pyxis.greenhopper.jira:gh-epic-link") : null;
+        var requested = new ArrayList<>(raw
+                ? List.of("summary", "status", "issuetype", "priority",
+                        "assignee", "reporter", "created", "updated", "resolution",
+                        "labels", "components", "fixVersions", "parent")
+                : selectedColumns.stream().filter(column -> !column.equals("key"))
                 .map(column -> switch (column) {
                     case "type" -> "issuetype";
                     case "fixversions" -> "fixVersions";
+                    case "epic" -> "parent";
                     default -> column;
-                }).distinct().toList();
-        var page = jira.search(query, limit, startAt, nextPageToken, raw
-                ? List.of("summary", "status", "issuetype", "priority",
-                        "assignee", "reporter", "created", "updated", "resolution",
-                        "labels", "components", "fixVersions", "parent") : requested);
+                }).distinct().toList());
+        if (epicField != null) {
+            requested.add(epicField);
+        }
+        var page = jira.search(query, limit, startAt, nextPageToken, requested);
         var issues = page.get("issues");
         if (issues == null || !issues.isJsonArray()) {
             throw wrong("Jira search response is missing an issues array.");
@@ -137,7 +145,7 @@ public class JiraIssueListCommand extends JiraCommand.Action {
             var fields = object(issue.get("fields"));
             var row = new ArrayList<String>();
             for (var column : selectedColumns) {
-                row.add(column(issue, fields, column));
+                row.add(column(issue, fields, column, epicField));
             }
             rows.add(row);
         }
@@ -258,7 +266,8 @@ public class JiraIssueListCommand extends JiraCommand.Action {
         return "(" + query + ") AND (" + scope + ")";
     }
 
-    private String column(JsonObject issue, JsonObject fields, String column)
+    private String column(JsonObject issue, JsonObject fields, String column,
+            String epicField)
             throws IOException {
         return switch (column) {
             case "key" -> scalar(issue.get("key"), csv);
@@ -266,6 +275,7 @@ public class JiraIssueListCommand extends JiraCommand.Action {
             case "assignee", "reporter" -> named(fields, column, "displayName");
             case "status", "priority", "resolution" -> named(fields, column, "name");
             case "parent" -> named(fields, "parent", "key");
+            case "epic" -> epic(fields, epicField);
             case "labels", "components", "fixversions" -> {
                 var value = fields.get(column.equals("fixversions") ? "fixVersions" : column);
                 var values = new ArrayList<String>();
@@ -282,6 +292,36 @@ public class JiraIssueListCommand extends JiraCommand.Action {
             }
             default -> scalar(fields.get(column), csv);
         };
+    }
+
+    private String epic(JsonObject fields, String epicField) throws IOException {
+        if (epicField != null) {
+            var link = fields.get(epicField);
+            if (link != null && !link.isJsonNull()) {
+                return scalar(link, csv);
+            }
+        }
+        var parent = fields.get("parent");
+        if (parent == null || parent.isJsonNull()) {
+            return "-";
+        }
+        var parentFields = object(parent).get("fields");
+        if (parentFields == null || parentFields.isJsonNull()) {
+            return "-";
+        }
+        var type = object(parentFields).get("issuetype");
+        if (type == null || type.isJsonNull()) {
+            return "-";
+        }
+        var issueType = object(type);
+        var level = issueType.get("hierarchyLevel");
+        var name = issueType.get("name");
+        var isEpic = level != null && !level.isJsonNull()
+                ? level.isJsonPrimitive() && level.getAsJsonPrimitive().isNumber()
+                        && level.getAsBigDecimal().compareTo(java.math.BigDecimal.ONE) == 0
+                : name != null && name.isJsonPrimitive()
+                        && "Epic".equalsIgnoreCase(name.getAsString());
+        return isEpic ? scalar(object(parent).get("key"), csv) : "-";
     }
 
     private static void filter(List<String> clauses, String field,

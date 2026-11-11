@@ -14,7 +14,6 @@
     <packaging>pom</packaging>
     <name>devpulse plugins</name>
     <modules>
-        <module>gatherer</module>
         <module>pulse</module>
         <module>gather</module>
         <module>jira</module>

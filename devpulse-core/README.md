@@ -12,6 +12,40 @@
 
 `DagWorkflow.builder()` 定义 Java 任务；`build()` 在执行前拒绝空工作流、重复节点或依赖、自依赖、未知依赖、结果类型不匹配及循环依赖。依赖可以前向声明。校验与拓扑排序采用非递归算法，复杂度为 O(V + E)，无固定节点数上限。Builder 不保证线程安全；构建后的定义可复用，每次调用 `newRun` 创建独立运行状态，但任务 Lambda 捕获的对象仍由调用方负责线程安全。
 
+### 环境事实采集
+
+`io.github.devpulse.core.environment.EnvironmentGatherer` 与 `BashShell` 同属 core 的环境包，供 [Gather CLI](../devpulse-plugins/gather/README.md) 和 Pulse 的 `status --tools` 复用，不再单独发布 gatherer 产物。提示词、剪贴板和终端输出仍由调用方处理。
+
+`new EnvironmentGatherer().gather(directory, bashOverride)` 返回 `Facts` record，包含项目绝对路径、OS、架构、Java 版本、Bash、工具位置和存在的项目标志。目录必须已经存在；`bashOverride` 为 `null` 时自动查找 Bash。实际检测需要 Bash，Windows 使用 Git Bash。`Facts.tools()` 和 `Facts.projectFiles()` 为不可修改列表。
+
+工具清单为 `git`、`docker`、`kubectl`、`helm`、`node`、`npm`、`pnpm`、`yarn`、`java`、`mvn`、`gradle`、`python`、`python3`、`go`、`cargo`、`make`、`terraform`；通过 Bash 的 `command -v` 获取位置，缺失工具的 `location()` 为空字符串。
+
+项目标志为 `.git`、`package.json`、`pom.xml`、`build.gradle`、`build.gradle.kts`、`Dockerfile`、`compose.yaml`、`compose.yml`、`docker-compose.yaml`、`docker-compose.yml`、`pyproject.toml`、`requirements.txt`、`go.mod`、`Cargo.toml`、`Makefile`、`.devpulse.yaml`。
+
+```java
+import io.github.devpulse.core.environment.EnvironmentGatherer;
+import java.nio.file.Path;
+
+public class GathererExample {
+    public static void main(String[] args) throws Exception {
+        var facts = new EnvironmentGatherer().gather(Path.of("."), null);
+        System.out.println(facts.os());
+        System.out.println(facts.projectFiles());
+        facts.tools().forEach(tool ->
+                System.out.println(tool.name() + ": " + tool.location()));
+    }
+}
+```
+
+保存为 `GathererExample.java` 后从仓库根目录构建并运行：
+
+```powershell
+mvn -q -pl devpulse-core -am -DskipTests package
+java --class-path devpulse-core\target\classes GathererExample.java
+```
+
+采集不读取项目内容、不递归扫描、不采集环境变量值，不执行工具版本、服务健康检查或 AI 调用。工具存在不代表配置正确或服务可用。目录或 Bash 无效、扫描不完整时抛出 `IOException`；中断抛出 `InterruptedException`。结果包含本地路径，共享前需审核。此次仅合并模块，工具清单、项目标志、采集范围和异常语义不变。
+
 ### 使用示例
 
 以下示例中 A 的结果供 B/C 并行读取，D 等待 B/C 成功后汇总：
@@ -245,6 +279,40 @@ try (var history = new RunHistory(directory).begin("dev", graph, 4)) {
 `io.github.devpulse.core.dag` in `devpulse-core` provides a local, static DAG framework for a single JVM, intended for workflows with fewer than 5000 nodes. It depends only on JDK 25 and reads no configuration files or registers CLI commands or JVM shutdown hooks. `io.github.devpulse.core.bash` supplies the Bash Adapter, process management, logs, and Bash run history, sharing the same DAG scheduler rather than maintaining a second execution scheduler.
 
 `DagWorkflow.builder()` defines Java tasks; `build()` rejects empty workflows, duplicate nodes or dependencies, self-dependencies, unknown dependencies, result type mismatches, and cycles before execution. Forward references are supported. Validation and topological sorting are iterative with O(V + E) complexity and no hard node limit. Builders are not thread-safe; built definitions are reusable and each `newRun` creates independent execution state, but callers remain responsible for thread safety of objects captured by task Lambdas.
+
+### Environment fact collection
+
+`io.github.devpulse.core.environment.EnvironmentGatherer` shares core's environment package with `BashShell` and is reused by the [Gather CLI](../devpulse-plugins/gather/README.md) and Pulse's `status --tools`. No separate gatherer artifact is published. Callers still own prompts, clipboard access, and terminal output.
+
+`new EnvironmentGatherer().gather(directory, bashOverride)` returns a `Facts` record containing the absolute project path, OS, architecture, Java version, Bash, tool locations, and existing project markers. The directory must already exist; a `null` `bashOverride` enables Bash discovery. Detection requires Bash, with Git Bash on Windows. `Facts.tools()` and `Facts.projectFiles()` are unmodifiable lists.
+
+The tool list is `git`, `docker`, `kubectl`, `helm`, `node`, `npm`, `pnpm`, `yarn`, `java`, `mvn`, `gradle`, `python`, `python3`, `go`, `cargo`, `make`, and `terraform`. Bash `command -v` supplies locations; missing tools have an empty `location()`.
+
+Project markers are `.git`, `package.json`, `pom.xml`, `build.gradle`, `build.gradle.kts`, `Dockerfile`, `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `Makefile`, and `.devpulse.yaml`.
+
+```java
+import io.github.devpulse.core.environment.EnvironmentGatherer;
+import java.nio.file.Path;
+
+public class GathererExample {
+    public static void main(String[] args) throws Exception {
+        var facts = new EnvironmentGatherer().gather(Path.of("."), null);
+        System.out.println(facts.os());
+        System.out.println(facts.projectFiles());
+        facts.tools().forEach(tool ->
+                System.out.println(tool.name() + ": " + tool.location()));
+    }
+}
+```
+
+Save as `GathererExample.java`, then build and run from the repository root:
+
+```powershell
+mvn -q -pl devpulse-core -am -DskipTests package
+java --class-path devpulse-core\target\classes GathererExample.java
+```
+
+Collection does not read project contents, scan recursively, collect environment variable values, run tool versions or service health checks, or call AI. Tool presence does not prove correct configuration or service availability. Invalid directories/Bash or incomplete scans throw `IOException`; interruption throws `InterruptedException`. Results contain local paths and should be reviewed before sharing. This change only consolidates modules; tool lists, project markers, collection scope, and exception semantics remain unchanged.
 
 ### Usage example
 

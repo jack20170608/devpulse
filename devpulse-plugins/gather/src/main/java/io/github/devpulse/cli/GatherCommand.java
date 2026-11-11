@@ -1,6 +1,6 @@
 package io.github.devpulse.cli;
 
-import io.github.devpulse.gatherer.EnvironmentGatherer;
+import io.github.devpulse.core.environment.EnvironmentGatherer;
 import io.github.devpulse.environment.GatherPrompt;
 import java.awt.AWTError;
 import java.awt.HeadlessException;
