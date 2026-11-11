@@ -28,7 +28,7 @@ v3 使用 ADF，上传和导出只支持严格的 Markdown 子集，不能无损
 
 评论、附件、工时、关联、克隆及状态流转由各自 API 执行，不共享导出文件的冲突检查；多请求操作不提供跨请求事务。完整命令、权限限制、分页与格式边界统一维护在模块使用说明中。
 
-创建命令的 `--template-format` 默认 `auto`，仅根据 `--template` 文件的后缀选择输入格式：`.md` / `.markdown` 不区分大小写，其他后缀及标准输入按 Wiki 处理；不检查内容猜测格式。显式模板格式或兼容的 `--body-format` 可覆盖自动判断；Wiki 仍要求 API v2。其他描述来源和其他命令的默认格式不变。
+创建和直接编辑命令共用 `TemplateFormat` mixin，`--template-format` 默认 `auto`，仅根据 `--template` 文件的后缀选择输入格式：`.md` / `.markdown` 不区分大小写，其他后缀及标准输入按 Wiki 处理；不检查内容猜测格式。显式模板格式或兼容的 `--body-format` 可覆盖自动判断；Wiki 仍要求 API v2。`issue edit --file` 仍使用导出元数据中的格式，其他描述来源和其他命令的默认格式不变。
 
 ## English
 
@@ -56,4 +56,4 @@ v3 uses ADF; uploads and exports support a strict Markdown subset and reject nod
 
 Comments, attachments, worklogs, links, clones, and transitions use their respective APIs without sharing exported-file conflict checks. Multi-request operations provide no cross-request transaction. Complete commands, permission limits, pagination, and format boundaries live in the module usage guide.
 
-The create command defaults `--template-format` to `auto`, selecting the input format only from the `--template` file suffix: `.md` / `.markdown` match case-insensitively; other suffixes and stdin use Wiki, without content guessing. Explicit template format or the compatible `--body-format` option overrides detection; Wiki still requires API v2. Defaults for other description sources and other commands are unchanged.
+Creation and direct editing share a `TemplateFormat` mixin that defaults `--template-format` to `auto`, selecting the input format only from the `--template` file suffix: `.md` / `.markdown` match case-insensitively; other suffixes and stdin use Wiki, without content guessing. Explicit template format or the compatible `--body-format` option overrides detection; Wiki still requires API v2. `issue edit --file` still uses the format in export metadata. Defaults for other description sources and other commands are unchanged.

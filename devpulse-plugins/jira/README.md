@@ -131,7 +131,7 @@ bash run-jira.sh issue create --file issue.conf -s "Updated summary"
 
 描述优先级为 `-b/--body` 或 `--template`、`--file` 同名 `.md`、管道输入或交互输入；`--body` 与 `--template` 互斥。`--template -` 显式读取标准输入直至结束；没有其他描述来源且无终端时也会读取标准输入，支持 `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`。标准输入为空时不发送 `description` 字段；使用 `--file` 且未覆盖描述来源时仍要求相邻 `.md`。`fields.description` 不可用于传入描述。
 
-创建时，`--template-format auto|markdown|wiki` 默认 `auto`：`--template` 文件的 `.md` / `.markdown` 后缀不区分大小写，识别为 Markdown 并转换；其他后缀、无后缀和 `--template -` 均按 Wiki 原样提交，不根据内容猜测。可显式指定 `--template-format markdown` 或 `wiki` 覆盖后缀判断；显式格式要求提供 `--template`，不能与 `--body-format` 同时指定。为兼容已有用法，`--template-format auto` 下显式的 `--body-format` 优先于后缀判断。Wiki 仅支持 API v2；API v3 的非 Markdown 后缀模板或标准输入需显式指定 Markdown。此规则仅影响 `issue create --template`，其他描述来源、编辑和评论的默认格式不变。
+创建和直接编辑时，`--template-format auto|markdown|wiki` 默认 `auto`：`--template` 文件的 `.md` / `.markdown` 后缀不区分大小写，识别为 Markdown 并转换；其他后缀、无后缀和 `--template -` 均按 Wiki 原样提交，不根据内容猜测。可显式指定 `--template-format markdown` 或 `wiki` 覆盖后缀判断；显式格式要求提供 `--template`，不能与 `--body-format` 同时指定。为兼容已有用法，`--template-format auto` 下显式的 `--body-format` 优先于后缀判断。Wiki 仅支持 API v2；API v3 的非 Markdown 后缀模板或标准输入需显式指定 Markdown。此规则仅影响 `issue create --template` 和 `issue edit --template`，其他描述来源和评论的默认格式不变；`issue edit --file` 仍按导出元数据选择格式。
 
 `--custom customfield_ID=HOCON_VALUE` 可重复，支持字符串、数字、布尔值、`null`、对象和数组；字符串含空格或特殊字符时应按 HOCON 规则加双引号，并使用 shell 引号保护整个参数。只接受原始 `customfield_数字` 标识，不解析显示名；显式值覆盖文件中同名字段。更复杂的字段配置仍建议使用 `--file`。本地校验必填项和输入格式，Jira 最终校验创建权限、字段可用性及额外必填字段；当前不自动发现创建元数据，也不提供编辑器或交互式用户/字段选择。描述转换仍受下面的 Markdown 边界限制。
 
@@ -174,6 +174,8 @@ bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
 标签（`-l/--label`）、组件（`-C/--component`）、修复版本（`--fix-version`）、影响版本（`--affects-version`）均可重复：普通值表示新增，前缀 `-` 表示移除，建议用 `--label=-old` 这类等号写法避免与选项混淆。不按逗号拆分；重复的同向操作去重，同一值同时新增和移除会在请求 Jira 前报错。增删通过 Jira `update` 操作提交，不先读取整个列表再覆盖。未指定的字段保持不变；若需清空或替换整个列表，使用导出文件模式明确编辑对应数组。
 
 `-b/--body` 和 `--template` 互斥；`--template -` 显式读取标准输入直至结束。空描述文本或空描述文件会清空远端描述，未提供描述来源则不修改；交互模式中的空输入仅表示保留，不能用于清空。没有编辑参数时才交互询问标题、优先级、经办人与单行描述；按 Enter 保留，若全部保留则不提交。`--no-input` 或没有终端时，必须提供编辑参数或 `--file`。指定编辑参数会直接提交，不额外询问确认。
+
+`issue edit --template` 与创建使用相同的 `--template-format` 自动识别和显式覆盖规则；空文件仍表示清空描述。`--template-format markdown|wiki` 不能单独使用，也不能与 `--file` 混用。
 
 直接编辑先读取当前问题，仅发送显式变更，跳过可识别的未变化字段；写入前通过 `/editmeta` 检查字段可编辑性及所需的 `set`、`add`、`remove` 操作，并再次比较问题的 `updated` 值，发现并发变化则拒绝提交。`--force` 只跳过更新时间检查，不绕过 Jira 字段权限。**更新时间检查不是原子并发锁**；检查与实际写入之间仍可能出现竞争。描述转换仍受下面的 Markdown 边界限制。
 
@@ -326,7 +328,7 @@ Sprint 显式 ID 或 `--current`、`--prev`、`--next` 复用问题筛选；无�
 
 ### Markdown 边界
 
-以下默认 Markdown 的规则不包含 `issue create --template` 的自动后缀选择；该来源使用上文的 `--template-format` 规则。
+以下默认 Markdown 的规则不包含 `issue create --template` 和 `issue edit --template` 的自动后缀选择；这两种来源使用上文的 `--template-format` 规则。
 
 API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。
 
@@ -335,11 +337,11 @@ API v2（包括显式选择 v2 的 Cloud）使用 Jira Wiki 格式而非 ADF。�
 ```bash
 # .md / .markdown 后缀自动识别 Markdown，不区分大小写
 bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
-# 创建时其他后缀自动按 Wiki 提交；也可显式覆盖格式
+# 创建和直接编辑时其他后缀自动按 Wiki 提交；也可显式覆盖格式
 bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --no-input
 bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.txt --template-format markdown --no-input
-# 编辑及评论仍需显式指定 Wiki
-bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --no-input
+# 评论仍需显式指定 Wiki
 bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
 ```
 
@@ -474,7 +476,7 @@ Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are r
 
 Description precedence is `-b/--body` or `--template`, then the `.md` adjacent to `--file`, then piped or interactive input; `--body` and `--template` are mutually exclusive. `--template -` explicitly reads stdin until EOF. Without another description source or a terminal, creation also reads stdin, supporting `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`. Empty stdin omits `description`; `--file` still requires adjacent Markdown unless an explicit source overrides it. Do not supply descriptions through `fields.description`.
 
-For creation, `--template-format auto|markdown|wiki` defaults to `auto`: `.md` / `.markdown` suffixes on `--template` files are matched case-insensitively and converted from Markdown. Other suffixes, extensionless files, and `--template -` are submitted unchanged as Wiki, without content guessing. Explicit `--template-format markdown` or `wiki` overrides suffix detection, requires `--template`, and cannot be combined with `--body-format`. For compatibility, explicit `--body-format` takes precedence over suffix detection when `--template-format auto` is used. Wiki requires API v2; with API v3, explicitly select Markdown for non-Markdown suffixes or stdin templates. This rule affects only `issue create --template`; defaults for other description sources, editing, and comments are unchanged.
+For creation and direct editing, `--template-format auto|markdown|wiki` defaults to `auto`: `.md` / `.markdown` suffixes on `--template` files are matched case-insensitively and converted from Markdown. Other suffixes, extensionless files, and `--template -` are submitted unchanged as Wiki, without content guessing. Explicit `--template-format markdown` or `wiki` overrides suffix detection, requires `--template`, and cannot be combined with `--body-format`. For compatibility, explicit `--body-format` takes precedence over suffix detection when `--template-format auto` is used. Wiki requires API v2; with API v3, explicitly select Markdown for non-Markdown suffixes or stdin templates. This rule affects only `issue create --template` and `issue edit --template`; defaults for other description sources and comments are unchanged. `issue edit --file` still selects its format from export metadata.
 
 Repeat `--custom customfield_ID=HOCON_VALUE` for strings, numbers, booleans, `null`, objects, or arrays. Double-quote strings containing spaces or special characters according to HOCON rules, and shell-quote the entire argument. Only raw `customfield_digits` identifiers are accepted, not display names; explicit values override matching file fields. Prefer `--file` for more complex fields. Local validation checks required fields and input shapes; Jira ultimately validates creation permissions, field availability, and additional required fields. Creation metadata discovery, editor integration, and interactive user/field selection are not currently provided. Description conversion remains subject to the Markdown limits below.
 
@@ -517,6 +519,8 @@ bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
 Labels (`-l/--label`), components (`-C/--component`), fix versions (`--fix-version`), and affected versions (`--affects-version`) are repeatable: ordinary values add entries, and a `-` prefix removes them. Prefer equals syntax such as `--label=-old` to avoid option ambiguity. Values are not comma-separated. Duplicate operations in the same direction are deduplicated; adding and removing the same value fails before contacting Jira. Changes use Jira's `update` operations rather than reading and overwriting whole lists. Unspecified fields remain unchanged; use exported-file mode to explicitly clear or replace entire arrays.
 
 `-b/--body` and `--template` are mutually exclusive; `--template -` explicitly reads stdin until EOF. Empty description text or an empty description file clears the remote description; omitting a description source leaves it unchanged. Empty interactive input means keep, not clear. Only invocations without edit flags prompt for summary, priority, assignee, and a single-line description; Enter keeps each field, and keeping everything performs no write. With `--no-input` or no terminal, edit flags or `--file` are required. Supplying edits submits directly without an additional confirmation.
+
+`issue edit --template` uses the same automatic detection and explicit overrides via `--template-format` as creation; an empty file still clears the description. `--template-format markdown|wiki` cannot be used alone or with `--file`.
 
 Direct editing reads the current issue, sends only explicit changes, and skips recognizable unchanged fields. Before writing, it checks `/editmeta` for field editability and the required `set`, `add`, or `remove` operations, then compares the issue's `updated` value again and refuses concurrent changes. `--force` bypasses only the timestamp check, not Jira field permissions. **The timestamp check is not an atomic concurrency lock**; a write can still race between checking and submission. Description conversion remains subject to the Markdown limits below.
 
@@ -669,7 +673,7 @@ Explicit sprint IDs and `--current`, `--prev`, or `--next` reuse issue filters. 
 
 ### Markdown limits
 
-The Markdown defaults below exclude automatic suffix selection for `issue create --template`, which follows the `--template-format` rules above.
+The Markdown defaults below exclude automatic suffix selection for `issue create --template` and `issue edit --template`, which follow the `--template-format` rules above.
 
 API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped.
 
@@ -678,11 +682,11 @@ API v2, including Cloud explicitly configured for v2, uses Jira Wiki rather than
 ```bash
 # .md / .markdown suffixes automatically select Markdown, case-insensitively
 bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
-# Other suffixes select Wiki for creation; explicit format overrides are available
+# Other suffixes select Wiki for creation and direct editing; explicit overrides are available
 bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --no-input
 bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.txt --template-format markdown --no-input
-# Editing and comments still require explicit Wiki selection
-bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --no-input
+# Comments still require explicit Wiki selection
 bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
 ```
 

@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
@@ -28,10 +27,10 @@ import picocli.CommandLine.Option;
         description = "Create an issue using prompts, flags, or "
                 + "HOCON, Markdown, or Jira wiki files.")
 public class JiraCreateCommand extends JiraCommand.Action {
-    enum TemplateFormat { auto, markdown, wiki }
-
     @Mixin
     JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
+    @Mixin
+    JiraCommand.TemplateFormat templateFormat = new JiraCommand.TemplateFormat();
     @Option(names = "--file", paramLabel = "ISSUE.conf",
             description = "HOCON fields and adjacent Markdown; "
                     + "explicit flags override template fields.")
@@ -80,13 +79,6 @@ public class JiraCreateCommand extends JiraCommand.Action {
                     + "overrides adjacent Markdown. "
                     + "See --template-format for input format.")
     Path template;
-    @Option(names = "--template-format", paramLabel = "auto|markdown|wiki",
-            defaultValue = "auto",
-            description = "Template input format: ${COMPLETION-CANDIDATES}. "
-                    + "Default: auto; .md/.markdown (case-insensitive) "
-                    + "means Markdown, otherwise Wiki (including stdin). "
-                    + "Wiki requires REST API v2.")
-    TemplateFormat templateFormat = TemplateFormat.auto;
     @Option(names = "--custom", paramLabel = "FIELD=HOCON",
             description = "Repeat to set customfield_ID using a "
                     + "HOCON value; overrides template custom fields.")
@@ -100,7 +92,7 @@ public class JiraCreateCommand extends JiraCommand.Action {
         if (body != null && template != null) {
             throw wrong("Use either --body or --template, not both.");
         }
-        var format = descriptionFormat();
+        var format = templateFormat.resolve(template, bodyFormat);
         var epicSupplied = epic != null;
         if (epic != null && epic.isBlank()) {
             epic = null;
@@ -167,29 +159,6 @@ public class JiraCreateCommand extends JiraCommand.Action {
             }
         }
         print("Created " + string(jira.create(issue), "key"));
-    }
-
-    private JiraMarkdown.Format descriptionFormat() throws IOException {
-        if (templateFormat != TemplateFormat.auto) {
-            if (template == null) {
-                throw wrong("--template-format requires --template.");
-            }
-            if (bodyFormat.format != null) {
-                throw wrong("Use either --template-format or --body-format "
-                        + "to select an explicit format, not both.");
-            }
-            return JiraMarkdown.Format.valueOf(templateFormat.name());
-        }
-        if (bodyFormat.format != null) {
-            return bodyFormat.format;
-        }
-        if (template == null) {
-            return JiraMarkdown.Format.markdown;
-        }
-        var name = template.getFileName();
-        var filename = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
-        return filename.endsWith(".md") || filename.endsWith(".markdown")
-                ? JiraMarkdown.Format.markdown : JiraMarkdown.Format.wiki;
     }
 
     private void setEpic(JsonObject issue, JiraClient jira) throws IOException {

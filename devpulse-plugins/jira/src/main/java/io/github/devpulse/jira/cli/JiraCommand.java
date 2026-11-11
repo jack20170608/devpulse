@@ -26,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -234,6 +235,43 @@ public final class JiraCommand implements Runnable {
         if (version != jira.apiVersion()) {
             throw wrong("Exported Jira API version does not match "
                     + "configuration; re-export before updating.");
+        }
+    }
+
+    static final class TemplateFormat {
+        enum Format { auto, markdown, wiki }
+
+        @Option(names = "--template-format", paramLabel = "auto|markdown|wiki",
+                defaultValue = "auto",
+                description = "Template input format: ${COMPLETION-CANDIDATES}. "
+                        + "Default: auto; .md/.markdown (case-insensitive) "
+                        + "means Markdown, otherwise Wiki (including stdin). "
+                        + "Wiki requires REST API v2.")
+        Format format = Format.auto;
+
+        JiraMarkdown.Format resolve(Path template, BodyFormat bodyFormat)
+                throws IOException {
+            if (format != Format.auto) {
+                if (template == null) {
+                    throw wrong("--template-format requires --template.");
+                }
+                if (bodyFormat.format != null) {
+                    throw wrong("Use either --template-format or --body-format "
+                            + "to select an explicit format, not both.");
+                }
+                return JiraMarkdown.Format.valueOf(format.name());
+            }
+            if (bodyFormat.format != null) {
+                return bodyFormat.format;
+            }
+            if (template == null) {
+                return JiraMarkdown.Format.markdown;
+            }
+            var name = template.getFileName();
+            var filename = name == null ? ""
+                    : name.toString().toLowerCase(Locale.ROOT);
+            return filename.endsWith(".md") || filename.endsWith(".markdown")
+                    ? JiraMarkdown.Format.markdown : JiraMarkdown.Format.wiki;
         }
     }
 

@@ -14,6 +14,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -29,6 +30,8 @@ import picocli.CommandLine.Parameters;
 public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Mixin
     JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
+    @Mixin
+    JiraCommand.TemplateFormat templateFormat = new JiraCommand.TemplateFormat();
     @Parameters(index = "0", paramLabel = "KEY")
     String key;
     @Option(names = {"-s", "--summary"}, paramLabel = "TEXT",
@@ -62,8 +65,9 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Option(names = {"-b", "--body"}, paramLabel = "MARKDOWN",
             description = "Replace description; an empty string clears it.")
     String body;
-    @Option(names = "--template", paramLabel = "BODY.md",
-            description = "Replace description from UTF-8 file, or - for stdin.")
+    @Option(names = "--template", paramLabel = "FILE",
+            description = "Replace description from UTF-8 file, or - for stdin; "
+                    + "see --template-format for input format.")
     Path template;
     @Option(names = "--custom", paramLabel = "FIELD=HOCON",
             description = "Set customfield_ID to a HOCON value. Repeatable.")
@@ -82,6 +86,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
 
     @Override
     protected void execute() throws IOException {
+        var format = templateFormat.resolve(template, bodyFormat);
         if (file != null) {
             if (hasEdits()) {
                 throw wrong("--file cannot be combined with field edits.");
@@ -127,7 +132,8 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
         }
         if (description != null) {
             fields.add("description", description.isEmpty() ? JsonNull.INSTANCE
-                    : bodyFormat.toJira(description, jira));
+                    : JiraMarkdown.toJira(description,
+                            jira.apiVersion() == 3, format));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
