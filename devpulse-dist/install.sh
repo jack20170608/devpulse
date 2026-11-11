@@ -4,12 +4,15 @@ set -euo pipefail
 usage() {
     cat <<'USAGE'
 Usage: install.sh --tool pulse|jira --version VERSION --base-url URL [--prefix DIR]
+       install.sh --local --tool pulse|jira [--version VERSION] [--base-url DIR] [--prefix DIR]
        install.sh --uninstall --tool pulse|jira [--prefix DIR]
 
 Installs one tool without Maven or administrator access (requires Java to run).
 The default prefix is ~/.local. Add PREFIX/bin to PATH.
-The base URL must contain the release tar.gz and its adjacent .tar.gz.sha256 file.
-Only HTTPS and file:// URLs are supported.
+The source must contain the release tar.gz and its adjacent .tar.gz.sha256 file.
+--base-url accepts HTTPS, file:// URLs, or local directory paths (quote spaces).
+--local defaults to target beside this script and infers the version only when
+exactly one archive for the selected tool exists. It does not run a build.
 Installing another version upgrades only the selected tool; uninstall removes
 only installer-managed files for the selected tool.
 USAGE
@@ -17,11 +20,62 @@ USAGE
 
 die() { echo "devpulse installer: $*" >&2; exit 1; }
 
+decode_file_path() {
+    local value="$1" decoded='' escape character
+    while [[ "$value" == *%* ]]; do
+        decoded+="${value%%\%*}"
+        value="${value#*%}"
+        escape="${value:0:2}"
+        [[ "$escape" =~ ^[a-fA-F0-9]{2}$ && "$escape" != 00 ]] ||
+            die 'invalid percent encoding in file URL; use a plain directory path for literal %'
+        printf -v character '%b' "\\x$escape"
+        decoded+="$character"
+        value="${value:2}"
+    done
+    printf '%s' "$decoded$value"
+}
+
+local_path() {
+    local path="${1//\\//}"
+    case "$path" in
+        file://localhost/*) path="${path#file://localhost}" ;;
+        file:///*) path="${path#file://}" ;;
+        file://[a-zA-Z]:/*) path="${path#file://}" ;;
+        file://*) die 'file URLs must use a local path or localhost; use a plain UNC path for a network share' ;;
+    esac
+    if [[ "$1" == file://* ]]; then
+        path="$(decode_file_path "$path")" || return 1
+    fi
+    if [[ "$path" =~ ^/[a-zA-Z]:/ ]]; then
+        path="${path:1}"
+    fi
+    case "$path" in
+        '~') path="$HOME" ;;
+        '~/'*) path="$HOME/${path:2}" ;;
+    esac
+    if command -v cygpath >/dev/null 2>&1; then
+        if [[ "$path" =~ ^/mnt/([a-zA-Z])(/.*)?$ ]]; then
+            path="${BASH_REMATCH[1]}:${BASH_REMATCH[2]:-/}"
+        fi
+        path="$(cygpath -u -- "$path")" || die "cannot convert local path: $1"
+    elif [[ -n "${WSL_DISTRO_NAME:-}" || -n "${WSL_INTEROP:-}" ]]; then
+        if [[ "$path" =~ ^([a-zA-Z]):(/.*)$ ]]; then
+            local drive="${BASH_REMATCH[1],,}"
+            path="/mnt/$drive${BASH_REMATCH[2]}"
+        elif [[ "$path" =~ ^/([a-zA-Z])(/.*)$ ]]; then
+            path="/mnt/${BASH_REMATCH[1],,}${BASH_REMATCH[2]}"
+        fi
+    fi
+    printf '%s' "$path"
+}
+
 tool=''
 version=''
 prefix="${HOME:?}/.local"
 base_url=''
 uninstall=false
+local_install=false
+source_dir=''
 while (($#)); do
     case "$1" in
         --tool|--version|--prefix|--base-url)
@@ -36,6 +90,7 @@ while (($#)); do
             shift 2
             ;;
         --uninstall) uninstall=true; shift ;;
+        --local) local_install=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) die "unknown argument: $1" ;;
     esac
@@ -43,14 +98,45 @@ done
 
 [[ "$tool" == pulse || "$tool" == jira ]] || die 'use --tool pulse or --tool jira'
 if [[ "$uninstall" == false ]]; then
+    if [[ "$local_install" == true && -z "$base_url" ]]; then
+        base_url="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/target"
+    fi
+    [[ -n "$base_url" ]] || die 'provide --base-url or use --local'
+    case "$base_url" in
+        https://*)
+            [[ "$local_install" == false ]] || die '--local requires a local directory, not HTTPS'
+            base_url="${base_url%/}"
+            ;;
+        *)
+            [[ "$base_url" != *://* || "$base_url" == file://* ]] ||
+                die '--base-url must be HTTPS, a file URL, or a local directory'
+            source_dir="$(local_path "$base_url")" || exit 1
+            [[ -d "$source_dir" ]] ||
+                die "local release directory not found: $source_dir (from $base_url); build with bash build.sh dist or check the path"
+            source_dir="$(cd -- "$source_dir" && pwd -P)"
+            ;;
+    esac
+    if [[ "$local_install" == true && -z "$version" ]]; then
+        archives=()
+        for candidate in "$source_dir"/devpulse-"$tool"-*.tar.gz; do
+            [[ -f "$candidate" ]] && archives+=("$candidate")
+        done
+        ((${#archives[@]} > 0)) || die "no $tool release archive in $source_dir; build with bash build.sh dist"
+        ((${#archives[@]} == 1)) || die "multiple $tool release archives in $source_dir; specify --version"
+        version="${archives[0]##*/}"
+        version="${version#devpulse-"$tool"-}"
+        version="${version%.tar.gz}"
+    fi
     [[ "$version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ && "$version" != *..* ]] ||
         die 'provide a safe, explicit --version'
-    [[ -n "$base_url" ]] || die 'provide an explicit --base-url'
-    [[ "$base_url" == https://* || "$base_url" == file://* ]] ||
-        die '--base-url must be an HTTPS or file URL'
-    base_url="${base_url%/}"
+    if [[ -n "$source_dir" ]]; then
+        for filename in "devpulse-$tool-$version.tar.gz" "devpulse-$tool-$version.tar.gz.sha256"; do
+            [[ -f "$source_dir/$filename" && -r "$source_dir/$filename" ]] ||
+                die "local release file not found or unreadable: $source_dir/$filename"
+        done
+    fi
 else
-    [[ -z "$version" && -z "$base_url" ]] ||
+    [[ -z "$version" && -z "$base_url" && "$local_install" == false ]] ||
         die '--uninstall takes only --tool and --prefix'
 fi
 
@@ -104,7 +190,9 @@ if [[ "$uninstall" == true ]]; then
     exit 0
 fi
 
-command -v curl >/dev/null || die 'curl is required'
+if [[ -z "$source_dir" ]]; then
+    command -v curl >/dev/null || die 'curl is required for HTTPS downloads'
+fi
 command -v sha256sum >/dev/null || die 'sha256sum is required'
 command -v tar >/dev/null || die 'tar is required'
 [[ ! -e "$tool_home/$version" && ! -L "$tool_home/$version" ]] ||
@@ -128,10 +216,14 @@ trap cleanup EXIT
 mkdir -- "$stage"
 archive="devpulse-$tool-$version.tar.gz"
 root="devpulse-$tool-$version"
-curl --fail --location --silent --show-error --output "$stage/$archive" \
-    "$base_url/$archive"
-curl --fail --location --silent --show-error --output "$stage/$archive.sha256" \
-    "$base_url/$archive.sha256"
+if [[ -n "$source_dir" ]]; then
+    cp -- "$source_dir/$archive" "$source_dir/$archive.sha256" "$stage/"
+else
+    curl --fail --location --silent --show-error --output "$stage/$archive" \
+        "$base_url/$archive"
+    curl --fail --location --silent --show-error --output "$stage/$archive.sha256" \
+        "$base_url/$archive.sha256"
+fi
 
 verify_checksum() {
     local checksum_file="$1" expected_file="$2" hash filename
@@ -149,9 +241,12 @@ verify_checksum() {
 verify_checksum "$archive.sha256" "$archive"
 tar -xOzf "$stage/$archive" "$root/devpulse-$tool.jar" > "$stage/devpulse-$tool.jar"
 tar -xOzf "$stage/$archive" "$root/devpulse-$tool.jar.sha256" > "$stage/devpulse-$tool.jar.sha256"
-tar -xOzf "$stage/$archive" "$root/bin/$tool" > "$stage/$tool"
+# Windows-built archives may contain CRLF launchers and version files.
+tar -xOzf "$stage/$archive" "$root/bin/$tool" |
+    sed $'s/\r$//' > "$stage/$tool"
 tar -xOzf "$stage/$archive" "$root/version.txt" > "$stage/version.txt"
-[[ "$(cat "$stage/version.txt")" == "$version" ]] || die 'archive version does not match request'
+archive_version="$(cat "$stage/version.txt")"
+[[ "${archive_version%$'\r'}" == "$version" ]] || die 'archive version does not match request'
 verify_checksum "devpulse-$tool.jar.sha256" "devpulse-$tool.jar"
 grep -Fqx "# devpulse-managed-wrapper: $tool" "$stage/$tool" ||
     die 'archive wrapper is not installer-managed'
