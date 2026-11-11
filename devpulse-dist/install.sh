@@ -14,7 +14,8 @@ The source must contain the release tar.gz and its adjacent .tar.gz.sha256 file.
 --local defaults to target beside this script and infers the version only when
 exactly one archive for the selected tool exists. It does not run a build.
 Installing another version upgrades only the selected tool; uninstall removes
-only installer-managed files for the selected tool.
+only installer-managed files for the selected tool. Reinstalling the same
+version replaces its managed files after verification.
 USAGE
 }
 
@@ -195,8 +196,15 @@ if [[ -z "$source_dir" ]]; then
 fi
 command -v sha256sum >/dev/null || die 'sha256sum is required'
 command -v tar >/dev/null || die 'tar is required'
-[[ ! -e "$tool_home/$version" && ! -L "$tool_home/$version" ]] ||
-    die "$tool version $version is already installed"
+version_home="$tool_home/$version"
+if [[ -e "$version_home" || -L "$version_home" ]]; then
+    [[ -d "$version_home" && ! -L "$version_home" &&
+       -f "$version_home/.devpulse-managed" && ! -L "$version_home/.devpulse-managed" &&
+       "$(cat "$version_home/.devpulse-managed")" == "$marker" ]] ||
+        die "refusing to replace an unmanaged version: $version_home"
+    [[ ! -L "$version_home/devpulse-$tool.jar" ]] ||
+        die 'refusing to replace a symlinked JAR'
+fi
 [[ ! -L "$tool_home/current" ]] || die 'refusing to replace a symlinked current file'
 mkdir -p -- "$prefix/bin" "$tool_home"
 if [[ ! -e "$tool_home/.devpulse-managed" ]]; then
@@ -251,9 +259,9 @@ verify_checksum "devpulse-$tool.jar.sha256" "devpulse-$tool.jar"
 grep -Fqx "# devpulse-managed-wrapper: $tool" "$stage/$tool" ||
     die 'archive wrapper is not installer-managed'
 chmod 755 "$stage/$tool"
-mkdir -- "$tool_home/$version"
-mv -- "$stage/devpulse-$tool.jar" "$tool_home/$version/"
-printf '%s\n' "$marker" > "$tool_home/$version/.devpulse-managed"
+mkdir -p -- "$version_home"
+mv -f -- "$stage/devpulse-$tool.jar" "$version_home/"
+printf '%s\n' "$marker" > "$version_home/.devpulse-managed"
 cp -- "$stage/$tool" "$new_wrapper"
 mv -f -- "$new_wrapper" "$wrapper"
 printf '%s\n' "$version" > "$new_current"

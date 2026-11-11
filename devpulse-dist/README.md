@@ -12,10 +12,10 @@
 
 ### 构建和直接运行
 
-在仓库根目录使用 JDK 25+ 和 Maven 构建。`devpulse-dist/target/` 生成各工具独立的 `devpulse-pulse-<版本>.tar.gz`、`devpulse-jira-<版本>.tar.gz` 及对应 `.sha256` 文件。每个归档只含对应工具的可执行 JAR、Bash 启动脚本、版本文件和 JAR 校验文件。
+在仓库根目录使用 JDK 25+ 和 Maven 构建。`bash build.sh dist` 默认执行 `clean package`，清理发行模块及其 reactor 依赖的旧构建产物，避免不同版本归档残留。`devpulse-dist/target/` 生成各工具独立的 `devpulse-pulse-<版本>.tar.gz`、`devpulse-jira-<版本>.tar.gz` 及对应 `.sha256` 文件。每个归档只含对应工具的可执行 JAR、Bash 启动脚本、版本文件和 JAR 校验文件。
 
 ```bash
-bash build.sh dist --clean
+bash build.sh dist
 tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
 bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
 ```
@@ -42,7 +42,7 @@ bash devpulse-dist/install.sh --uninstall --tool pulse
 准备 JDK 25+、Maven、Bash、`tar` 和 `sha256sum`，在仓库根目录执行以下命令（Windows 使用 Git Bash）：
 
 ```bash
-bash build.sh dist --clean
+bash build.sh dist
 
 # 按需安装；自动定位脚本旁的 target，并识别所选工具的唯一归档版本
 bash devpulse-dist/install.sh --local --tool pulse
@@ -53,7 +53,7 @@ pulse --help
 jira --help
 ```
 
-`--local` 不自动构建；归档和校验文件应先生成在 `devpulse-dist/target/`。默认目录相对于安装脚本定位，与调用时的工作目录无关。所选工具有多个版本时必须传入 `--version`，不猜测最新版本；已安装的同版本仍拒绝覆盖。显式版本应与根 `pom.xml` 的 `<revision>` 一致。
+`--local` 不自动构建；归档和校验文件应先生成在 `devpulse-dist/target/`。默认目录相对于安装脚本定位，与调用时的工作目录无关。所选工具有多个版本时必须传入 `--version`，不猜测最新版本。重复安装同版本时，在归档及 JAR 校验通过后直接覆盖安装器管理的 JAR 和启动入口，无需先卸载；校验失败保留原安装，不覆盖非受管版本目录或软链接。显式版本应与根 `pom.xml` 的 `<revision>` 一致。
 
 本地源推荐直接传目录，无需手工拼接 `file://` 或调用 `cygpath`：
 
@@ -84,10 +84,10 @@ bash devpulse-dist/install.sh --local --tool jira --base-url "/opt/devpulse/rele
 
 ### Build and run without installation
 
-Build from the repository root with JDK 25+ and Maven. `devpulse-dist/target/` produces separate `devpulse-pulse-<version>.tar.gz` and `devpulse-jira-<version>.tar.gz` archives with adjacent `.sha256` files. Each archive contains only its tool's executable JAR, Bash launcher, version file, and JAR checksum.
+Build from the repository root with JDK 25+ and Maven. `bash build.sh dist` defaults to `clean package`, removing previous build outputs from the distribution module and its reactor dependencies so archives from different versions do not linger. `devpulse-dist/target/` produces separate `devpulse-pulse-<version>.tar.gz` and `devpulse-jira-<version>.tar.gz` archives with adjacent `.sha256` files. Each archive contains only its tool's executable JAR, Bash launcher, version file, and JAR checksum.
 
 ```bash
-bash build.sh dist --clean
+bash build.sh dist
 tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
 bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
 ```
@@ -114,7 +114,7 @@ The URL above is a placeholder; replace it with an actual release location. For 
 Prepare JDK 25+, Maven, Bash, `tar`, and `sha256sum`, then run these commands from the repository root (use Git Bash on Windows):
 
 ```bash
-bash build.sh dist --clean
+bash build.sh dist
 
 # Install as needed; find target beside the script and infer the tool's unique archive version
 bash devpulse-dist/install.sh --local --tool pulse
@@ -125,7 +125,7 @@ pulse --help
 jira --help
 ```
 
-`--local` does not build automatically; generate archives and checksum files in `devpulse-dist/target/` first. The default directory is resolved relative to the installer, independently of the caller's working directory. When multiple versions of the selected tool exist, specify `--version`; the installer never guesses the latest version. An already installed version still cannot be overwritten. Match explicit versions to `<revision>` in the root `pom.xml`.
+`--local` does not build automatically; generate archives and checksum files in `devpulse-dist/target/` first. The default directory is resolved relative to the installer, independently of the caller's working directory. When multiple versions of the selected tool exist, specify `--version`; the installer never guesses the latest version. Reinstalling the same version directly replaces its installer-managed JAR and launcher after archive and JAR verification, without uninstalling first. Verification failures preserve the previous installation; unmanaged version directories and symlinks are not overwritten. Match explicit versions to `<revision>` in the root `pom.xml`.
 
 For local sources, pass the directory directly instead of constructing a `file://` URL or calling `cygpath`:
 
