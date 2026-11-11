@@ -13,6 +13,7 @@ import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import io.github.devpulse.jira.JiraClient;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -63,6 +64,10 @@ public class JiraCreateCommand extends JiraCommand.Action {
     @Option(names = {"-P", "--parent"}, paramLabel = "KEY",
             description = "Parent issue key; subject to Jira hierarchy.")
     String parent;
+    @Option(names = "--epic", paramLabel = "KEY",
+            description = "Optional Epic key; blank skips association. "
+                    + "Cannot be combined with --parent.")
+    String epic;
     @Option(names = {"-b", "--body"}, paramLabel = "MARKDOWN",
             description = "Description text; conflicts with --template.")
     String body;
@@ -82,6 +87,16 @@ public class JiraCreateCommand extends JiraCommand.Action {
     protected void execute() throws IOException {
         if (body != null && template != null) {
             throw wrong("Use either --body or --template, not both.");
+        }
+        var epicSupplied = epic != null;
+        if (epic != null && epic.isBlank()) {
+            epic = null;
+        }
+        if (epic != null) {
+            JiraCatalogCommands.issueId(epic);
+            if (parent != null) {
+                throw wrong("Use either --epic or --parent, not both.");
+            }
         }
         var issue = file == null ? new JsonObject() : fields(load(file));
         if (issue.has("description")) {
@@ -107,8 +122,19 @@ public class JiraCreateCommand extends JiraCommand.Action {
         requiredField(issue, "issuetype", "name", "Issue type", "--type");
         requiredField(issue, "summary", null, "Summary", "--summary");
 
+        if (!epicSupplied && !noInput && System.console() != null
+                && file == null && !issue.has("parent")
+                && !"Epic".equalsIgnoreCase(type)) {
+            var answer = prompt("Epic key (optional; Enter to skip)");
+            if (!answer.isBlank()) {
+                epic = JiraCatalogCommands.issueId(answer);
+            }
+        }
         var description = description();
         var jira = client();
+        if (epic != null) {
+            setEpic(issue, jira);
+        }
         if (description != null) {
             issue.add("description", bodyFormat.toJira(description, jira));
         }
@@ -127,6 +153,24 @@ public class JiraCreateCommand extends JiraCommand.Action {
             }
         }
         print("Created " + string(jira.create(issue), "key"));
+    }
+
+    private void setEpic(JsonObject issue, JiraClient jira) throws IOException {
+        if (jira.cloud()) {
+            if (issue.has("parent")) {
+                throw wrong("--epic conflicts with the template parent field; "
+                        + "Cloud uses parent for Epic association.");
+            }
+            setNamed(issue, "parent", "key", epic);
+        } else {
+            var field = JiraAgileCommands.epicField(jira, "Epic Link",
+                    "com.pyxis.greenhopper.jira:gh-epic-link");
+            if (field == null) {
+                throw wrong("Jira field metadata does not expose "
+                        + "an Epic Link field.");
+            }
+            issue.addProperty(field, epic);
+        }
     }
 
     private String description() throws IOException {

@@ -431,7 +431,7 @@ public final class JiraAgileCommands {
         }
     }
 
-    private static String epicField(JiraClient jira, String name,
+    static String epicField(JiraClient jira, String name,
             String schemaKey) throws IOException {
         var metadata = array(jira.request("GET", "field", null));
         var schemaMatches = new HashSet<String>();

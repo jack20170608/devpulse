@@ -109,6 +109,10 @@ bash run-jira.sh issue create --no-input \
 printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
   -p DEMO -t Task -s "Document deployment" --template -
 
+# 可选 Epic；省略 --epic 或传入空字符串均可跳过
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Story -s "Add login flow" --epic DEMO-100
+
 # 父任务、自指派与自定义字段（按实例要求使用原始 REST 字段 ID 和值）
 bash run-jira.sh issue create --no-input \
   -p DEMO -t Sub-task -s "Add timeout handling" -P DEMO-1 -a me \
@@ -122,6 +126,8 @@ bash run-jira.sh issue create --file issue.conf -s "Updated summary"
 必填项为项目（`-p/--project`）、类型（`-t/--type`）和标题（`-s/--summary`）；也可由 `--file` 的 `fields` 提供，项目和类型支持原始 REST `id` 对象。未显式提供项目且模板中没有该字段时使用连接配置的默认项目。终端中默认补问仍缺少的必填项；未指定描述来源时，再询问可选描述。`--no-input` 禁止所有提示；无终端时也不会等待交互，必填项缺失则在请求 Jira 前报错。创建会直接提交，不额外询问确认；脚本建议始终指定 `--no-input`。
 
 `-y/--priority` 设置优先级名称；`-l/--label`、`-C/--component`、`--fix-version` 和 `--affects-version` 可重复，显式提供时**替换**模板中的整个对应列表，不按逗号拆分。`-P/--parent` 设置父问题 key，是否可用由 Jira 的项目类型和层级决定。`-a/--assignee` 在 Cloud 使用账户 `accountId`，在 Data Center 使用用户名；特殊值 `me` 查询当前用户，`x` 取消指派，`default` 使用项目默认经办人。不按显示名模糊查找用户。
+
+`--epic KEY` 可选地指定所属 Epic；省略或传入空字符串不额外设置关联。终端创建时，在必填项之后询问 Epic key，按 Enter 跳过；`--no-input`、文件模式、已设置父任务或 `epic create` 不补问。Cloud 使用 `fields.parent.key`，不允许与模板中的 `parent` 同时设置；Data Center 根据字段元数据自动查找 Epic Link，显式 Epic 覆盖模板或 `--custom` 中对应的字段。`--epic` 不与 `--parent` 同时使用；Jira 最终校验目标是否为 Epic、层级和权限，关联与创建在同一次请求中提交。
 
 描述优先级为 `-b/--body` 或 `--template`、`--file` 同名 `.md`、管道输入或交互输入；`--body` 与 `--template` 互斥。`--template -` 显式读取标准输入直至结束；没有其他描述来源且无终端时也会读取标准输入，支持 `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`。标准输入为空时不发送 `description` 字段；使用 `--file` 且未覆盖描述来源时仍要求相邻 `.md`。`fields.description` 不可用于传入描述。
 
@@ -440,6 +446,10 @@ bash run-jira.sh issue create --no-input \
 printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
   -p DEMO -t Task -s "Document deployment" --template -
 
+# Optional Epic; omit --epic or supply an empty string to skip
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Story -s "Add login flow" --epic DEMO-100
+
 # Parent issue, self-assignment, and custom fields (raw REST IDs and instance-specific values)
 bash run-jira.sh issue create --no-input \
   -p DEMO -t Sub-task -s "Add timeout handling" -P DEMO-1 -a me \
@@ -453,6 +463,8 @@ bash run-jira.sh issue create --file issue.conf -s "Updated summary"
 Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are required. They may also come from `--file`'s `fields`; project and type accept raw REST `id` objects. If no project flag or template field is supplied, the connection configuration's default project is used. In a terminal, remaining missing required values are prompted by default, followed by an optional description if no description source was supplied. `--no-input` disables all prompts; without a terminal, creation never waits for interactive input either, and missing required fields fail before contacting Jira. Creation submits directly without an additional confirmation; scripts should always specify `--no-input`.
 
 `-y/--priority` sets the priority name. Repeat `-l/--label`, `-C/--component`, `--fix-version`, and `--affects-version` for multiple values; explicit lists **replace** the entire corresponding template list and are not comma-separated. `-P/--parent` sets the parent issue key, subject to Jira's project type and hierarchy. `-a/--assignee` accepts a Cloud `accountId` or Data Center username; special values are `me` to look up the current user, `x` to unassign, and `default` for the project's default assignee. Display-name fuzzy lookup is not supported.
+
+`--epic KEY` optionally selects an Epic; omitting it or supplying an empty string adds no association. Terminal creation prompts for an Epic key after required fields; Enter skips it. There is no additional prompt with `--no-input`, file mode, an existing parent, or `epic create`. Cloud uses `fields.parent.key` and rejects a simultaneous template `parent`; Data Center discovers the Epic Link field from metadata, with an explicit Epic overriding that field from the template or `--custom`. Do not combine `--epic` with `--parent`. Jira ultimately validates the target Epic, hierarchy, and permissions; association is submitted in the same request as creation.
 
 Description precedence is `-b/--body` or `--template`, then the `.md` adjacent to `--file`, then piped or interactive input; `--body` and `--template` are mutually exclusive. `--template -` explicitly reads stdin until EOF. Without another description source or a terminal, creation also reads stdin, supporting `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`. Empty stdin omits `description`; `--file` still requires adjacent Markdown unless an explicit source overrides it. Do not supply descriptions through `fields.description`.
 
