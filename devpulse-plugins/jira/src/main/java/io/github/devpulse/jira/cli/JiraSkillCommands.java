@@ -123,17 +123,17 @@ final class JiraSkillCommands implements Runnable {
         }
 
         private static String bundled(Path file, Language language) throws IOException {
-            boolean skill = file.equals(Path.of("SKILL.md"));
-            var source = skill ? "SKILL." + language.name() + ".md"
-                    : file.toString().replace('\\', '/');
-            var resource = "/skills/" + NAME + "/" + source;
+            boolean bilingual = file.equals(Path.of("templates", "specification.md"));
+            var source = bilingual ? file : file.resolveSibling(
+                    file.getFileName().toString().replace(".md", "." + language.name() + ".md"));
+            var resource = "/skills/" + NAME + "/" + source.toString().replace('\\', '/');
             try (var stream = JiraSkillCommands.class.getResourceAsStream(resource)) {
                 if (stream == null) {
                     throw JiraCommand.wrong("Bundled Jira skill resource is missing.");
                 }
                 var content = new String(stream.readAllBytes(), StandardCharsets.UTF_8)
                         .replace("\r\n", "\n");
-                if (skill) {
+                if (!bilingual) {
                     return content;
                 }
                 var chinese = "\n## 中文\n";

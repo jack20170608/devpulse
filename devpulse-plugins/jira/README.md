@@ -56,7 +56,7 @@ jira skill export --output chinese-skill --language zh
 jira --machine skill export --output exported-skill --templates team-templates
 ```
 
-导出包含 `SKILL.md`、`references\workflow.md`、`templates\specification.md` 和 `templates\jira-description.md`，可放入所用 AI 工具支持的 Skill 目录。内置入口按 `SKILL.en.md` 和 `SKILL.zh.md` 分开维护，导出时统一命名为 `SKILL.md`。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
+导出包含 `SKILL.md`、`references\workflow.md`、`templates\specification.md` 和 `templates\jira-description.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow` 和 `jira-description` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
 
 默认从**当前工作目录**的 `.jira\templates` 读取同名 `specification.md`、`jira-description.md` 覆盖内置模板；与连接配置位置无关。`--templates DIR` 改为只从该目录选取覆盖，不混用默认项目目录。两个文件可只提供一个，缺失文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错，其他文件忽略。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。AI 按项目语言规范填充模板正文，不把使用说明或代码围栏上传到 Jira。
 
@@ -462,7 +462,7 @@ jira skill export --output chinese-skill --language zh
 jira --machine skill export --output exported-skill --templates team-templates
 ```
 
-Exports contain `SKILL.md`, `references\workflow.md`, `templates\specification.md`, and `templates\jira-description.md` for placement in a skill directory supported by the chosen AI tool. Bundled entry points are maintained separately as `SKILL.en.md` and `SKILL.zh.md`, both exported under the standard name `SKILL.md`. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
+Exports contain `SKILL.md`, `references\workflow.md`, `templates\specification.md`, and `templates\jira-description.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, and `jira-description` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
 
 By default, same-named `specification.md` and `jira-description.md` in `.jira\templates` under the **current working directory** override bundled templates, independently of connection-file location. `--templates DIR` selects only that override directory, without mixing in the default project directory. Either file can be supplied alone; absent files use bundled defaults in the selected language. Existing invalid, blank, non-UTF-8, or over-1-MiB templates fail rather than silently falling back; other files are ignored. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. The AI fills template bodies according to project language conventions instead of uploading instructions or fences.
 
