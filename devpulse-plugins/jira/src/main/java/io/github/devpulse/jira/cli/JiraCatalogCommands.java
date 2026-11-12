@@ -167,6 +167,9 @@ public final class JiraCatalogCommands {
                     ? base.resolve("projects/"
                             + encode(project(null, config.project())))
                     : base.resolve("browse/" + encode(issueId(key)));
+            var result = new JsonObject();
+            result.addProperty("url", destination.toASCIIString());
+            machineData = result;
             if (!printUrl) {
                 try {
                     if (Desktop.isDesktopSupported()

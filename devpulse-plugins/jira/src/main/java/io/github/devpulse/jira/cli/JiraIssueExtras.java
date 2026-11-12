@@ -55,7 +55,7 @@ public final class JiraIssueExtras {
             if (body == null && template != null) {
                 body = template.toString().equals("-") ? stdin() : text(template);
             }
-            if (body == null && System.console() == null) {
+            if (body == null && !machine() && System.console() == null) {
                 body = stdin();
             }
             body = required(this, body, "Comment", noInput);
@@ -73,6 +73,7 @@ public final class JiraIssueExtras {
                 data.add("properties", properties);
             }
             jira.request("POST", "issue/" + key + "/comment", data);
+            changed(key, true);
             print("Commented on " + key + ".");
         }
     }
@@ -136,8 +137,12 @@ public final class JiraIssueExtras {
     public static final class Me extends JiraCommand.Action {
         @Override protected void execute() throws IOException {
             var jira = client();
-            print(nonblank(string(jira.myself(),
-                    jira.cloud() ? "accountId" : "name"), "Current user"));
+            var identifier = jira.cloud() ? "accountId" : "name";
+            var value = nonblank(string(jira.myself(), identifier), "Current user");
+            var result = new JsonObject();
+            result.addProperty(identifier, value);
+            machineData = result;
+            print(value);
         }
     }
 

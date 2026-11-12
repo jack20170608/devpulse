@@ -20,6 +20,12 @@ Jira 是独立的可执行工具，不依赖 core、Pulse 或 Gather，不需要
 
 HTTP 客户端不跟随重定向，设置连接及请求超时；拒绝远程明文 HTTP，仅允许本机 HTTP 测试。失败只显示 HTTP 状态码，不输出 Jira 的错误正文或认证信息。
 
+### 机器调用协议
+
+`JiraMachine` 作为 picocli 执行 Adapter，提供显式 `--machine`，不新建工具模块或复制业务操作。该模式强制无交互、显式 stdin 和不启动浏览器，通过版本化 JSON 信封返回结果；已有 JSON 查询复用原始结果，创建、编辑、评论及账户/链接查询提供结构化数据，其他命令暂保留非稳定的文本消息。人类诊断不混入协议。`JiraRequestException` 保留脱敏的 HTTP 状态、重试提示和写操作结果不确定性；不添加自动重试，不提供跨请求事务。具体退出码与数据契约见模块使用说明。
+
+该模式只是机器接口，不代表写权限或用户审批。计划/审批/提交闭环尚未实现；调用方仍负责审批，CLI 仍直接执行写命令。
+
 ### 编辑、导出与内容转换
 
 直接创建及编辑按 Jira 实例元数据解析字段；导出保留 `/editmeta` 返回的可编辑字段及原始结构，并保存字段基线、描述哈希、API 版本和正文格式。更新只发送已修改字段，上传前校验 `updated`；这是非原子的冲突检查，不能承诺与其他客户端写入互斥。
@@ -49,6 +55,12 @@ Connection files are selected as a whole in priority order: explicit `--config`,
 Deployment mode determines authentication, user identities, and search pagination: Cloud uses email/token Basic authentication, `accountId`, and `nextPageToken`; Data Center uses PAT Bearer authentication, usernames, and `startAt`. API version separately determines REST paths and body format, defaulting to Cloud v3 or Data Center v2 with an explicit override. Availability of the selected API version is not guaranteed.
 
 The HTTP client follows no redirects and sets connection and request timeouts. Remote plaintext HTTP is refused; only local HTTP testing is allowed. Failures display HTTP status codes rather than Jira error bodies or authentication information.
+
+### Machine invocation protocol
+
+`JiraMachine` is a picocli execution Adapter offering explicit `--machine` without adding a tool module or duplicating business operations. It forces noninteractive execution, explicit stdin, and no browser launch, returning a versioned JSON envelope. Existing JSON queries reuse raw results; creation, edits, comments, and account/URL queries provide structured data, while other commands currently retain unstable text messages. Human diagnostics stay out of the protocol. `JiraRequestException` retains sanitized HTTP status, retry advice, and unknown write outcomes without adding automatic retries or cross-request transactions. Exit codes and data contracts live in the usage guide.
+
+This mode is a machine interface, not write authorization or user approval. The plan/approval/apply workflow is not implemented; callers must approve writes, which the CLI still executes directly.
 
 ### Editing, export, and content conversion
 

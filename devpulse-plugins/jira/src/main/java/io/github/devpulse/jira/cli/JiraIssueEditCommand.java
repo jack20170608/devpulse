@@ -101,6 +101,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             update.bodyFormat = bodyFormat;
             update.spec = spec;
             update.execute();
+            machineData = update.machineData;
             return;
         }
         if (body != null && template != null) {
@@ -157,6 +158,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             }
         }
         if (fields.isEmpty() && updates.isEmpty()) {
+            changed(key, false);
             print("No changes to upload.");
             return;
         }
@@ -179,6 +181,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             }
         }
         jira.edit(key, fields, updates);
+        changed(key, true);
         print("Updated " + key + ".");
     }
 

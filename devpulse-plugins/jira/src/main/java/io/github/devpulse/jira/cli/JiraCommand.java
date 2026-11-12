@@ -67,13 +67,19 @@ public final class JiraCommand implements Runnable {
                     + "JIRA_API_TOKEN only.")
     private Path configFile;
 
+    @Option(names = "--machine", scope = ScopeType.INHERIT,
+            description = "Versioned JSON result; disable prompts and implicit stdin. "
+                    + "Does not authorize or approve writes.")
+    boolean machine;
+
     public static void main(String[] args) {
         var cli = new CommandLine(new JiraCommand())
                 .setOut(new PrintWriter(System.out, true,
                         StandardCharsets.UTF_8))
                 .setErr(new PrintWriter(System.err, true,
                         StandardCharsets.UTF_8));
-        System.exit(cli.execute(args));
+        System.exit(JiraMachine.configure(cli, (JiraCommand) cli.getCommand())
+                .execute(args));
     }
 
     public static final class VersionProvider implements IVersionProvider {
@@ -312,8 +318,20 @@ public final class JiraCommand implements Runnable {
         @Spec
         CommandSpec spec;
         private JiraConfiguration configuration;
+        JsonElement machineData;
 
         protected abstract void execute() throws IOException;
+
+        boolean machine() {
+            return ((JiraCommand) spec.root().userObject()).machine;
+        }
+
+        void changed(String key, boolean changed) {
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            result.addProperty("changed", changed);
+            machineData = result;
+        }
 
         Path explicitConfigFile() {
             return ((JiraCommand) spec.root().userObject()).configFile;
@@ -333,7 +351,11 @@ public final class JiraCommand implements Runnable {
         }
 
         @Override
-        public final Integer call() {
+        public final Integer call() throws Exception {
+            if (machine()) {
+                execute();
+                return 0;
+            }
             try {
                 execute();
                 return 0;
@@ -523,10 +545,12 @@ public final class JiraCommand implements Runnable {
                         description, jira, data));
             }
             if (changes.isEmpty()) {
+                changed(data.getString("key"), false);
                 print("No changes to upload.");
                 return;
             }
             jira.edit(data.getString("key"), changes);
+            changed(data.getString("key"), true);
             print("Updated " + data.getString("key") + ". "
                     + "Re-export before the next update.");
         }
@@ -589,6 +613,7 @@ public final class JiraCommand implements Runnable {
         protected void execute() throws IOException {
             var jira = client();
             jira.comment(key, bodyFormat.toJira(text(file), jira));
+            changed(key, true);
             print("Commented on " + key + ".");
         }
     }

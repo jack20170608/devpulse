@@ -109,7 +109,20 @@ public final class JiraClient {
     public JsonObject create(JsonObject fields) throws IOException {
         var body = new JsonObject();
         body.add("fields", fields);
-        return object(request("POST", "issue", body));
+        var response = request("POST", "issue", body);
+        try {
+            var result = object(response);
+            if (!result.has("key") || !result.get("key").isJsonPrimitive()
+                    || !result.getAsJsonPrimitive("key").isString()
+                    || result.get("key").getAsString().isBlank()) {
+                throw new IOException("Missing issue key.");
+            }
+            return result;
+        } catch (IOException exception) {
+            throw new JiraRequestException(
+                    "Jira create response has no usable issue key; inspect Jira before retrying.",
+                    "OUTCOME_UNKNOWN", null, true, false, exception);
+        }
     }
 
     public JsonObject search(String jql, int limit, Integer startAt,
@@ -279,7 +292,9 @@ public final class JiraClient {
             return response.isBlank() ? new JsonObject()
                     : JsonParser.parseString(response);
         } catch (com.google.gson.JsonParseException exception) {
-            throw new IOException("Jira returned invalid JSON.", exception);
+            throw new JiraRequestException("Jira returned invalid JSON.",
+                    "INVALID_RESPONSE", null, !readOnly(method, path),
+                    false, exception);
         }
     }
 
@@ -301,15 +316,41 @@ public final class JiraClient {
                             StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 // Response bodies may contain private issue data.
-                throw new IOException("Jira HTTP " + response.statusCode()
+                var status = response.statusCode();
+                boolean unknown = !readOnly(request.method(), request.uri().getPath())
+                        && status >= 500;
+                throw new JiraRequestException("Jira HTTP " + status
                         + " for " + request.method() + " "
-                        + request.uri().getPath() + ".");
+                        + request.uri().getPath() + ".",
+                        unknown ? "OUTCOME_UNKNOWN" : "HTTP_ERROR",
+                        status, unknown, !unknown && (status == 429
+                        || (readOnly(request.method(), request.uri().getPath())
+                        && status >= 500)), null);
             }
             return response.body();
+        } catch (JiraRequestException exception) {
+            throw exception;
+        } catch (IOException exception) {
+            boolean read = readOnly(request.method(), request.uri().getPath());
+            throw new JiraRequestException(
+                    read ? "Jira request failed during transport."
+                            : "Jira write outcome is unknown; inspect Jira before retrying.",
+                    read ? "TRANSPORT_ERROR" : "OUTCOME_UNKNOWN",
+                    null, !read, read, exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IOException("Jira request interrupted.", exception);
+            boolean read = readOnly(request.method(), request.uri().getPath());
+            throw new JiraRequestException("Jira request interrupted.",
+                    read ? "REQUEST_INTERRUPTED" : "OUTCOME_UNKNOWN",
+                    null, !read, false, exception);
         }
+    }
+
+    private static boolean readOnly(String method, String path) {
+        return method.equals("GET") || method.equals("HEAD")
+                || (method.equals("POST")
+                && (path.equals("search") || path.equals("search/jql")
+                || path.endsWith("/search") || path.endsWith("/search/jql")));
     }
 
     private static JsonObject object(JsonElement element)

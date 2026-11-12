@@ -158,7 +158,9 @@ public class JiraCreateCommand extends JiraCommand.Action {
                 setNamed(issue, "assignee", identifier, user);
             }
         }
-        print("Created " + string(jira.create(issue), "key"));
+        var created = jira.create(issue);
+        machineData = created;
+        print("Created " + string(created, "key"));
     }
 
     private void setEpic(JsonObject issue, JiraClient jira) throws IOException {
@@ -192,7 +194,7 @@ public class JiraCreateCommand extends JiraCommand.Action {
         if (file != null) {
             return text(markdown(file));
         }
-        if (System.console() == null) {
+        if (!machine() && System.console() == null) {
             var input = new String(System.in.readAllBytes(),
                     StandardCharsets.UTF_8);
             return input.isEmpty() ? null : input;
