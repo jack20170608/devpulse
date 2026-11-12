@@ -1,6 +1,4 @@
-package io.github.devpulse.gatherer;
-
-import io.github.devpulse.core.environment.BashShell;
+package io.github.devpulse.core.environment;
 
 import java.io.IOException;
 import java.nio.file.Files;

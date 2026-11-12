@@ -109,6 +109,10 @@ bash run-jira.sh issue create --no-input \
 printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
   -p DEMO -t Task -s "Document deployment" --template -
 
+# 可选 Epic；省略 --epic 或传入空字符串均可跳过
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Story -s "Add login flow" --epic DEMO-100
+
 # 父任务、自指派与自定义字段（按实例要求使用原始 REST 字段 ID 和值）
 bash run-jira.sh issue create --no-input \
   -p DEMO -t Sub-task -s "Add timeout handling" -P DEMO-1 -a me \
@@ -123,7 +127,11 @@ bash run-jira.sh issue create --file issue.conf -s "Updated summary"
 
 `-y/--priority` 设置优先级名称；`-l/--label`、`-C/--component`、`--fix-version` 和 `--affects-version` 可重复，显式提供时**替换**模板中的整个对应列表，不按逗号拆分。`-P/--parent` 设置父问题 key，是否可用由 Jira 的项目类型和层级决定。`-a/--assignee` 在 Cloud 使用账户 `accountId`，在 Data Center 使用用户名；特殊值 `me` 查询当前用户，`x` 取消指派，`default` 使用项目默认经办人。不按显示名模糊查找用户。
 
+`--epic KEY` 可选地指定所属 Epic；省略或传入空字符串不额外设置关联。终端创建时，在必填项之后询问 Epic key，按 Enter 跳过；`--no-input`、文件模式、已设置父任务或 `epic create` 不补问。Cloud 使用 `fields.parent.key`，不允许与模板中的 `parent` 同时设置；Data Center 根据字段元数据自动查找 Epic Link，显式 Epic 覆盖模板或 `--custom` 中对应的字段。`--epic` 不与 `--parent` 同时使用；Jira 最终校验目标是否为 Epic、层级和权限，关联与创建在同一次请求中提交。
+
 描述优先级为 `-b/--body` 或 `--template`、`--file` 同名 `.md`、管道输入或交互输入；`--body` 与 `--template` 互斥。`--template -` 显式读取标准输入直至结束；没有其他描述来源且无终端时也会读取标准输入，支持 `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`。标准输入为空时不发送 `description` 字段；使用 `--file` 且未覆盖描述来源时仍要求相邻 `.md`。`fields.description` 不可用于传入描述。
+
+创建和直接编辑时，`--template-format auto|markdown|wiki` 默认 `auto`：`--template` 文件的 `.md` / `.markdown` 后缀不区分大小写，识别为 Markdown 并转换；其他后缀、无后缀和 `--template -` 均按 Wiki 原样提交，不根据内容猜测。可显式指定 `--template-format markdown` 或 `wiki` 覆盖后缀判断；显式格式要求提供 `--template`，不能与 `--body-format` 同时指定。为兼容已有用法，`--template-format auto` 下显式的 `--body-format` 优先于后缀判断。Wiki 仅支持 API v2；API v3 的非 Markdown 后缀模板或标准输入需显式指定 Markdown。此规则仅影响 `issue create --template` 和 `issue edit --template`，其他描述来源和评论的默认格式不变；`issue edit --file` 仍按导出元数据选择格式。
 
 `--custom customfield_ID=HOCON_VALUE` 可重复，支持字符串、数字、布尔值、`null`、对象和数组；字符串含空格或特殊字符时应按 HOCON 规则加双引号，并使用 shell 引号保护整个参数。只接受原始 `customfield_数字` 标识，不解析显示名；显式值覆盖文件中同名字段。更复杂的字段配置仍建议使用 `--file`。本地校验必填项和输入格式，Jira 最终校验创建权限、字段可用性及额外必填字段；当前不自动发现创建元数据，也不提供编辑器或交互式用户/字段选择。描述转换仍受下面的 Markdown 边界限制。
 
@@ -166,6 +174,8 @@ bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
 标签（`-l/--label`）、组件（`-C/--component`）、修复版本（`--fix-version`）、影响版本（`--affects-version`）均可重复：普通值表示新增，前缀 `-` 表示移除，建议用 `--label=-old` 这类等号写法避免与选项混淆。不按逗号拆分；重复的同向操作去重，同一值同时新增和移除会在请求 Jira 前报错。增删通过 Jira `update` 操作提交，不先读取整个列表再覆盖。未指定的字段保持不变；若需清空或替换整个列表，使用导出文件模式明确编辑对应数组。
 
 `-b/--body` 和 `--template` 互斥；`--template -` 显式读取标准输入直至结束。空描述文本或空描述文件会清空远端描述，未提供描述来源则不修改；交互模式中的空输入仅表示保留，不能用于清空。没有编辑参数时才交互询问标题、优先级、经办人与单行描述；按 Enter 保留，若全部保留则不提交。`--no-input` 或没有终端时，必须提供编辑参数或 `--file`。指定编辑参数会直接提交，不额外询问确认。
+
+`issue edit --template` 与创建使用相同的 `--template-format` 自动识别和显式覆盖规则；空文件仍表示清空描述。`--template-format markdown|wiki` 不能单独使用，也不能与 `--file` 混用。
 
 直接编辑先读取当前问题，仅发送显式变更，跳过可识别的未变化字段；写入前通过 `/editmeta` 检查字段可编辑性及所需的 `set`、`add`、`remove` 操作，并再次比较问题的 `updated` 值，发现并发变化则拒绝提交。`--force` 只跳过更新时间检查，不绕过 Jira 字段权限。**更新时间检查不是原子并发锁**；检查与实际写入之间仍可能出现竞争。描述转换仍受下面的 Markdown 边界限制。
 
@@ -247,7 +257,9 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 默认按 `created DESC` 排序；`--order-by` 支持 `created`、`updated`、`priority`、`key`、`rank`、`summary`、`status`、`assignee`、`issuetype`，`--reverse` 改为升序。`--created` 与 `--updated` 接受 Jira 日期、相对时间或 `day`/`today`、`week`、`month`、`year`，表示大于等于该时间或当前周期起点；`--created-before` 与 `--updated-before` 指定不包含边界的上限。`-w/--watching` 查询自己关注的问题，`--history` 使用 Jira 的最近浏览记录，`-R/--resolution` 筛选解决结果并支持 `~` 排除。**仅在没有默认项目、任何筛选及 JQL 时**默认添加 `created >= "-30d"`，以满足 Cloud 搜索必须具有查询限制的要求。`-q/--jql` 是完整查询，不能与显式筛选、`--order-by` 或 `--reverse` 混用，也不注入默认项目；Epic/Sprint 的范围限制仍会合并到自定义 JQL，保留其排序。
 
-默认表格列为问题 key、类型、状态、优先级、经办人、标题。`--columns key,created,reporter` 可按顺序选择列，还支持 `updated`、`resolution`、`labels`、`components`、`fixVersions`、`parent`；仅请求显示所需字段。缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出 TSV；`--csv` 输出 UTF-8 CSV，所有字段加双引号，双引号加倍，并保留逗号和换行。`--csv` 与 `--plain` 互斥。`--no-headers` 移除表头，空结果没有数据行。`--raw` 与 `--json` 等价，输出包含上述支持字段及分页元数据的原始 JSON 页；不能与 `--plain`、`--csv` 或 `--no-headers` 混用。
+默认表格列为问题 key、类型、状态、优先级、经办人、所属 Epic key、标题。`--columns key,created,reporter` 可按顺序选择列，还支持 `updated`、`resolution`、`labels`、`components`、`fixVersions`、`parent`、`epic`；仅请求显示所需字段。缺失或不可见的可选字段显示 `-`，表格和 TSV 中的控制字符会替换为空格。`--plain` 输出 TSV；`--csv` 输出 UTF-8 CSV，所有字段加双引号，双引号加倍，并保留逗号和换行。`--csv` 与 `--plain` 互斥。`--no-headers` 移除表头，空结果没有数据行。`--raw` 与 `--json` 等价，输出包含上述支持字段及分页元数据的原始 JSON 页；不能与 `--plain`、`--csv` 或 `--no-headers` 混用。
+
+`EPIC` 列显示直接关联的 Epic key：Data Center 动态发现 Epic Link 自定义字段；Cloud 使用 `parent`，仅在父问题类型的 `hierarchyLevel = 1`（无层级信息时类型名为 `Epic`）时显示，不把普通父任务当作 Epic。未关联、字段缺失或父类型信息不足时显示 `-`；不向上遍历子任务的父链。表格、TSV、CSV 均支持 `--columns key,epic,summary`。仅在请求 Epic 列或原始 JSON 时发现 Data Center 的 Epic Link 字段；原始 JSON 保留 `parent` 和动态发现的自定义字段，不添加合成 `epic` 属性。
 
 每次调用仅请求一页，不自动遍历所有问题；`--limit` 默认为 50，范围为 1–100，Jira 仍可能返回更少的条目。在所选 API 版本下，Cloud 使用 `POST /search/jql` 与不透明的 `nextPageToken`；Data Center 使用 `POST /search` 与零起始的 `startAt`。两种分页参数不能跨模式使用。表格/TSV/CSV 模式在存在下一页时向标准错误输出续页提示，不混入标准输出的数据；JSON 模式直接保留服务器分页信息。查询结果受 Jira 权限限制，Cloud 最近写入的修改也可能不会立即出现在搜索中。
 
@@ -318,16 +330,20 @@ Sprint 显式 ID 或 `--current`、`--prev`、`--next` 复用问题筛选；无�
 
 ### Markdown 边界
 
+以下默认 Markdown 的规则不包含 `issue create --template` 和 `issue edit --template` 的自动后缀选择；这两种来源使用上文的 `--template-format` 规则。
+
 API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。
 
 API v2（包括显式选择 v2 的 Cloud）使用 Jira Wiki 格式而非 ADF。创建、直接编辑和新增评论默认以 Markdown 解析正文；支持段落、标题、加粗、斜体、行内代码、带或不带语言的代码块、简单及嵌套列表、引用、链接、图片、分隔线和 GFM 表格，并转换为 Wiki。表格表头使用 `||`，数据单元格使用 `|`；支持单元格内的强调、行内代码、链接和转义竖线，保留空单元格，但不保留列对齐标记。HTML（包括表格中的 `<br>`）、带标题的链接/图片、多段落列表项及无法安全转换的内容会明确报错；不提供任务列表和删除线扩展转换。API v3 暂不支持 ADF 表格上传，Markdown 表格会明确报错。需要直接使用 Wiki 表格、宏、用户提及等原生格式时，添加 `--body-format wiki`，正文将原样提交，不进行 Markdown 解析或格式猜测。`*文字*` 在默认 Markdown 模式下为斜体，在 Wiki 模式下为加粗。Wiki 模式只适用于 API v2。
 
 ```bash
-# 默认 Markdown，也可显式添加 --body-format markdown
+# .md / .markdown 后缀自动识别 Markdown，不区分大小写
 bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
-# 原生 Jira Wiki；文件扩展名不决定格式
-bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --body-format wiki --no-input
-bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+# 创建和直接编辑时其他后缀自动按 Wiki 提交；也可显式覆盖格式
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --no-input
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.txt --template-format markdown --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --no-input
+# 评论仍需显式指定 Wiki
 bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
 ```
 
@@ -440,6 +456,10 @@ bash run-jira.sh issue create --no-input \
 printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
   -p DEMO -t Task -s "Document deployment" --template -
 
+# Optional Epic; omit --epic or supply an empty string to skip
+bash run-jira.sh issue create --no-input \
+  -p DEMO -t Story -s "Add login flow" --epic DEMO-100
+
 # Parent issue, self-assignment, and custom fields (raw REST IDs and instance-specific values)
 bash run-jira.sh issue create --no-input \
   -p DEMO -t Sub-task -s "Add timeout handling" -P DEMO-1 -a me \
@@ -454,7 +474,11 @@ Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are r
 
 `-y/--priority` sets the priority name. Repeat `-l/--label`, `-C/--component`, `--fix-version`, and `--affects-version` for multiple values; explicit lists **replace** the entire corresponding template list and are not comma-separated. `-P/--parent` sets the parent issue key, subject to Jira's project type and hierarchy. `-a/--assignee` accepts a Cloud `accountId` or Data Center username; special values are `me` to look up the current user, `x` to unassign, and `default` for the project's default assignee. Display-name fuzzy lookup is not supported.
 
+`--epic KEY` optionally selects an Epic; omitting it or supplying an empty string adds no association. Terminal creation prompts for an Epic key after required fields; Enter skips it. There is no additional prompt with `--no-input`, file mode, an existing parent, or `epic create`. Cloud uses `fields.parent.key` and rejects a simultaneous template `parent`; Data Center discovers the Epic Link field from metadata, with an explicit Epic overriding that field from the template or `--custom`. Do not combine `--epic` with `--parent`. Jira ultimately validates the target Epic, hierarchy, and permissions; association is submitted in the same request as creation.
+
 Description precedence is `-b/--body` or `--template`, then the `.md` adjacent to `--file`, then piped or interactive input; `--body` and `--template` are mutually exclusive. `--template -` explicitly reads stdin until EOF. Without another description source or a terminal, creation also reads stdin, supporting `printf 'Description' | bash run-jira.sh issue create -t Task -s Summary --no-input`. Empty stdin omits `description`; `--file` still requires adjacent Markdown unless an explicit source overrides it. Do not supply descriptions through `fields.description`.
+
+For creation and direct editing, `--template-format auto|markdown|wiki` defaults to `auto`: `.md` / `.markdown` suffixes on `--template` files are matched case-insensitively and converted from Markdown. Other suffixes, extensionless files, and `--template -` are submitted unchanged as Wiki, without content guessing. Explicit `--template-format markdown` or `wiki` overrides suffix detection, requires `--template`, and cannot be combined with `--body-format`. For compatibility, explicit `--body-format` takes precedence over suffix detection when `--template-format auto` is used. Wiki requires API v2; with API v3, explicitly select Markdown for non-Markdown suffixes or stdin templates. This rule affects only `issue create --template` and `issue edit --template`; defaults for other description sources and comments are unchanged. `issue edit --file` still selects its format from export metadata.
 
 Repeat `--custom customfield_ID=HOCON_VALUE` for strings, numbers, booleans, `null`, objects, or arrays. Double-quote strings containing spaces or special characters according to HOCON rules, and shell-quote the entire argument. Only raw `customfield_digits` identifiers are accepted, not display names; explicit values override matching file fields. Prefer `--file` for more complex fields. Local validation checks required fields and input shapes; Jira ultimately validates creation permissions, field availability, and additional required fields. Creation metadata discovery, editor integration, and interactive user/field selection are not currently provided. Description conversion remains subject to the Markdown limits below.
 
@@ -497,6 +521,8 @@ bash run-jira.sh issue edit DEMO-1 --file exported.conf --no-input
 Labels (`-l/--label`), components (`-C/--component`), fix versions (`--fix-version`), and affected versions (`--affects-version`) are repeatable: ordinary values add entries, and a `-` prefix removes them. Prefer equals syntax such as `--label=-old` to avoid option ambiguity. Values are not comma-separated. Duplicate operations in the same direction are deduplicated; adding and removing the same value fails before contacting Jira. Changes use Jira's `update` operations rather than reading and overwriting whole lists. Unspecified fields remain unchanged; use exported-file mode to explicitly clear or replace entire arrays.
 
 `-b/--body` and `--template` are mutually exclusive; `--template -` explicitly reads stdin until EOF. Empty description text or an empty description file clears the remote description; omitting a description source leaves it unchanged. Empty interactive input means keep, not clear. Only invocations without edit flags prompt for summary, priority, assignee, and a single-line description; Enter keeps each field, and keeping everything performs no write. With `--no-input` or no terminal, edit flags or `--file` are required. Supplying edits submits directly without an additional confirmation.
+
+`issue edit --template` uses the same automatic detection and explicit overrides via `--template-format` as creation; an empty file still clears the description. `--template-format markdown|wiki` cannot be used alone or with `--file`.
 
 Direct editing reads the current issue, sends only explicit changes, and skips recognizable unchanged fields. Before writing, it checks `/editmeta` for field editability and the required `set`, `add`, or `remove` operations, then compares the issue's `updated` value again and refuses concurrent changes. `--force` bypasses only the timestamp check, not Jira field permissions. **The timestamp check is not an atomic concurrency lock**; a write can still race between checking and submission. Description conversion remains subject to the Markdown limits below.
 
@@ -578,7 +604,9 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 
 Sorting defaults to `created DESC`. `--order-by` accepts `created`, `updated`, `priority`, `key`, `rank`, `summary`, `status`, `assignee`, or `issuetype`; `--reverse` switches to ascending order. `--created` and `--updated` accept Jira dates, relative times, or `day`/`today`, `week`, `month`, and `year`, selecting values at or after the given time or current period boundary. `--created-before` and `--updated-before` provide exclusive upper bounds. `-w/--watching` selects watched issues, `--history` uses Jira's viewing history, and `-R/--resolution` filters resolutions with optional `~` exclusion. **Only when no default project, filters, or JQL are supplied**, the command adds `created >= "-30d"` to satisfy Cloud's restricted-query requirement. `-q/--jql` is a complete query and cannot be combined with explicit filters, `--order-by`, or `--reverse`; it does not receive an implicit default project. Epic/Sprint scopes still merge with custom JQL while preserving its ordering.
 
-Default table columns are issue key, type, status, priority, assignee, and summary. `--columns key,created,reporter` selects ordered columns; `updated`, `resolution`, `labels`, `components`, `fixVersions`, and `parent` are also supported. Only displayed fields are requested. Missing or inaccessible optional fields display `-`; control characters become spaces in table/TSV output. `--plain` emits TSV; `--csv` emits UTF-8 CSV with quoted fields, doubled embedded quotes, and preserved commas and line breaks. `--csv` and `--plain` are mutually exclusive. `--no-headers` removes headers; empty results have no data rows. Equivalent `--raw` and `--json` emit the original JSON page containing the supported fields above and pagination metadata; they cannot be combined with `--plain`, `--csv`, or `--no-headers`.
+Default table columns are issue key, type, status, priority, assignee, associated Epic key, and summary. `--columns key,created,reporter` selects ordered columns; `updated`, `resolution`, `labels`, `components`, `fixVersions`, `parent`, and `epic` are also supported. Only displayed fields are requested. Missing or inaccessible optional fields display `-`; control characters become spaces in table/TSV output. `--plain` emits TSV; `--csv` emits UTF-8 CSV with quoted fields, doubled embedded quotes, and preserved commas and line breaks. `--csv` and `--plain` are mutually exclusive. `--no-headers` removes headers; empty results have no data rows. Equivalent `--raw` and `--json` emit the original JSON page containing the supported fields above and pagination metadata; they cannot be combined with `--plain`, `--csv`, or `--no-headers`.
+
+The `EPIC` column shows the directly associated Epic key. Data Center dynamically discovers the Epic Link custom field; Cloud uses `parent`, displaying it only when its issue type has `hierarchyLevel = 1` (or is named `Epic` when hierarchy data is absent), never treating an ordinary parent task as an Epic. Unassociated issues, missing fields, or insufficient parent-type data display `-`; subtask parent chains are not traversed. Tables, TSV, and CSV support `--columns key,epic,summary`. Data Center Epic Link discovery runs only when the Epic column or raw JSON is requested. Raw JSON retains `parent` and the discovered custom field without adding a synthetic `epic` property.
 
 Each invocation requests one page, never all issues automatically. `--limit` defaults to 50 and accepts 1–100; Jira may still return fewer items. Within the selected API version, Cloud uses `POST /search/jql` with an opaque `nextPageToken`; Data Center uses `POST /search` with zero-based `startAt`. Pagination flags cannot be used across modes. Table/TSV/CSV output writes a continuation hint to stderr when another page exists, keeping it separate from stdout data; JSON output preserves server pagination metadata directly. Results are limited by Jira permissions, and recent Cloud writes may not immediately appear in search results.
 
@@ -649,16 +677,20 @@ Explicit sprint IDs and `--current`, `--prev`, or `--next` reuse issue filters. 
 
 ### Markdown limits
 
+The Markdown defaults below exclude automatic suffix selection for `issue create --template` and `issue edit --template`, which follow the `--template-format` rules above.
+
 API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped.
 
 API v2, including Cloud explicitly configured for v2, uses Jira Wiki rather than ADF. Creation, direct editing, and new comments parse bodies as Markdown by default, converting paragraphs, headings, bold, italic, inline code, labelled or unlabelled code blocks, simple and nested lists, quotes, links, images, thematic breaks, and GFM tables to Wiki. Table headers use `||` and data cells use `|`; emphasis, inline code, links, escaped pipes, and empty cells are supported, but column alignment markers are not preserved. HTML (including `<br>` in tables), titled links/images, multi-paragraph list items, and content that cannot be converted safely produce explicit errors. Task-list and strikethrough extension conversion is not provided. API v3 does not yet support ADF table uploads and explicitly rejects Markdown tables. For native Wiki tables, macros, user mentions, and other native syntax, add `--body-format wiki` to submit the body unchanged, without Markdown parsing or format guessing. `*text*` means italic in default Markdown mode and bold in Wiki mode. Wiki mode requires API v2.
 
 ```bash
-# Markdown by default; --body-format markdown is also accepted
+# .md / .markdown suffixes automatically select Markdown, case-insensitively
 bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
-# Native Jira Wiki; the file extension does not determine the format
-bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --body-format wiki --no-input
-bash run-jira.sh issue edit DEMO-1 --template template.wiki --body-format wiki --no-input
+# Other suffixes select Wiki for creation and direct editing; explicit overrides are available
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --no-input
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.txt --template-format markdown --no-input
+bash run-jira.sh issue edit DEMO-1 --template template.wiki --no-input
+# Comments still require explicit Wiki selection
 bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
 ```
 

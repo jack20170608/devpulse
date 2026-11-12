@@ -20,7 +20,7 @@
 - **剪贴板控制**：默认通过 AWT 写入剪贴板；无图形环境、剪贴板忙或不可访问时提示警告，保留标准输出，盘点仍成功。
 - **命令选项**：`gather --directory <目录>` 指定盘点位置，`--bash <路径>` 指定 Bash，`--no-clipboard` 禁用剪贴板复制；`--language zh|en|both` 同时控制终端与剪贴板中的提示词语言，默认 `both`，不支持的取值在盘点前拒绝。目录无效、Bash 缺失或扫描失败时返回非零退出码。遇到中文终端显示乱码时可使用 `gather --language en` 避开提示词中的中文；该选项不修复终端编码，也不翻译本地事实数据。
 
-环境事实采集复用 [gatherer 检测库](../gatherer/architecture.md)，该库通过 core 的 `BashShell` 定位与调用 Bash；`GatherPrompt` 负责语言模板，`GatherCommand` 负责 CLI 选项、编码提示和剪贴板输出。Gather 不依赖 Pulse；生成的 YAML 由用户审核后交给 Pulse。
+环境事实采集直接复用 [core 环境包](../../devpulse-core/architecture.md) 的 `EnvironmentGatherer`，通过同包的 `BashShell` 定位与调用 Bash；不再依赖独立的 gatherer 模块。`GatherPrompt` 负责语言模板，`GatherCommand` 负责 CLI 选项、编码提示和剪贴板输出。Gather 不依赖 Pulse；生成的 YAML 由用户审核后交给 Pulse。
 
 ### 原有实施路线图
 
@@ -46,7 +46,7 @@
 - **Clipboard**: Copy through AWT by default. In headless environments or when the clipboard is busy or inaccessible, warn and retain standard output; inventory still succeeds.
 - **Options**: `gather --directory <directory>` selects the project, `--bash <path>` selects Bash, and `--no-clipboard` disables clipboard writes. `--language zh|en|both` controls the prompt language for both terminal and clipboard output, defaults to `both`, and rejects unsupported values before inventory. Invalid directories, missing Bash, and scan failures return nonzero exit codes. Use `gather --language en` to avoid Chinese prompt text when the terminal displays it incorrectly; this option does not fix terminal encoding or translate local fact data.
 
-Fact collection reuses the [gatherer detection library](../gatherer/architecture.md), which discovers and invokes Bash through core's `BashShell`. `GatherPrompt` owns language templates; `GatherCommand` owns CLI options, encoding warnings, and clipboard output. Gather does not depend on Pulse; users review generated YAML before using Pulse.
+Fact collection directly reuses `EnvironmentGatherer` from the [core environment package](../../devpulse-core/architecture.md), discovering and invoking Bash through `BashShell` in the same package without a separate gatherer module dependency. `GatherPrompt` owns language templates; `GatherCommand` owns CLI options, encoding warnings, and clipboard output. Gather does not depend on Pulse; users review generated YAML before using Pulse.
 
 ### Original implementation roadmap
 

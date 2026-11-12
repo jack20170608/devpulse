@@ -1,6 +1,6 @@
 package io.github.devpulse.cli;
 
-import io.github.devpulse.gatherer.EnvironmentGatherer;
+import io.github.devpulse.core.environment.EnvironmentGatherer;
 import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.bash.DaemonManager;
 import java.io.IOException;

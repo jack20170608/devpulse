@@ -1,6 +1,6 @@
 package io.github.devpulse.environment;
 
-import io.github.devpulse.gatherer.EnvironmentGatherer;
+import io.github.devpulse.core.environment.EnvironmentGatherer;
 
 import java.util.stream.Collectors;
 

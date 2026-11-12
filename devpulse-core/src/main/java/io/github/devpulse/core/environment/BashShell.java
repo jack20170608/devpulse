@@ -16,6 +16,11 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 public record BashShell(Path executable) {
+
+    public static BashShell discover() throws IOException , InterruptedException{
+        return discover(null);
+    }
+
     public static BashShell discover(Path override)
             throws IOException, InterruptedException {
         var windows = System.getProperty("os.name")

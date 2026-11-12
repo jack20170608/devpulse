@@ -17,7 +17,7 @@ java -jar devpulse-plugins\gather\target\devpulse-gather.jar --help
 
 Gather 有独立可执行 JAR，但暂不提供安装归档。提示词审核、配置保存及执行流程见 [Pulse 使用说明](../pulse/README.md)。
 
-环境检测由独立的 [Gatherer 库](../gatherer/README.md) 提供；本模块保留提示词生成与 CLI，检测行为和命令选项不变。
+环境检测由 [core 环境包](../../devpulse-core/README.md#环境事实采集) 提供，与 Pulse 共享 `EnvironmentGatherer`，不再单独依赖 gatherer 模块；本模块保留提示词生成与 CLI，检测行为和命令选项不变。
 
 ### `gather`：生成辅助编写配置的 AI 提示词
 
@@ -73,7 +73,7 @@ java -jar devpulse-plugins\gather\target\devpulse-gather.jar --help
 
 Gather has a standalone executable JAR but no installation archive yet. See the [Pulse guide](../pulse/README.md) for prompt review, configuration saving, and execution.
 
-The separate [Gatherer library](../gatherer/README.md) supplies environment detection; this module retains prompt generation and the CLI, with unchanged detection behavior and command options.
+The [core environment package](../../devpulse-core/README.md#environment-fact-collection) supplies `EnvironmentGatherer`, shared with Pulse without a separate gatherer module dependency. This module retains prompt generation and the CLI, with unchanged detection behavior and command options.
 
 ### `gather`: generate an AI prompt for configuration assistance
 

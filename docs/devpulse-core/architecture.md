@@ -28,7 +28,7 @@
 
 ### 环境事实采集（`EnvironmentGatherer.java`）
 
-环境事实采集已移至 [gatherer 模块](../devpulse-plugins/gatherer/architecture.md)，core 不再包含 `EnvironmentGatherer`，只提供供检测库与 Bash 运行模块共用的 `BashShell`。功能与使用契约见 [Gatherer 使用说明](../../devpulse-plugins/gatherer/README.md)。
+`io.github.devpulse.core.environment.EnvironmentGatherer` 与 `BashShell` 同属 core 的环境包，供 Gather CLI 和 Pulse 的 `status --tools` 直接复用，不再维护独立的 gatherer Maven 模块。`gather()` 校验并规范化目录，通过固定的 Bash `command -v` 脚本获取工具位置，拒绝不完整盘点，并检查根目录项目标志；返回防御性复制的 `Facts` / `Tool` record。环境采集与 DAG、Bash 调度相互独立，不引入 CLI、提示词或剪贴板逻辑；不读取项目内容、不递归扫描、不采集环境变量值、不执行版本或健康检查。功能与使用契约见 [Core 使用说明](../../devpulse-core/README.md#环境事实采集)。
 
 ### Bash 定义、计划与运行时
 
@@ -108,7 +108,7 @@ Successful batch exit and daemon readiness release dependencies. Handles provide
 
 ### Environment fact collection (`EnvironmentGatherer.java`)
 
-Environment fact collection has moved to the [gatherer module](../devpulse-plugins/gatherer/architecture.md). Core no longer contains `EnvironmentGatherer`; it supplies `BashShell` shared by detection and Bash execution. See the [Gatherer usage guide](../../devpulse-plugins/gatherer/README.md) for functionality and contracts.
+`io.github.devpulse.core.environment.EnvironmentGatherer` shares core's environment package with `BashShell`, directly reused by the Gather CLI and Pulse's `status --tools` without a separate gatherer Maven module. `gather()` validates and normalizes directories, runs a fixed Bash `command -v` inventory, rejects incomplete results, and checks root-level project markers. It returns `Facts` / `Tool` records with defensive list copies. Collection remains independent of DAG and Bash scheduling, introducing no CLI, prompts, or clipboard logic. It does not read project contents, scan recursively, collect environment variable values, or run version/health checks. See the [Core usage guide](../../devpulse-core/README.md#environment-fact-collection) for functionality and contracts.
 
 ### Bash definitions, planning, and runtime
 

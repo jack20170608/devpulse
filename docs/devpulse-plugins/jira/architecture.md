@@ -28,6 +28,10 @@ v3 使用 ADF，上传和导出只支持严格的 Markdown 子集，不能无损
 
 评论、附件、工时、关联、克隆及状态流转由各自 API 执行，不共享导出文件的冲突检查；多请求操作不提供跨请求事务。完整命令、权限限制、分页与格式边界统一维护在模块使用说明中。
 
+创建和直接编辑命令共用 `TemplateFormat` mixin，`--template-format` 默认 `auto`，仅根据 `--template` 文件的后缀选择输入格式：`.md` / `.markdown` 不区分大小写，其他后缀及标准输入按 Wiki 处理；不检查内容猜测格式。显式模板格式或兼容的 `--body-format` 可覆盖自动判断；Wiki 仍要求 API v2。`issue edit --file` 仍使用导出元数据中的格式，其他描述来源和其他命令的默认格式不变。
+
+问题列表默认显示 `EPIC` key 列，复用列表的表格、TSV 和 CSV 渲染。Data Center 按字段元数据发现 Epic Link；Cloud 从带有 Epic 类型信息的 `parent` 读取，不逐项请求父问题，也不将普通父任务当作 Epic。仅在需要 Epic 信息时请求相关字段，原始 JSON 不添加合成字段。
+
 ## English
 
 [Architecture index](../../architecture.md) | [Usage](../../../devpulse-plugins/jira/README.md)
@@ -53,3 +57,7 @@ Direct creation and editing resolve fields against Jira instance metadata. Expor
 v3 uses ADF; uploads and exports support a strict Markdown subset and reject nodes that cannot round-trip losslessly; ADF table uploads are not yet supported. `JiraMarkdown` parses Markdown with CommonMark's GFM tables extension, converting tables to Wiki headers and data rows for v2 without preserving column alignment markers. Direct v2 writes convert Markdown to Jira Wiki by default or accept explicitly selected native Wiki. Exports preserve original Wiki and record its format to avoid lossy conversion. Approximate Markdown rendering in view commands is read-only and does not change export/upload rules.
 
 Comments, attachments, worklogs, links, clones, and transitions use their respective APIs without sharing exported-file conflict checks. Multi-request operations provide no cross-request transaction. Complete commands, permission limits, pagination, and format boundaries live in the module usage guide.
+
+Creation and direct editing share a `TemplateFormat` mixin that defaults `--template-format` to `auto`, selecting the input format only from the `--template` file suffix: `.md` / `.markdown` match case-insensitively; other suffixes and stdin use Wiki, without content guessing. Explicit template format or the compatible `--body-format` option overrides detection; Wiki still requires API v2. `issue edit --file` still uses the format in export metadata. Defaults for other description sources and other commands are unchanged.
+
+Issue lists display an `EPIC` key column by default, reusing table, TSV, and CSV rendering. Data Center discovers Epic Link through field metadata; Cloud reads `parent` with Epic issue-type information, without per-issue parent requests or treating ordinary parent tasks as Epics. Related fields are requested only when Epic information is needed; raw JSON gains no synthetic fields.
