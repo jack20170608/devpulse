@@ -163,7 +163,7 @@ public final class JiraMarkdown {
             } else if (child instanceof Emphasis) {
                 markedChildren(child, "em", null, result);
             } else if (child instanceof Link link) {
-                if (!link.getTitle().isEmpty()
+                if ((link.getTitle() != null && !link.getTitle().isEmpty())
                         || !link.getDestination().matches("https?://.+")) {
                     throw unsupported();
                 }
@@ -231,7 +231,7 @@ public final class JiraMarkdown {
             }
             case "heading" -> {
                 require(node, "type", "attrs", "content");
-                var attrs = object(node.get("attrs"), null);
+                var attrs = attributes(node);
                 require(attrs, "level");
                 var level = attrs.get("level").getAsInt();
                 if (level < 1 || level > 6) {
@@ -246,7 +246,7 @@ public final class JiraMarkdown {
                         : new String[]{"type", "attrs", "content"});
                 var lines = new ArrayList<String>();
                 var index = type.equals("orderedList") && node.has("attrs")
-                        ? object(node.get("attrs"), null).get("order")
+                        ? attributes(node).get("order")
                                 .getAsInt() : 1;
                 for (var item : array(node, "content")) {
                     var listItem = object(item, "listItem");
@@ -321,7 +321,7 @@ public final class JiraMarkdown {
                         yield "`" + value + "`";
                     }
                     case "link" -> {
-                        var attrs = object(mark.get("attrs"), null);
+                        var attrs = attributes(mark);
                         require(attrs, "href");
                         var href = attrs.get("href").getAsString();
                         if (!href.matches("https?://[^\\s)]+")) {
@@ -527,6 +527,14 @@ public final class JiraMarkdown {
         return new IOException("Markdown contains content that cannot be "
                 + "represented safely as Jira wiki; simplify it or use "
                 + "--body-format wiki with native Jira wiki input.");
+    }
+
+    private static JsonObject attributes(JsonObject node) throws IOException {
+        var value = node.get("attrs");
+        if (value == null || !value.isJsonObject()) {
+            throw unsupported();
+        }
+        return value.getAsJsonObject();
     }
 
     private static JsonObject object(JsonElement value, String type)

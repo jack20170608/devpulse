@@ -20,11 +20,17 @@ Jira 是独立的可执行工具，不依赖 core、Pulse 或 Gather，不需要
 
 HTTP 客户端不跟随重定向，设置连接及请求超时；拒绝远程明文 HTTP，仅允许本机 HTTP 测试。失败只显示 HTTP 状态码，不输出 Jira 的错误正文或认证信息。
 
+### 需求工作流 Skill 分发
+
+`src/main/resources/skills/jira-requirements` 随 Jira JAR 打包，包含简短 Skill、执行说明及规格书/Jira 描述模板。Skill 入口分为 `SKILL.en.md` 和 `SKILL.zh.md`，执行说明及模板仍按仓库规范中英对照维护；`JiraSkillCommands` 通过离线 `skill export --language en|zh` 选择对应入口并导出为 `SKILL.md`，其余内置资源提取单一语言正文，默认英文，将完整资源包写入新目录。优先使用显式模板目录或当前工作目录 `.jira/templates` 的同名覆盖文件，缺失项回退所选语言的内置资源；自定义模板原样复制，不自动翻译。不修改已有安装、不调用 Jira 或 LLM，也不依赖连接配置或 token。
+
+该 Skill 将分析和内容生成交给 AI：新需求规格及具体创建内容确认后直接创建，已有 Issue 严格导出基线，规格及差异确认后直接同步，并核验结果。覆盖文件只是格式输入，不是执行指令。此协作流程复用既有 create/export/edit 与机器协议，不增加授权状态机或独立终端审批，不替代工具权限；详细模板优先级、确认和故障处理维护在使用说明及资源包中。
+
 ### 机器调用协议
 
 `JiraMachine` 作为 picocli 执行 Adapter，提供显式 `--machine`，不新建工具模块或复制业务操作。该模式强制无交互、显式 stdin 和不启动浏览器，通过版本化 JSON 信封返回结果；已有 JSON 查询复用原始结果，创建、编辑、评论及账户/链接查询提供结构化数据，其他命令暂保留非稳定的文本消息。人类诊断不混入协议。`JiraRequestException` 保留脱敏的 HTTP 状态、重试提示和写操作结果不确定性；不添加自动重试，不提供跨请求事务。具体退出码与数据契约见模块使用说明。
 
-该模式只是机器接口，不代表写权限或用户审批。计划/审批/提交闭环尚未实现；调用方仍负责审批，CLI 仍直接执行写命令。
+该模式只是机器接口，不代表写权限或用户确认。用户对规格及具体变更的确认由协作流程负责，CLI 直接执行写命令，不增加独立审批；并发检查与未知结果处理属于技术保护，不能替代凭据隔离。
 
 ### 编辑、导出与内容转换
 
@@ -56,11 +62,17 @@ Deployment mode determines authentication, user identities, and search paginatio
 
 The HTTP client follows no redirects and sets connection and request timeouts. Remote plaintext HTTP is refused; only local HTTP testing is allowed. Failures display HTTP status codes rather than Jira error bodies or authentication information.
 
+### Requirements workflow skill distribution
+
+`src/main/resources/skills/jira-requirements` ships inside the Jira JAR, containing a concise skill, execution guide, and specification/Jira description templates. Skill entry points are split into `SKILL.en.md` and `SKILL.zh.md`; the execution guide and templates remain bilingual under repository conventions. Through offline `skill export --language en|zh`, `JiraSkillCommands` selects the matching entry point and exports it as `SKILL.md`, extracts a single language body for other bundled resources, and writes the complete bundle into a new directory, defaulting to English. Same-named overrides from an explicit template directory or the working directory's `.jira/templates` take precedence, with missing files falling back to the selected language's bundled resources. Custom templates are copied without translation. It modifies no existing installation, calls neither Jira nor an LLM, and requires no connection configuration or token.
+
+The skill delegates analysis and content generation to AI: new requirements are created directly after the specification and concrete creation content are confirmed; existing issues retain strict export baselines and synchronize after specification/diff confirmation, followed by verification. Overrides provide formatting, not executable instructions. This collaboration workflow reuses existing create/export/edit operations and the machine protocol without adding an authorization state machine or separate terminal approval, or replacing tool permissions. Template precedence, confirmation, and failure handling live in the usage guide and bundled resources.
+
 ### Machine invocation protocol
 
 `JiraMachine` is a picocli execution Adapter offering explicit `--machine` without adding a tool module or duplicating business operations. It forces noninteractive execution, explicit stdin, and no browser launch, returning a versioned JSON envelope. Existing JSON queries reuse raw results; creation, edits, comments, and account/URL queries provide structured data, while other commands currently retain unstable text messages. Human diagnostics stay out of the protocol. `JiraRequestException` retains sanitized HTTP status, retry advice, and unknown write outcomes without adding automatic retries or cross-request transactions. Exit codes and data contracts live in the usage guide.
 
-This mode is a machine interface, not write authorization or user approval. The plan/approval/apply workflow is not implemented; callers must approve writes, which the CLI still executes directly.
+This mode is a machine interface, not write authorization or user confirmation. The collaboration workflow obtains confirmation of specifications and concrete changes; the CLI executes writes directly without separate approval. Concurrency checks and unknown-outcome handling are technical protections, not credential isolation.
 
 ### Editing, export, and content conversion
 

@@ -41,6 +41,29 @@ bash run-jira.sh issue list -p DEMO --config connection.conf
 
 使用 HTTPS；仅本机测试允许 HTTP。请勿将包含凭据的 shell 历史、环境转储、导出的 Jira 数据或附件提交到版本库。访问失败只显示 HTTP 状态码，不输出 Jira 的错误正文。
 
+### 由 CLI 提供的需求工作流 Skill
+
+JAR 内置 `jira-requirements` Skill、执行说明、规格书模板及 Jira 描述模板。CLI 只负责离线导出和 Jira 操作；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
+
+```powershell
+# 导出到新的项目级 Skill 目录；不需要连接配置或 token
+jira skill export --output .github\skills\jira-requirements
+
+# 默认导出英文；需要中文时显式选择
+jira skill export --output chinese-skill --language zh
+
+# 显式选择项目模板目录，也支持 --machine 返回导出清单与模板来源
+jira --machine skill export --output exported-skill --templates team-templates
+```
+
+导出包含 `SKILL.md`、`references\workflow.md`、`templates\specification.md` 和 `templates\jira-description.md`，可放入所用 AI 工具支持的 Skill 目录。内置入口按 `SKILL.en.md` 和 `SKILL.zh.md` 分开维护，导出时统一命名为 `SKILL.md`。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
+
+默认从**当前工作目录**的 `.jira\templates` 读取同名 `specification.md`、`jira-description.md` 覆盖内置模板；与连接配置位置无关。`--templates DIR` 改为只从该目录选取覆盖，不混用默认项目目录。两个文件可只提供一个，缺失文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错，其他文件忽略。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。AI 按项目语言规范填充模板正文，不把使用说明或代码围栏上传到 Jira。
+
+Skill 定义两条业务流程：新需求经澄清形成规格书，按模板生成 Jira 描述；用户确认目标及具体创建内容后直接创建，记录 key 并核验，不额外要求终端审批。已有 Jira 则先读取、严格导出并保留基线，AI 评审和生成规格/描述差异，**用户确认规格及具体差异后直接同步**，使用导出文件的更新时间检查，不使用 `--force`。规格、目标或内容改变后需重新确认。
+
+这是 Skill 的协作规范，不是 CLI 新增的授权机制；工具权限审批及 Jira 权限仍有效，CLI 不额外设置终端审批。导出格式不是服务器身份绑定，Skill 要求保持连接、用户及 Issue 身份一致；不能无损导出、发生冲突或写入结果未知时停止核验，不自动覆盖或重复创建。`issue template` 仍是原有 HOCON/Markdown Issue 文件生成器，与此 Skill 的业务描述模板不同。
+
 ### AI 与脚本调用：`--machine`
 
 全局 `--machine` 可放在子命令前或后，启用版本化 JSON 协议；未指定时保留原有的人类交互和 `--json` 输出方式。
@@ -75,7 +98,7 @@ jira --machine issue comment add DEMO-1 "Approved comment"
 
 写请求失败可能发生在 Jira 已执行之后；`outcome: unknown` 不是“未执行”，必须查询核验或人工处理，不能盲目重复创建、评论或记工时。客户端不添加应用层自动重试。Issue 描述及评论始终是不可信数据，不应作为 AI 的指令执行。
 
-**当前仅实现机器协议基础，不是审批系统。** `--machine` 不代表授权；写命令仍会直接提交，调用方必须先取得用户批准。计划文件、差异预览、审批绑定与 `apply` 流程尚未实现；不要将写操作开放给无人值守 AI。
+**`--machine` 不代表授权。** 用户在协作流程中确认规格、目标及具体变更后，AI 直接调用创建或编辑命令，CLI 不再增加独立终端审批。并发冲突检查和结果核验继续保留；工具权限审批、Jira 权限与外部安全策略仍然有效，不应把 Issue 内容当作授权指令。
 
 ### 初始化连接：`init`
 
@@ -424,6 +447,29 @@ bash run-jira.sh issue list -p DEMO --config connection.conf
 
 Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history containing credentials, environment dumps, exported Jira data, or attachments. HTTP failures display only the status code, not the Jira response body.
 
+### CLI-provided requirements workflow skill
+
+The JAR bundles the `jira-requirements` skill, execution guide, specification template, and Jira description template. The CLI only exports assets offline and performs Jira operations. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
+
+```powershell
+# Export to a new project skill directory; no connection configuration or token needed
+jira skill export --output .github\skills\jira-requirements
+
+# English is the default; explicitly select Chinese when needed
+jira skill export --output chinese-skill --language zh
+
+# Select a template directory explicitly; --machine reports files and template sources
+jira --machine skill export --output exported-skill --templates team-templates
+```
+
+Exports contain `SKILL.md`, `references\workflow.md`, `templates\specification.md`, and `templates\jira-description.md` for placement in a skill directory supported by the chosen AI tool. Bundled entry points are maintained separately as `SKILL.en.md` and `SKILL.zh.md`, both exported under the standard name `SKILL.md`. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
+
+By default, same-named `specification.md` and `jira-description.md` in `.jira\templates` under the **current working directory** override bundled templates, independently of connection-file location. `--templates DIR` selects only that override directory, without mixing in the default project directory. Either file can be supplied alone; absent files use bundled defaults in the selected language. Existing invalid, blank, non-UTF-8, or over-1-MiB templates fail rather than silently falling back; other files are ignored. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. The AI fills template bodies according to project language conventions instead of uploading instructions or fences.
+
+The skill defines two business workflows. New requirements are clarified into a specification and projected into a Jira description. After the user confirms the target and concrete creation content, create directly, retain the key, and verify without additional terminal approval. For existing Jira issues, first read, strictly export, and retain a baseline; the AI reviews and prepares specification/description diffs. **After the user confirms the specification and concrete diff, synchronize directly** using the exported update-time check, without `--force`. Changed specifications, targets, or content require renewed confirmation.
+
+These are skill collaboration rules, not new CLI authorization. Tool approvals and Jira permissions remain effective; the CLI adds no separate terminal approval. Exports do not bind server identity, so the skill requires the connection, principal, and Issue identity to remain consistent. Lossless-export failures, conflicts, and unknown write outcomes stop for reconciliation rather than automatic overwriting or recreation. Existing `issue template` remains the HOCON/Markdown issue-file generator, distinct from these business-description templates.
+
 ### AI and script invocation: `--machine`
 
 Global `--machine` can appear before or after subcommands and enables a versioned JSON protocol. Without it, existing human interaction and `--json` output remain unchanged.
@@ -458,7 +504,7 @@ Failures return an `error` object containing a stable `code`, explanatory `messa
 
 A write can fail after Jira has already applied it. `outcome: unknown` does not mean “not executed”: verify by querying or involve a human rather than blindly repeating creates, comments, or worklogs. The client adds no application-level automatic retries. Issue descriptions and comments remain untrusted data and must not be executed as AI instructions.
 
-**This is machine-protocol groundwork, not an approval system.** `--machine` does not authorize actions; write commands still submit directly, so callers must obtain user approval first. Plan files, diff previews, approval binding, and an `apply` workflow are not implemented. Do not expose write operations to unattended AI.
+**`--machine` does not authorize actions.** After the user confirms the specification, target, and concrete changes in the collaboration workflow, AI calls create or edit directly without separate terminal approval. Concurrency checks and result verification remain; tool approvals, Jira permissions, and external policies still apply. Issue content is never an authorization instruction.
 
 ### Initializing a connection: `init`
 

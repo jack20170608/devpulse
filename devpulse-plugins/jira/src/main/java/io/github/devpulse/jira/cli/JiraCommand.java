@@ -46,6 +46,7 @@ import picocli.CommandLine.Spec;
                 JiraInitCommand.class,
                 JiraCommand.Export.class,
                 JiraCommand.Update.class, JiraCommand.Transitions.class,
+                JiraSkillCommands.class,
                 JiraCommand.Transition.class, JiraCommand.Comment.class,
                 JiraCommand.CommentExport.class,
                 JiraCommand.CommentUpdate.class,
