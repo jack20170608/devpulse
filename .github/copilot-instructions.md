@@ -51,7 +51,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ```
 
-在 Bash（Windows 使用 Git Bash）中优先通过根目录 `build.sh` 构建：`bash build.sh [all|pulse|gather|jira|cli|dist] [--clean] [--quiet]`。`run.sh` 和 `../run-jira.sh` 复用此脚本，不另写 Maven 模块选择逻辑。
+在 Bash（Windows 使用 Git Bash）中优先通过根目录 `build.sh` 构建：`bash build.sh [all|pulse|gather|jira|cli|dist] [--clean] [--quiet]`。`run.sh` 和 `../integration-test` 复用此脚本，不另写 Maven 模块选择逻辑。
 
 ### 测试
 
@@ -106,7 +106,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ```
 
-In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash build.sh [all|pulse|gather|jira|cli|dist] [--clean] [--quiet]`. `run.sh` and `../run-jira.sh` reuse this script rather than duplicating Maven module selection.
+In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash build.sh [all|pulse|gather|jira|cli|dist] [--clean] [--quiet]`. `run.sh` and `../integration-test` reuse this script rather than duplicating Maven module selection.
 
 ### Testing
 

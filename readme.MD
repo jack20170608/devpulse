@@ -13,11 +13,11 @@ devpulse 是基于 Java 25 和 Maven 的本地 DevOps 工具箱。Pulse 使用 `
 ```bash
 bash build.sh --clean
 bash run.sh --help
-bash run-jira.sh --help
+bash integration-test/run-jira.sh --help
 java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 ```
 
-`build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|gather|gatherer|jira|depmap|cli|dist` 按需构建，`--clean` 可清理所选模块的旧产物。`run.sh` 保留组合式 CLI 兼容入口；`run-jira.sh` 只构建和运行 Jira。两个启动脚本都复用 `build.sh`，不会修改父终端的环境变量。可选安装与发行包见 [发行与安装](devpulse-dist/README.md)。运行 JAR 需要 Java 25 或更高版本；实际执行 `pulse`、`gather` 和 `status --tools` 还需要 Bash。
+`build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|gather|gatherer|jira|depmap|cli|dist` 按需构建，`--clean` 可清理所选模块的旧产物。`run.sh` 保留组合式 CLI 兼容入口；`integration-test/run-jira.sh` 只构建和运行 Jira。两个启动脚本都复用 `build.sh`，不会修改父终端的环境变量。[集成测试](integration-test/README.md) 使用 `bash integration-test/run.sh jira`，默认离线，真实 Jira 写入需显式启用。可选安装与发行包见 [发行与安装](devpulse-dist/README.md)。运行 JAR 需要 Java 25 或更高版本；实际执行 `pulse`、`gather` 和 `status --tools` 还需要 Bash。
 
 ### 文档导航
 
@@ -63,11 +63,11 @@ From the repository root (use Git Bash on Windows):
 ```bash
 bash build.sh --clean
 bash run.sh --help
-bash run-jira.sh --help
+bash integration-test/run-jira.sh --help
 java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 ```
 
-`build.sh` builds every module by default, or use `bash build.sh pulse|gather|gatherer|jira|depmap|cli|dist` to build a selected target; `--clean` removes its previous output. `run.sh` preserves the combined CLI for compatibility, while `run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. See [distribution and installation](devpulse-dist/README.md) for selective installation. Running the JARs requires Java 25 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
+`build.sh` builds every module by default, or use `bash build.sh pulse|gather|gatherer|jira|depmap|cli|dist` to build a selected target; `--clean` removes its previous output. `run.sh` preserves the combined CLI for compatibility, while `integration-test/run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. Run [integration tests](integration-test/README.md) with `bash integration-test/run.sh jira`; they are offline by default and require explicit authorization for live Jira writes. See [distribution and installation](devpulse-dist/README.md) for selective installation. Running the JARs requires Java 25 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
 
 ### Documentation
 

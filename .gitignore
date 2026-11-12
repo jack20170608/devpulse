@@ -47,3 +47,6 @@ stats.html
 ### Environment files
 http-client.private.env.json
 .env/
+
+/integration-test/output/
+/integration-test/*.local.conf
