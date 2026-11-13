@@ -18,7 +18,7 @@ this is a change for the pi service
 
 #### Why
 
-Need to restart the sb~~pi~~good~~main~~service 
+Need to restart the sb-pi-good-main-service 
 
 #### Description
 

@@ -328,8 +328,9 @@ bash run-jira.sh issue list -p DEMO --limit 20 --start-at 20
 bash run-jira.sh issue view DEMO-1 --comments 5
 bash run-jira.sh issue view DEMO-1 --description-format raw --comments 0
 bash run-jira.sh issue view DEMO-1 --plain
-bash run-jira.sh issue view DEMO-1 --format markdown
-bash run-jira.sh issue view DEMO-1 --format markdown --fields summary,key,status,epic,story-point
+bash run-jira.sh issue view DEMO-1
+bash run-jira.sh issue view DEMO-1 --fields summary,key,status,epic,story-point
+bash run-jira.sh issue view DEMO-1 --format text
 bash run-jira.sh issue link DEMO-1 DEMO-2 Blocks --no-input
 bash run-jira.sh issue link remote DEMO-1 https://example.com "Reference" --no-input
 bash run-jira.sh issue unlink DEMO-1 DEMO-2 --no-input
@@ -338,13 +339,13 @@ bash run-jira.sh issue clone DEMO-1 -s "Cloned summary" -y High -a me \
 bash run-jira.sh issue delete DEMO-1 --cascade --no-input
 ```
 
-`view` 直接在终端输出描述、关联问题和最近评论，不启动分页器。description 默认转换为 Markdown：v2 将 Jira Wiki 的标题、强调、列表、链接、代码、引用及表格转换为 Markdown；v3 将 ADF 的对应节点及标记转换为 Markdown。`--description-format markdown` 可显式选择默认模式，`--description-format raw` 则保留 v2 原始 Wiki 文本或 v3 原始 ADF JSON，不转换 description；`--plain` 保持以前的文本展示，不能与 `--description-format` 混用。评论的展示方式不变。Markdown 展示为只读近似转换，未知节点保留可读内容或类型提示，不要求满足无损导出限制，也不影响导出/回传规则。`--comments` 默认 1，范围为 0–1000；`--raw/--json` 仍输出整份原始问题，而不是仅改变 description 格式。
+`view` 默认输出 YAML frontmatter 和 Markdown description，不启动分页器。`--format text` 输出原有的描述、关联问题和最近评论。description 默认转换为 Markdown：v2 将 Jira Wiki 的标题、强调、列表、链接、代码、引用及表格转换为 Markdown；v3 将 ADF 的对应节点及标记转换为 Markdown。`--description-format markdown` 可显式选择默认模式，`--description-format raw` 则保留 v2 原始 Wiki 文本或 v3 原始 ADF JSON，不转换 description；`--plain` 保持以前的文本展示，不能与 `--description-format` 混用。评论的展示方式不变。Markdown 展示为只读近似转换，未知节点保留可读内容或类型提示，不要求满足无损导出限制，也不影响导出/回传规则。`--comments` 默认 1，范围为 0–1000；`--raw/--json` 仍输出整份原始问题，而不是仅改变 description 格式。
 
 Wiki 展示按词边界识别强调等格式，不把 `sb-test-1`、`config_test_prod` 等名称内部的分隔符当成格式；含糊的词内格式保守作为普通文本。链接及格式结束符识别转义与行内代码，普通文本不会意外变成 Markdown 标题或列表。Markdown → Wiki 上传时，普通文本中的反斜杠使用 `{{\}}` 表示，避免 `\\` 被 Wiki 解释为硬换行；查看时该字符为行内代码，字符本身保留，真实硬换行仍正常转换。需要完全保真时使用原始 Wiki 导出，而不是将近似展示文档直接回传。
 
 `--format markdown` 输出以 `---` 包裹的 YAML frontmatter，随后仅输出 Markdown description，不附加关联问题或评论，也不请求评论。`--fields` 用逗号指定属性及顺序，仅适用于此格式；默认依次包含 `summary,key,issuetype,status,priority,assignee,reporter,created,updated,epic,story-point`，未知、空白或重复字段报错。字符串使用双引号并转义，未设置的值为 `""`，Story Points 有值时为数字；用户字段显示名称，时间保留服务端字符串。Data Center 的 Epic Link 按字段元数据解析；Cloud 仅将 Epic 类型的直接 `parent` 作为 Epic，不遍历父链。Story Points 按 `Story Points` 或 `Story point estimate` 名称发现，不硬编码 ID；未发现字段时为空，匹配多个字段时报错。仅选择相关属性时请求字段元数据。
 
-此格式不能与显式 `--raw/--json`、`--plain`、`--description-format raw` 或非零 `--comments` 混用。默认 `--format text` 保持原输出；`--machine --format markdown` 仍返回 JSON 信封，`data` 包含 `key` 和完整 `markdown` 文档。可将普通输出重定向为 Markdown 文件，但它仅供查看，不是 `issue edit --file` 所需的带基线 HOCON 导出文件，不可直接用于更新。
+默认启用 `--format markdown`，无需显式指定即可使用 `--fields`。`--format text` 恢复原输出；未显式指定格式时，`--raw/--json`、`--plain`、`--description-format raw` 或非零 `--comments` 保留原有输出行为，但不能与显式 `--format markdown` 混用。单独的 `--machine` 保持原有 JSON 查看协议；`--machine --format markdown` 仍返回 JSON 信封，`data` 包含 `key` 和完整 `markdown` 文档。可将普通输出重定向为 Markdown 文件，但它仅供查看，不是 `issue edit --file` 所需的带基线 HOCON 导出文件，不可直接用于更新。
 
 `link` 从 Jira 获取可用关联类型，支持类型名称或方向说明；`link remote` 添加外部网页链接。`unlink` 只删除指定两个问题之间实际存在的关联，若存在多个关联会逐个删除；多次请求不是原子操作，失败后应重新查询。`clone` 根据创建元数据复制可创建字段，不复制状态、历史或服务端管理字段；支持标题、优先级、经办人、标签、组件和修复版本覆盖。`-H/--replace old:new` 对标题及描述中的文本做区分大小写的替换。无法表示的可选自定义字段会计数警告后省略，缺少无默认值的必填字段则拒绝克隆；克隆不复制附件、评论或关联。
 
@@ -742,8 +743,9 @@ Each invocation requests one page, never all issues automatically. `--limit` def
 bash run-jira.sh issue view DEMO-1 --comments 5
 bash run-jira.sh issue view DEMO-1 --description-format raw --comments 0
 bash run-jira.sh issue view DEMO-1 --plain
-bash run-jira.sh issue view DEMO-1 --format markdown
-bash run-jira.sh issue view DEMO-1 --format markdown --fields summary,key,status,epic,story-point
+bash run-jira.sh issue view DEMO-1
+bash run-jira.sh issue view DEMO-1 --fields summary,key,status,epic,story-point
+bash run-jira.sh issue view DEMO-1 --format text
 bash run-jira.sh issue link DEMO-1 DEMO-2 Blocks --no-input
 bash run-jira.sh issue link remote DEMO-1 https://example.com "Reference" --no-input
 bash run-jira.sh issue unlink DEMO-1 DEMO-2 --no-input
@@ -752,13 +754,13 @@ bash run-jira.sh issue clone DEMO-1 -s "Cloned summary" -y High -a me \
 bash run-jira.sh issue delete DEMO-1 --cascade --no-input
 ```
 
-`view` prints descriptions, linked issues, and recent comments directly without a pager. Description output defaults to Markdown: v2 converts Jira Wiki headings, emphasis, lists, links, code, quotes, and tables; v3 converts corresponding ADF nodes and marks. `--description-format markdown` explicitly selects the default, while `--description-format raw` preserves the original v2 Wiki text or v3 ADF JSON without description conversion. `--plain` retains the previous text display and cannot be combined with `--description-format`. Comment display is unchanged. Markdown presentation is a read-only approximation: unknown nodes retain readable content or a type placeholder, without imposing lossless-export restrictions or changing export/upload rules. `--comments` defaults to 1 and accepts 0–1000. `--raw/--json` still outputs the entire original issue rather than changing only the description format.
+`view` defaults to YAML frontmatter and the Markdown description without a pager. `--format text` restores descriptions, linked issues, and recent comments in the previous layout. Description output defaults to Markdown: v2 converts Jira Wiki headings, emphasis, lists, links, code, quotes, and tables; v3 converts corresponding ADF nodes and marks. `--description-format markdown` explicitly selects the default, while `--description-format raw` preserves the original v2 Wiki text or v3 ADF JSON without description conversion. `--plain` retains the previous text display and cannot be combined with `--description-format`. Comment display is unchanged. Markdown presentation is a read-only approximation: unknown nodes retain readable content or a type placeholder, without imposing lossless-export restrictions or changing export/upload rules. `--comments` defaults to 1 and accepts 0–1000. `--raw/--json` still outputs the entire original issue rather than changing only the description format.
 
 Wiki presentation recognizes formatting at word boundaries rather than interpreting internal delimiters in names such as `sb-test-1` or `config_test_prod`; ambiguous intraword formatting is conservatively treated as literal text. Link and formatting terminators respect escapes and inline code, and literal text does not accidentally become Markdown headings or lists. Markdown → Wiki uploads represent literal backslashes as `{{\}}` to avoid Wiki interpreting `\\` as a hard break. The character appears as inline code when viewed, preserving its value; actual hard breaks still convert normally. Use original Wiki exports for full fidelity rather than directly uploading approximate presentation documents.
 
 `--format markdown` outputs YAML frontmatter wrapped in `---`, followed only by the Markdown description, without appending linked issues or comments or requesting comments. `--fields` selects comma-separated properties in output order and requires this format. The default order is `summary,key,issuetype,status,priority,assignee,reporter,created,updated,epic,story-point`; unknown, empty, or duplicate fields fail. Strings are double-quoted and escaped, unset values are `""`, and populated Story Points are numeric. User fields show display names; timestamps retain server strings. Data Center Epic Link is resolved through field metadata; Cloud recognizes only a direct Epic-type `parent`, without traversing parent chains. Story Points are discovered by the names `Story Points` or `Story point estimate`, without hardcoded IDs; missing fields are empty, while multiple matches fail. Field metadata is requested only for relevant selected properties.
 
-This format cannot be combined with explicit `--raw/--json`, `--plain`, `--description-format raw`, or nonzero `--comments`. Default `--format text` retains previous output. `--machine --format markdown` still returns a JSON envelope whose `data` contains `key` and the complete `markdown` document. Human output can be redirected to a Markdown file, but this is read-only presentation, not the baseline-bearing HOCON export required by `issue edit --file`, and cannot be used directly for updates.
+`--format markdown` is enabled by default, so `--fields` needs no explicit format option. `--format text` restores the previous layout. Without an explicit format, `--raw/--json`, `--plain`, `--description-format raw`, or nonzero `--comments` retain their previous output behavior, but cannot be combined with explicit `--format markdown`. Standalone `--machine` retains the existing JSON view protocol; `--machine --format markdown` still returns a JSON envelope whose `data` contains `key` and the complete `markdown` document. Human output can be redirected to a Markdown file, but this is read-only presentation, not the baseline-bearing HOCON export required by `issue edit --file`, and cannot be used directly for updates.
 
 `link` discovers available Jira link types and accepts type names or direction descriptions; `link remote` adds an external web link. `unlink` removes only actual links between the specified issues, removing each if multiple exist. Multiple requests are not atomic; query again after a failure. `clone` copies createable fields based on creation metadata rather than status, history, or server-managed fields, and supports summary, priority, assignee, label, component, and fix-version overrides. `-H/--replace old:new` replaces case-sensitive text in summary and description. Unsupported optional custom fields are omitted with a count warning; required fields without defaults cause cloning to fail. Attachments, comments, and links are not cloned.
 

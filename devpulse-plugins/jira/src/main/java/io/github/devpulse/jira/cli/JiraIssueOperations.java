@@ -31,7 +31,7 @@ public final class JiraIssueOperations {
     }
 
     @Command(name = "view", mixinStandardHelpOptions = true,
-            description = "Print issue details and recent comments without a pager.")
+            description = "Print issue Markdown with YAML metadata, or select legacy text/JSON output.")
     public static final class View extends JiraCommand.Action {
         private static final List<String> MARKDOWN_FIELDS = List.of(
                 "summary", "key", "issuetype", "status", "priority",
@@ -40,7 +40,7 @@ public final class JiraIssueOperations {
         @Parameters(index = "0", paramLabel = "KEY")
         String key;
         @Option(names = "--comments", defaultValue = "1", paramLabel = "N",
-                description = "Recent comments to fetch, newest first (0-1000).")
+                description = "Recent comments for text/JSON output, newest first (0-1000).")
         int comments;
         @Option(names = {"--raw", "--json"},
                 description = "Print JSON, with the requested recent comments.")
@@ -53,14 +53,14 @@ public final class JiraIssueOperations {
                         + "Raw preserves Wiki text for v2 or ADF JSON for v3.")
         DescriptionFormat descriptionFormat;
         enum OutputFormat { text, markdown }
-        @Option(names = "--format", defaultValue = "text", paramLabel = "text|markdown",
-                description = "Output format (default: text). Markdown prints YAML "
+        @Option(names = "--format", defaultValue = "markdown", paramLabel = "text|markdown",
+                description = "Output format (default: markdown). Markdown prints YAML "
                         + "frontmatter and description only, without links or comments.")
         OutputFormat format;
         @Option(names = "--fields", split = ",", paramLabel = "FIELD,...",
                 description = "Ordered Markdown frontmatter fields: summary,key,issuetype,"
                         + "status,priority,assignee,reporter,created,updated,epic,story-point. "
-                        + "Default: all. Requires --format markdown.")
+                        + "Default: all. Requires Markdown output.")
         List<String> selectedFields;
 
         @Override
@@ -172,14 +172,21 @@ public final class JiraIssueOperations {
             }
         }
 
-        private List<String> markdownFields() throws IOException {
+        List<String> markdownFields() throws IOException {
+            var parsed = spec.commandLine().getParseResult();
+            if (!parsed.hasMatchedOption("--format")
+                    && (parsed.hasMatchedOption("--raw") || parsed.hasMatchedOption("--json")
+                            || plain || descriptionFormat == DescriptionFormat.raw
+                            || (parsed.hasMatchedOption("--comments") && comments != 0)
+                            || (machine() && selectedFields == null))) {
+                format = OutputFormat.text;
+            }
             if (format != OutputFormat.markdown) {
                 if (selectedFields != null) {
                     throw wrong("--fields requires --format markdown.");
                 }
                 return List.of();
             }
-            var parsed = spec.commandLine().getParseResult();
             if (parsed.hasMatchedOption("--raw") || parsed.hasMatchedOption("--json")
                     || plain || descriptionFormat == DescriptionFormat.raw
                     || (parsed.hasMatchedOption("--comments") && comments != 0)) {
