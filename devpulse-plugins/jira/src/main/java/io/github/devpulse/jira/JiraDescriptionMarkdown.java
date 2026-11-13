@@ -103,7 +103,10 @@ public final class JiraDescriptionMarkdown {
                 numbers.clear();
                 rendered = stripped.equals("----") ? "---"
                         : stripped.startsWith("bq. ") ? "> " + wikiInline(stripped.substring(4), 0)
-                        : wikiInline(line, 0);
+                        : escapeBlockSyntax(wikiInline(line, 0));
+            }
+            if (rendered.endsWith("  \n") && i + 1 < lines.length) {
+                rendered = rendered.substring(0, rendered.length() - 1);
             }
             output.add(quote ? quoted(rendered) : rendered);
         }
@@ -126,7 +129,12 @@ public final class JiraDescriptionMarkdown {
         var braces = 0;
         var image = false;
         for (var i = 0; i < content.length(); i++) {
-            if (content.charAt(i) == '\\') {
+            if (content.startsWith("{{", i)) {
+                var end = content.indexOf("}}", i + 2);
+                if (end >= 0) {
+                    i = end + 1;
+                }
+            } else if (content.charAt(i) == '\\') {
                 i++;
             } else if (content.charAt(i) == '[') {
                 brackets++;
@@ -140,16 +148,20 @@ public final class JiraDescriptionMarkdown {
                 image = !image;
             } else if (brackets == 0 && braces == 0 && !image
                     && content.startsWith(separator, i)) {
-                cells.add(wikiInline(content.substring(start, i).strip(), 0));
+                cells.add(wikiInline(content.substring(start, i).strip(), 0, true));
                 i += width - 1;
                 start = i + 1;
             }
         }
-        cells.add(wikiInline(content.substring(start).strip(), 0));
+        cells.add(wikiInline(content.substring(start).strip(), 0, true));
         return cells;
     }
 
     private static String wikiInline(String text, int depth) {
+        return wikiInline(text, depth, false);
+    }
+
+    private static String wikiInline(String text, int depth, boolean tableCell) {
         if (depth > 30) {
             return escaped(text);
         }
@@ -158,7 +170,8 @@ public final class JiraDescriptionMarkdown {
             if (text.startsWith("{{", i)) {
                 var end = text.indexOf("}}", i + 2);
                 if (end >= 0) {
-                    output.append(codeSpan(text.substring(i + 2, end)));
+                    var literal = text.substring(i + 2, end);
+                    output.append(codeSpan(tableCell ? literal.replace("\\|", "|") : literal));
                     i = end + 2;
                     continue;
                 }
@@ -174,18 +187,20 @@ public final class JiraDescriptionMarkdown {
                 continue;
             }
             if (character == '[' || character == '!') {
-                var end = text.indexOf(character == '[' ? ']' : '!', i + 1);
+                var end = wikiDelimiter(text, i + 1, character == '[' ? ']' : '!');
                 if (end > i + 1) {
                     var value = text.substring(i + 1, end);
-                    var separator = value.indexOf('|');
+                    var separator = wikiDelimiter(value, 0, '|');
                     if (character == '!') {
                         var url = separator < 0 ? value : value.substring(0, separator);
                         var alt = Pattern.compile("(?:^|\\|)alt=([^|]*)").matcher(value);
                         output.append("![").append(alt.find() ? escaped(alt.group(1)) : "")
                                 .append("](").append(destination(url)).append(")");
                     } else if (separator >= 0) {
-                        output.append("[").append(wikiInline(value.substring(0, separator), depth + 1))
-                                .append("](").append(destination(value.substring(separator + 1))).append(")");
+                        output.append("[").append(wikiInline(
+                                value.substring(0, separator), depth + 1, tableCell))
+                                .append("](").append(destination(
+                                        unescapeWiki(value.substring(separator + 1)))).append(")");
                     } else if (value.startsWith("~")) {
                         output.append(escaped("@" + value.substring(1)));
                     } else if (value.matches("(?i)(?:https?://|mailto:).*")) {
@@ -199,10 +214,11 @@ public final class JiraDescriptionMarkdown {
                 }
             }
             if ("*_+-~^".indexOf(character) >= 0 && i + 1 < text.length()
-                    && !Character.isWhitespace(text.charAt(i + 1))) {
-                var end = text.indexOf(character, i + 1);
-                if (end > i + 1 && !Character.isWhitespace(text.charAt(end - 1))) {
-                    var inner = wikiInline(text.substring(i + 1, end), depth + 1);
+                    && !Character.isWhitespace(text.charAt(i + 1))
+                    && (i == 0 || !wordCharacter(text.charAt(i - 1)))) {
+                var end = formatEnd(text, i + 1, character);
+                if (end > i + 1) {
+                    var inner = wikiInline(text.substring(i + 1, end), depth + 1, tableCell);
                     output.append(switch (character) {
                         case '*' -> "**" + inner + "**";
                         case '_' -> "*" + inner + "*";
@@ -219,6 +235,66 @@ public final class JiraDescriptionMarkdown {
             i++;
         }
         return output.toString();
+    }
+
+    private static int wikiDelimiter(String text, int start, char delimiter) {
+        for (var i = start; i < text.length(); i++) {
+            if (text.charAt(i) == '\\' && i + 1 < text.length()) {
+                i++;
+            } else if (text.startsWith("{{", i)) {
+                var end = text.indexOf("}}", i + 2);
+                if (end >= 0) {
+                    i = end + 1;
+                }
+            } else if (text.charAt(i) == delimiter) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int formatEnd(String text, int start, char delimiter) {
+        for (var i = start; i < text.length(); i++) {
+            if (text.charAt(i) == '\\' && i + 1 < text.length()) {
+                i++;
+            } else if (text.startsWith("{{", i)) {
+                var end = text.indexOf("}}", i + 2);
+                if (end >= 0) {
+                    i = end + 1;
+                }
+            } else if (text.charAt(i) == '[' || text.charAt(i) == '!') {
+                var end = wikiDelimiter(text, i + 1, text.charAt(i) == '[' ? ']' : '!');
+                if (end >= 0) {
+                    i = end;
+                }
+            } else if (text.charAt(i) == delimiter
+                    && !Character.isWhitespace(text.charAt(i - 1))
+                    && (i + 1 == text.length() || !wordCharacter(text.charAt(i + 1)))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean wordCharacter(char character) {
+        return Character.isLetterOrDigit(character) || character == '_';
+    }
+
+    private static String unescapeWiki(String text) {
+        var output = new StringBuilder();
+        for (var i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\\' && i + 1 < text.length()) {
+                i++;
+            }
+            output.append(text.charAt(i));
+        }
+        return output.toString();
+    }
+
+    private static String escapeBlockSyntax(String text) {
+        return text.replaceAll("(?m)^( {0,3})([-+])(?=\\s)", "$1\\\\$2")
+                .replaceAll("(?m)^( {0,3}\\d{1,9})([.)])(?=\\s)", "$1\\\\$2")
+                .replaceAll("(?m)^( {0,3})([-=])(?=[-= \\t]*$)", "$1\\\\$2");
     }
 
     private static String node(JsonElement value, int depth) {
@@ -244,7 +320,8 @@ public final class JiraDescriptionMarkdown {
                 var blocks = blocks(object, depth);
                 yield type.equals("blockquote") ? quoted(blocks) : blocks;
             }
-            case "paragraph", "listItem" -> children(object, depth);
+            case "paragraph" -> escapeBlockSyntax(children(object, depth));
+            case "listItem" -> children(object, depth);
             case "tableCell", "tableHeader" -> blocks(object, depth);
             case "heading" -> "#".repeat(number(attrs, "level", 1, 6)) + " "
                     + children(object, depth);
@@ -407,7 +484,7 @@ public final class JiraDescriptionMarkdown {
     }
 
     private static String escaped(String text) {
-        return text.replace("\\", "\\\\").replaceAll("([`*_\\[\\]<>])", "\\\\$1");
+        return text.replace("\\", "\\\\").replaceAll("([`*_\\[\\]<>#!~])", "\\\\$1");
     }
 
     private static String destination(String text) {
@@ -418,8 +495,9 @@ public final class JiraDescriptionMarkdown {
 
     private static String codeSpan(String text) {
         var fence = "`".repeat(longestRun(text, '`') + 1);
-        return fence + (text.startsWith("`") || text.endsWith("`") ? " " : "")
-                + text + (text.startsWith("`") || text.endsWith("`") ? " " : "") + fence;
+        boolean padding = text.startsWith("`") || text.endsWith("`")
+                || (text.startsWith(" ") && text.endsWith(" ") && !text.isBlank());
+        return fence + (padding ? " " : "") + text + (padding ? " " : "") + fence;
     }
 
     private static String fenced(String text, String language) {

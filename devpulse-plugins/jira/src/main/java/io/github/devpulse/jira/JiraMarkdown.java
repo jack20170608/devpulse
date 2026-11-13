@@ -518,9 +518,19 @@ public final class JiraMarkdown {
     }
 
     private static String wikiEscaped(String text) {
-        return text.replace("\\", "\\\\")
-                .replaceAll("([\\[\\]{}*_!|#^~+?\\-])", "\\\\$1")
-                .replaceAll("(?m)^(h[1-6]|bq)\\.", "$1\\\\.");
+        var output = new StringBuilder();
+        for (var character : text.toCharArray()) {
+            if (character == '\\') {
+                // Wiki reserves two backslashes for a hard break.
+                output.append("{{\\}}");
+            } else {
+                if ("[]{}*_!|#^~+?-".indexOf(character) >= 0) {
+                    output.append('\\');
+                }
+                output.append(character);
+            }
+        }
+        return output.toString().replaceAll("(?m)^(h[1-6]|bq)\\.", "$1\\\\.");
     }
 
     private static IOException unsupportedWiki() {
