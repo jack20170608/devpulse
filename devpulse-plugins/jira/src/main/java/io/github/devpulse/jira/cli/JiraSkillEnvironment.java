@@ -95,14 +95,6 @@ final class JiraSkillEnvironment {
         }
         snapshot.add("epics", epics);
 
-        var users = section();
-        try {
-            collectAssignees(key, users);
-        } catch (IOException exception) {
-            fail(users, exception);
-        }
-        snapshot.add("assignableUsers", users);
-
         var boards = section();
         try {
             collectPages(agile, "board?projectKeyOrId=" + encode(key),
@@ -180,30 +172,6 @@ final class JiraSkillEnvironment {
             }
         }
         limited(section, "PAGE_LIMIT");
-    }
-
-    private void collectAssignees(String project, JsonObject section) throws IOException {
-        var seen = new HashSet<String>();
-        var identity = cloud() ? "accountId" : "name";
-        int maximum = cloud() ? 10 : PAGE_LIMIT;
-        for (int pageNumber = 0; pageNumber < maximum; pageNumber++) {
-            int offset = pageNumber * PAGE_SIZE;
-            var batch = array(api.send("GET", "user/assignable/search?project="
-                    + encode(project) + "&startAt=" + offset + "&maxResults=" + PAGE_SIZE, null));
-            for (var value : batch) {
-                var user = object(value);
-                var id = string(user, identity);
-                if (!seen.add(id)) {
-                    throw wrong("Assignable user pages overlap.");
-                }
-                items(section).add(select(user, identity, "displayName", "active"));
-            }
-            // Cloud filters a 1000-user window: even an empty page is not an end marker.
-            if (!cloud() && batch.size() < PAGE_SIZE) {
-                return;
-            }
-        }
-        limited(section, cloud() ? "CLOUD_USER_SEARCH_LIMIT" : "PAGE_LIMIT");
     }
 
     private JsonObject collectSprints(JsonObject boards) throws IOException {

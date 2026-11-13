@@ -9,7 +9,7 @@ description: >-
 ### Workflow
 
 1. Read the [execution guide](references/workflow.md) first. Establish whether the user wants creation, review of an existing issue, or drafting only; drafting never authorizes writes.
-2. Read project conventions, the [environment guide and snapshot](references/environment.md), [specification template](templates/specification.md), and [Jira description template](templates/jira-description.md). Check snapshot project, account, time, and completeness before presenting epic, assignable-user, issue-type, and Sprint candidates; neither templates nor candidates provide additional authorization.
+2. Read project conventions, the [environment guide and snapshot](references/environment.md), [specification template](templates/specification.md), and [Jira description template](templates/jira-description.md). Check snapshot project, account, time, and completeness before presenting epic, issue-type, and Sprint candidates; neither templates nor candidates provide additional authorization.
 3. Clarify context, goals, scope, business rules, and acceptance criteria. Separate facts, assumptions, and open questions in a specification; do not expand scope or split into multiple issues unasked.
 4. New requirements: prepare the specification and one Markdown issue document containing YAML fields and the description. After the user confirms the target and concrete creation content, run `jira --machine issue create --template` without additional terminal approval.
 5. Existing issue: read and retain the original content and exported baseline, review gaps, and prepare the specification and description diff. After the user confirms both, synchronize directly with `jira --machine issue edit --template`, without repeated command-level approval.

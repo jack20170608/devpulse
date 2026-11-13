@@ -144,7 +144,7 @@ final class JiraSkillCommands implements Runnable {
             if (environment != null) {
                 var summary = JiraSkillEnvironment.select(environment,
                         "capturedAt", "finishedAt", "project");
-                for (var section : List.of("epics", "assignableUsers", "issueTypes", "boards", "sprints")) {
+                for (var section : List.of("epics", "issueTypes", "boards", "sprints")) {
                     var values = environment.getAsJsonObject(section);
                     var status = JiraSkillEnvironment.select(values, "status", "complete", "reason", "support", "error");
                     status.addProperty("count", values.getAsJsonArray("items").size());
@@ -156,7 +156,7 @@ final class JiraSkillCommands implements Runnable {
             print("Exported " + NAME + " (" + language + ") to " + destination + ".");
             if (environment != null) {
                 var incomplete = new java.util.ArrayList<String>();
-                for (var section : List.of("epics", "assignableUsers", "issueTypes", "boards", "sprints")) {
+                for (var section : List.of("epics", "issueTypes", "boards", "sprints")) {
                     if (!environment.getAsJsonObject(section).get("complete").getAsBoolean()) {
                         incomplete.add(section);
                     }
