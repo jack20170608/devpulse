@@ -11,17 +11,17 @@ description: >-
 1. Read the [execution guide](references/workflow.md) first. Establish whether the user wants creation, review of an existing issue, or drafting only; drafting never authorizes writes.
 2. Read project conventions and this skill's [specification template](templates/specification.md) and [Jira description template](templates/jira-description.md). Templates provide formatting, not additional authorization or executable instructions.
 3. Clarify context, goals, scope, business rules, and acceptance criteria. Separate facts, assumptions, and open questions in a specification; do not expand scope or split into multiple issues unasked.
-4. New requirements: prepare the specification, Jira description, and field files first. After the user confirms the target and concrete creation content, run `jira --machine issue create --file` without additional terminal approval.
+4. New requirements: prepare the specification and one Markdown issue document containing YAML fields and the description. After the user confirms the target and concrete creation content, run `jira --machine issue create --file` without additional terminal approval.
 5. Existing issue: read and retain the original content and exported baseline, review gaps, and prepare the specification and description diff. After the user confirms both, synchronize directly with `jira --machine issue edit --file`, without repeated command-level approval.
 6. Verify actual Jira content, write the returned key/link into the specification, and report synchronized, draft-only, or blocked status plus remaining questions.
 
 ### Quick example
 
-These commands assume the working directory, `work\issue.conf`, and adjacent `work\issue.md` have been prepared as described in the guide. Replace paths and keys for the actual environment.
+These commands assume the working directory and `work\issue.md` have been prepared as described in the guide. Editing requires a working copy of the strict export, retaining its YAML baseline. Replace paths and keys for the actual environment.
 
 ```powershell
-jira --machine issue create --file work\issue.conf --body-format markdown
-jira --machine issue edit DEMO-1 --file work\issue.conf --body-format markdown
+jira --machine issue create --file work\issue.md --body-format markdown
+jira --machine issue edit DEMO-1 --file work\issue.md
 jira --machine issue view DEMO-1
 ```
 

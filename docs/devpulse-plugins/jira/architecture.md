@@ -34,11 +34,13 @@ HTTP 客户端不跟随重定向，设置连接及请求超时；拒绝远程明
 
 ### 编辑、导出与内容转换
 
-直接创建及编辑按 Jira 实例元数据解析字段；导出保留 `/editmeta` 返回的可编辑字段及原始结构，并保存字段基线、描述哈希、API 版本和正文格式。更新只发送已修改字段，上传前校验 `updated`；这是非原子的冲突检查，不能承诺与其他客户端写入互斥。
+`JiraIssueDocument` 集中管理单个 Markdown Issue 文件的 YAML frontmatter、正文、字段映射及基线检查；create/edit/template/export/update 共用这一格式，不再接受 HOCON Issue 文件。SnakeYAML Engine 解析 YAML 节点，拒绝重复键、别名、锚点、合并键、未知标签及过量输入，并直接保留十进制精度。连接和评论元数据仍使用 HOCON。
+
+命令行参数优先于文件，空字符串或省略字段保留原值，显式 null 才清空；必填字段不能清空，状态等只读信息不自动回写。经办人使用 Cloud accountId 或 DC 用户名；Epic、Story Points 按实例元数据映射。导出将常用引用转换为稳定用户标识、key 或名称，自定义字段保留结构，并在同一 YAML 中保存 originalFields、描述哈希、模式、API 版本和正文格式。update 要求完整导出基线，复用 edit 的差异和可编辑操作检查。编辑校验文件与当前 updated，写入前再次检查；这是非原子检查，不能保证与其他客户端写入互斥。
 
 v3 使用 ADF，上传和导出只支持严格的 Markdown 子集，不能无损表示的节点拒绝往返；暂不支持 ADF 表格上传。`JiraMarkdown` 使用 CommonMark 的 GFM 表格扩展解析 Markdown，v2 将表格转换为 Wiki 表头和数据行，不保留列对齐标记。v2 直接写入默认将 Markdown 转为 Jira Wiki，也可显式提交原生 Wiki；导出保留原始 Wiki，并记录格式，避免有损转换。查看命令的近似 Markdown 渲染只读，不改变导出或上传规则。
 
-`issue view --format markdown` 将所选属性输出为 YAML frontmatter，正文复用只读 description 渲染，不查询评论。字段选择保留顺序；Epic 和 Story Points 按需共用一次字段元数据查询，不硬编码自定义字段 ID。此文档不包含更新基线；机器模式通过 `data.key` 和 `data.markdown` 返回，不改变原有默认 JSON 查看协议。
+`issue view --format markdown` 使用同一文档序列化，将所选属性输出为 YAML frontmatter，正文复用只读 description 渲染，不查询评论。字段保留顺序；Epic 和 Story Points 共用按需元数据查询，不硬编码 ID。assignee 输出可导入的用户标识。view 文档可用于 create/edit，但没有严格更新基线，不能作为无损导出；未改变的展示正文不会回写。严格导出描述按哈希判断变更，未修改时不重新转换。机器模式通过 data.key/data.markdown 返回，不改变原有默认 JSON 查看协议。
 
 评论、附件、工时、关联、克隆及状态流转由各自 API 执行，不共享导出文件的冲突检查；多请求操作不提供跨请求事务。完整命令、权限限制、分页与格式边界统一维护在模块使用说明中。
 
@@ -78,11 +80,13 @@ This mode is a machine interface, not write authorization or user confirmation. 
 
 ### Editing, export, and content conversion
 
-Direct creation and editing resolve fields against Jira instance metadata. Exports retain editable `/editmeta` fields and their original structure, storing field baselines, description hashes, API version, and body format. Updates send only modified fields and check `updated` before uploading; this non-atomic conflict check cannot guarantee exclusion of other clients' writes.
+`JiraIssueDocument` centralizes YAML frontmatter, body, field mapping, and baseline checks for a single Markdown issue file. Create/edit/template/export/update share this format and no longer accept HOCON issue files. SnakeYAML Engine parses nodes, rejecting duplicate keys, aliases, anchors, merge keys, unknown tags, and excessive input while retaining decimal precision directly. Connection and comment metadata remain HOCON.
+
+CLI flags override files; empty strings or omitted fields preserve values and explicit null clears them. Required fields cannot be cleared, and read-only information such as status is not written automatically. Assignees use Cloud account IDs or DC usernames; Epic and Story Points resolve through instance metadata. Exports normalize common references to stable user identifiers, keys, or names, retain custom structures, and store originalFields, description hashes, mode, API version, and body format in the same YAML. Update requires the complete baseline and reuses edit's diff and editable-operation checks. Editing compares file/current updated and checks again before writing; this non-atomic check cannot exclude other clients' writes.
 
 v3 uses ADF; uploads and exports support a strict Markdown subset and reject nodes that cannot round-trip losslessly; ADF table uploads are not yet supported. `JiraMarkdown` parses Markdown with CommonMark's GFM tables extension, converting tables to Wiki headers and data rows for v2 without preserving column alignment markers. Direct v2 writes convert Markdown to Jira Wiki by default or accept explicitly selected native Wiki. Exports preserve original Wiki and record its format to avoid lossy conversion. Approximate Markdown rendering in view commands is read-only and does not change export/upload rules.
 
-`issue view --format markdown` renders selected properties as YAML frontmatter and reuses read-only description rendering for the body, without querying comments. Selection preserves field order; Epic and Story Points share one on-demand metadata request without hardcoded custom field IDs. This document has no update baseline. Machine mode returns `data.key` and `data.markdown` without changing the existing default JSON view protocol.
+`issue view --format markdown` uses the same serializer for selected YAML properties and read-only description rendering, without querying comments. Field order is retained; Epic and Story Points share on-demand metadata without hardcoded IDs. Assignee outputs an importable identity. View documents can feed create/edit, but have no strict baseline and are not lossless exports; unchanged presentation bodies are never written back. Strict export bodies use hashes and are not reconverted when unchanged. Machine mode returns data.key/data.markdown without changing the default JSON view protocol.
 
 Comments, attachments, worklogs, links, clones, and transitions use their respective APIs without sharing exported-file conflict checks. Multi-request operations provide no cross-request transaction. Complete commands, permission limits, pagination, and format boundaries live in the module usage guide.
 

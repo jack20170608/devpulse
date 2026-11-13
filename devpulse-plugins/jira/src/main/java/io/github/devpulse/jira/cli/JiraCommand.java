@@ -102,26 +102,6 @@ public final class JiraCommand implements Runnable {
         return Files.readString(file, StandardCharsets.UTF_8);
     }
 
-    static Path markdown(Path file) throws IOException {
-        var name = file.getFileName().toString();
-        if (!name.endsWith(".conf")) {
-            throw new IOException("Issue metadata must be a .conf file.");
-        }
-        return file.resolveSibling(name.substring(0, name.length() - 5)
-                + ".md");
-    }
-
-    static JsonObject fields(com.typesafe.config.Config config)
-            throws IOException {
-        if (!config.hasPath("fields")) {
-            throw new IOException("Issue template needs a fields object.");
-        }
-        return JsonParser.parseString(
-                ConfigValueFactory.fromMap(
-                        config.getObject("fields").unwrapped()).render(
-                        ConfigRenderOptions.concise())).getAsJsonObject();
-    }
-
     static com.typesafe.config.Config load(Path file)
             throws IOException {
         var options = ConfigParseOptions.defaults()
@@ -146,7 +126,7 @@ public final class JiraCommand implements Runnable {
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
     }
 
-    private static String hash(String content) {
+    static String hash(String content) {
         try {
             var digest = MessageDigest.getInstance("SHA-256").digest(
                     content.getBytes(StandardCharsets.UTF_8));
@@ -379,34 +359,30 @@ public final class JiraCommand implements Runnable {
     }
 
     @Command(name = "template", mixinStandardHelpOptions = true,
-            description = "Create a HOCON/Markdown issue "
+            description = "Create a single Markdown issue "
             + "template without contacting Jira.")
     static final class IssueTemplate extends Action {
-        @Option(names = "--file", required = true, paramLabel = "ISSUE.conf")
+        @Option(names = "--file", required = true, paramLabel = "ISSUE.md")
         Path file;
 
         @Override
         protected void execute() throws IOException {
-            var body = markdown(file);
-            write(body, "请替换此描述。 / Replace this description.\n");
-            try {
-                write(file, """
-                        # 字段使用 Jira REST 格式；令牌仅从环境变量读取。
-                        # Fields use Jira REST format.
-                        # Token is read from the environment.
-                        version = 1
-                        fields {
-                          project { key = "DEMO" }
-                          issuetype { name = "Task" }
-                          summary = "Replace this summary"
-                          labels = []
-                        }
-                        """);
-            } catch (IOException exception) {
-                Files.deleteIfExists(body);
-                throw exception;
-            }
-            print("Created " + file + " and " + body + ".");
+            JiraIssueDocument.requireMarkdown(file);
+            write(file, """
+                    ---
+                    project: "DEMO"
+                    issuetype: "Task"
+                    summary: "Replace this summary"
+                    priority: ""
+                    assignee: ""
+                    epic: ""
+                    story-point: ""
+                    labels: []
+                    ---
+
+                    请替换此描述。 / Replace this description.
+                    """);
+            print("Created " + file + ".");
         }
     }
 
@@ -431,18 +407,18 @@ public final class JiraCommand implements Runnable {
     }
 
     @Command(name = "export", description = "Export editable Jira fields "
-            + "and Markdown to new files.")
+            + "and a lossless description to one Markdown document.")
     static final class Export extends Action {
         @Parameters(index = "0")
         String key;
-        @Option(names = "--file", required = true, paramLabel = "ISSUE.conf")
+        @Option(names = "--file", required = true, paramLabel = "ISSUE.md")
         Path file;
 
         @Override
         protected void execute() throws IOException {
-            var body = markdown(file);
-            if (Files.exists(body) || Files.exists(file)) {
-                throw wrong("Export destination exists; choose new files.");
+            JiraIssueDocument.requireMarkdown(file);
+            if (Files.exists(file)) {
+                throw wrong("Export destination exists; choose a new file.");
             }
             var jira = client();
             var issue = jira.issue(key);
@@ -450,42 +426,31 @@ public final class JiraCommand implements Runnable {
             var editable = object(jira.editMeta(key).get("fields"));
             var exported = new JsonObject();
             for (var entry : editable.entrySet()) {
-                if (!entry.getKey().equals("description")
+                if (!List.of("description", "status", "created", "reporter", "updated").contains(entry.getKey())
                         && source.has(entry.getKey())) {
                     exported.add(entry.getKey(), source.get(entry.getKey()));
                 }
             }
             var description = JiraMarkdown.fromJira(
                     source.get("description"), jira.apiVersion() == 3);
-            var values = new LinkedHashMap<String, Object>();
-            values.put("version", 1);
-            values.put("key", string(issue, "key"));
-            values.put("updated", string(source, "updated"));
-            values.put("mode", jira.cloud() ? "cloud" : "dc");
-            values.put("apiVersion", jira.apiVersion());
-            values.put("bodyFormat", jira.apiVersion() == 2 ? "wiki" : "markdown");
-            values.put("descriptionSha256", hash(description));
-            values.put("fields", toMap(exported));
-            values.put("originalFields", toMap(exported));
-            var metadata = render(values);
-            try {
-                var roundTrip = ConfigFactory.parseString(metadata);
-                if (!exported.equals(fields(roundTrip))) {
-                    throw wrong("Editable Jira fields cannot be "
-                            + "represented losslessly in HOCON.");
-                }
-            } catch (ConfigException exception) {
-                throw wrong("Editable Jira fields cannot be "
-                        + "represented in HOCON.");
+            var values = new JsonObject();
+            values.addProperty("version", 1);
+            values.addProperty("key", string(issue, "key"));
+            values.addProperty("updated", string(source, "updated"));
+            values.addProperty("mode", jira.cloud() ? "cloud" : "dc");
+            values.addProperty("apiVersion", jira.apiVersion());
+            values.addProperty("bodyFormat", jira.apiVersion() == 2 ? "wiki" : "markdown");
+            values.addProperty("descriptionSha256", hash(description));
+            exported = JiraIssueDocument.exportFields(exported, jira.cloud());
+            for (var entry : exported.entrySet()) {
+                values.add(entry.getKey(), entry.getValue());
             }
-            write(body, description);
-            try {
-                write(file, metadata);
-            } catch (IOException exception) {
-                Files.deleteIfExists(body);
-                throw exception;
+            if (source.has("project")) {
+                values.add("project", JiraIssueDocument.exportFields(source, jira.cloud()).get("project"));
             }
-            print("Exported " + key + " to " + file + " and " + body + ".");
+            values.add("originalFields", exported.deepCopy());
+            write(file, JiraIssueDocument.render(values, description));
+            print("Exported " + key + " to " + file + ".");
         }
     }
 
@@ -494,7 +459,7 @@ public final class JiraCommand implements Runnable {
     static final class Update extends Action {
         @Mixin
         BodyFormat bodyFormat = new BodyFormat();
-        @Option(names = "--file", required = true, paramLabel = "ISSUE.conf")
+        @Option(names = "--file", required = true, paramLabel = "ISSUE.md")
         Path file;
         @Option(names = "--force", description = "Override the remote "
                 + "updated-time check (may overwrite recent changes).")
@@ -502,58 +467,17 @@ public final class JiraCommand implements Runnable {
 
         @Override
         protected void execute() throws IOException {
-            var data = load(file);
-            if (!data.hasPath("key") || !data.hasPath("updated")
-                    || !data.hasPath("originalFields")
-                    || !data.hasPath("descriptionSha256")
-                    || !data.hasPath("mode")) {
-                throw wrong("Use jira export to create an update file.");
-            }
-            var jira = client();
-            requireExportConfiguration(data, jira);
-            var current = jira.issue(data.getString("key"));
-            var remote = object(current.get("fields"));
-            if (!force && !data.getString("updated").equals(
-                    string(remote, "updated"))) {
-                throw wrong("Issue changed since export; re-export, "
-                        + "or explicitly use --force to override.");
-            }
-            var original = object(JsonParser.parseString(
-                    data.getObject("originalFields").render(
-                            ConfigRenderOptions.concise())));
-            var edited = fields(data);
-            var changes = new JsonObject();
-            for (var entry : edited.entrySet()) {
-                var name = entry.getKey();
-                if (!original.has(name)) {
-                    throw wrong("Field " + name
-                            + " was not exported as editable.");
-                }
-                if (!entry.getValue().equals(original.get(name))) {
-                    changes.add(name, entry.getValue());
-                }
-            }
-            for (var entry : original.entrySet()) {
-                if (!edited.has(entry.getKey())) {
-                    throw wrong("Cannot remove exported field "
-                            + entry.getKey() + "; use null explicitly.");
-                }
-            }
-            var description = text(markdown(file));
-            if (bodyFormat.changesFormat(data) || !hash(description).equals(
-                    data.getString("descriptionSha256"))) {
-                changes.add("description", bodyFormat.toJira(
-                        description, jira, data));
-            }
-            if (changes.isEmpty()) {
-                changed(data.getString("key"), false);
-                print("No changes to upload.");
-                return;
-            }
-            jira.edit(data.getString("key"), changes);
-            changed(data.getString("key"), true);
-            print("Updated " + data.getString("key") + ". "
-                    + "Re-export before the next update.");
+            var document = JiraIssueDocument.read(file);
+            document.requireBaseline();
+            var edit = new JiraIssueEditCommand();
+            edit.key = document.string("key");
+            edit.file = file;
+            edit.force = force;
+            edit.noInput = true;
+            edit.bodyFormat = bodyFormat;
+            edit.spec = spec;
+            edit.execute();
+            machineData = edit.machineData;
         }
     }
 
@@ -727,10 +651,6 @@ public final class JiraCommand implements Runnable {
             client().attach(key, file);
             print("Attached " + file.getFileName() + " to " + key + ".");
         }
-    }
-
-    private static Map<String, Object> toMap(JsonObject value) {
-        return new com.google.gson.Gson().fromJson(value, Map.class);
     }
 
     private static final class NoIncludes implements ConfigIncluder {

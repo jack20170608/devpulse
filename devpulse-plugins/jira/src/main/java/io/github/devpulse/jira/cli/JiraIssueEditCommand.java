@@ -1,7 +1,6 @@
 package io.github.devpulse.jira.cli;
 
 import static io.github.devpulse.jira.cli.JiraCommand.customFields;
-import static io.github.devpulse.jira.cli.JiraCommand.load;
 import static io.github.devpulse.jira.cli.JiraCommand.nonblank;
 import static io.github.devpulse.jira.cli.JiraCommand.object;
 import static io.github.devpulse.jira.cli.JiraCommand.setNamed;
@@ -18,6 +17,8 @@ import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import picocli.CommandLine.Command;
@@ -50,6 +51,12 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Option(names = {"-P", "--parent"}, paramLabel = "KEY",
             description = "Replace the parent issue key.")
     String parent;
+    @Option(names = "--epic", paramLabel = "KEY",
+            description = "Replace Epic association; conflicts with --parent.")
+    String epic;
+    @Option(names = "--story-point", paramLabel = "NUMBER",
+            description = "Replace Story Points.")
+    BigDecimal storyPoint;
     @Option(names = {"-l", "--label"}, paramLabel = "LABEL",
             description = "Add a label; use --label=-NAME to remove. Repeatable.")
     List<String> labels;
@@ -72,9 +79,9 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Option(names = "--custom", paramLabel = "FIELD=HOCON",
             description = "Set customfield_ID to a HOCON value. Repeatable.")
     List<String> custom;
-    @Option(names = "--file", paramLabel = "EXPORTED.conf",
-            description = "Update an export for KEY using the existing "
-                    + "change/concurrency checks; cannot be mixed with edits.")
+    @Option(names = "--file", paramLabel = "ISSUE.md",
+            description = "Read YAML metadata and description; flags override "
+                    + "the document, with export/concurrency checks retained.")
     Path file;
     @Option(names = "--no-input",
             description = "Never prompt; at least one edit or --file is required.")
@@ -87,27 +94,14 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Override
     protected void execute() throws IOException {
         var format = templateFormat.resolve(template, bodyFormat);
-        if (file != null) {
-            if (hasEdits()) {
-                throw wrong("--file cannot be combined with field edits.");
-            }
-            var data = load(file);
-            if (!data.hasPath("key") || !data.getString("key").equals(key)) {
-                throw wrong("Exported issue key does not match KEY.");
-            }
-            var update = new JiraCommand.Update();
-            update.file = file;
-            update.force = force;
-            update.bodyFormat = bodyFormat;
-            update.spec = spec;
-            update.execute();
-            machineData = update.machineData;
-            return;
-        }
         if (body != null && template != null) {
             throw wrong("Use either --body or --template, not both.");
         }
-        var interactive = !hasEdits();
+        if (epic != null && parent != null) {
+            throw wrong("Use either --epic or --parent, not both.");
+        }
+        var document = file == null ? null : JiraIssueDocument.read(file);
+        var interactive = document == null && !hasEdits();
         if (interactive && (noInput || System.console() == null)) {
             throw wrong("Supply at least one edit option or --file; "
                     + "interactive editing requires a terminal.");
@@ -123,6 +117,48 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
         prepareFields(fields);
         var jira = client();
         var current = object(jira.issue(key).get("fields"));
+        if (document != null) {
+            document.checkTarget(key, string(current, "updated"), jira.cloud(), jira.apiVersion(), force);
+            var overridden = new HashSet<>(fields.keySet());
+            overridden.addAll(updates.keySet());
+            if (assignee != null) {
+                overridden.add("assignee");
+            }
+            if (body != null || template != null) {
+                overridden.add("description");
+            }
+            if (epic != null || parent != null) {
+                overridden.add("epic");
+            }
+            if (epic != null) {
+                overridden.add("parent");
+            }
+            if (storyPoint != null) {
+                overridden.add("story-point");
+            }
+            var metadata = document.needsMetadata(jira.cloud(), overridden)
+                    ? jira.request("GET", "field", null).getAsJsonArray() : new JsonArray();
+            var imported = document.fields(false, jira.cloud(), overridden, metadata);
+            var original = document.originalFields();
+            if (original != null) {
+                for (var name : imported.keySet()) {
+                    if (!name.equals("description") && !original.has(name)) {
+                        throw wrong("Field " + name + " was not exported as editable.");
+                    }
+                }
+            }
+            for (var entry : fields.entrySet()) {
+                imported.add(entry.getKey(), entry.getValue());
+            }
+            fields = imported;
+            if (description == null && !document.body().isBlank()) {
+                description = document.changedBody(bodyFormat.format,
+                        document.string("descriptionSha256") != null ? null
+                                : JiraIssueOperations.View.markdownDescription(
+                                        current.get("description"), jira.apiVersion() == 3));
+                format = bodyFormat.format == null ? document.bodyFormat() : bodyFormat.format;
+            }
+        }
         if (interactive) {
             summary = prompt("Summary (Enter to keep)");
             priority = prompt("Priority name (Enter to keep)");
@@ -135,6 +171,27 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             fields.add("description", description.isEmpty() ? JsonNull.INSTANCE
                     : JiraMarkdown.toJira(description,
                             jira.apiVersion() == 3, format));
+        }
+        if (epic != null) {
+            JiraCatalogCommands.issueId(epic);
+            if (jira.cloud()) {
+                setNamed(fields, "parent", "key", epic);
+            } else {
+                var field = JiraAgileCommands.epicField(jira, "Epic Link",
+                        "com.pyxis.greenhopper.jira:gh-epic-link");
+                if (field == null) {
+                    throw wrong("Jira field metadata does not expose an Epic Link field.");
+                }
+                fields.addProperty(field, epic);
+            }
+        }
+        if (storyPoint != null) {
+            var field = JiraAgileCommands.storyPointsField(
+                    jira.request("GET", "field", null).getAsJsonArray());
+            if (field == null) {
+                throw wrong("Jira field metadata does not expose Story Points.");
+            }
+            fields.addProperty(field, storyPoint);
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
@@ -186,7 +243,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     }
 
     private boolean hasEdits() {
-        return summary != null || type != null || priority != null
+        return summary != null || type != null || priority != null || epic != null || storyPoint != null
                 || assignee != null || parent != null || labels != null
                 || components != null || fixVersions != null
                 || affectsVersions != null || body != null
@@ -260,9 +317,9 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
         updates.add(field, array);
     }
 
-    private static boolean unchanged(String field, JsonElement proposed,
+    static boolean unchanged(String field, JsonElement proposed,
             JsonElement current) {
-        if (proposed.equals(current)) {
+        if (proposed.equals(current) || (proposed.isJsonNull() && current == null)) {
             return true;
         }
         if (!List.of("issuetype", "priority", "parent", "assignee")

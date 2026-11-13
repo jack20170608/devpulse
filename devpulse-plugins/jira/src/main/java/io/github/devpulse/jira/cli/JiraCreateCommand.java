@@ -1,9 +1,6 @@
 package io.github.devpulse.jira.cli;
 
 import static io.github.devpulse.jira.cli.JiraCommand.customFields;
-import static io.github.devpulse.jira.cli.JiraCommand.fields;
-import static io.github.devpulse.jira.cli.JiraCommand.load;
-import static io.github.devpulse.jira.cli.JiraCommand.markdown;
 import static io.github.devpulse.jira.cli.JiraCommand.nonblank;
 import static io.github.devpulse.jira.cli.JiraCommand.setNamed;
 import static io.github.devpulse.jira.cli.JiraCommand.string;
@@ -18,6 +15,8 @@ import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
@@ -25,15 +24,15 @@ import picocli.CommandLine.Option;
 
 @Command(name = "create", mixinStandardHelpOptions = true,
         description = "Create an issue using prompts, flags, or "
-                + "HOCON, Markdown, or Jira wiki files.")
+                + "Markdown issue documents.")
 public class JiraCreateCommand extends JiraCommand.Action {
     @Mixin
     JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
     @Mixin
     JiraCommand.TemplateFormat templateFormat = new JiraCommand.TemplateFormat();
-    @Option(names = "--file", paramLabel = "ISSUE.conf",
-            description = "HOCON fields and adjacent Markdown; "
-                    + "explicit flags override template fields.")
+    @Option(names = "--file", paramLabel = "ISSUE.md",
+            description = "YAML metadata and description in one Markdown file; "
+                    + "explicit flags override document fields.")
     Path file;
     @Option(names = {"-p", "--project"}, paramLabel = "KEY",
             description = "Project key; defaults to template or connection configuration.")
@@ -71,12 +70,15 @@ public class JiraCreateCommand extends JiraCommand.Action {
             description = "Optional Epic key; blank skips association. "
                     + "Cannot be combined with --parent.")
     String epic;
+    @Option(names = "--story-point", paramLabel = "NUMBER",
+            description = "Story Points; overrides document metadata.")
+    BigDecimal storyPoint;
     @Option(names = {"-b", "--body"}, paramLabel = "MARKDOWN",
             description = "Description text; conflicts with --template.")
     String body;
     @Option(names = "--template", paramLabel = "FILE",
             description = "UTF-8 description file, or - for stdin; "
-                    + "overrides adjacent Markdown. "
+                    + "overrides the issue document body. "
                     + "See --template-format for input format.")
     Path template;
     @Option(names = "--custom", paramLabel = "FIELD=HOCON",
@@ -103,11 +105,8 @@ public class JiraCreateCommand extends JiraCommand.Action {
                 throw wrong("Use either --epic or --parent, not both.");
             }
         }
-        var issue = file == null ? new JsonObject() : fields(load(file));
-        if (issue.has("description")) {
-            throw wrong("Use --body, --template, or adjacent .md "
-                    + "for description, not fields.description.");
-        }
+        var document = file == null ? null : JiraIssueDocument.read(file);
+        var issue = new JsonObject();
         setNamed(issue, "project", "key", project);
         setNamed(issue, "issuetype", "name", type);
         if (summary != null) {
@@ -120,6 +119,32 @@ public class JiraCreateCommand extends JiraCommand.Action {
         setList(issue, "fixVersions", fixVersions, true);
         setList(issue, "versions", affectsVersions, true);
         customFields(issue, custom);
+        var jira = client();
+        var overridden = new HashSet<>(issue.keySet());
+        if (assignee != null) {
+            overridden.add("assignee");
+        }
+        if (body != null || template != null) {
+            overridden.add("description");
+        }
+        if (epicSupplied || parent != null) {
+            overridden.add("epic");
+        }
+        if (epic != null) {
+            overridden.add("parent");
+        }
+        if (storyPoint != null) {
+            overridden.add("story-point");
+        }
+        if (document != null) {
+            var metadata = document.needsMetadata(jira.cloud(), overridden)
+                    ? jira.request("GET", "field", null).getAsJsonArray() : new JsonArray();
+            var imported = document.fields(true, jira.cloud(), overridden, metadata);
+            for (var entry : issue.entrySet()) {
+                imported.add(entry.getKey(), entry.getValue());
+            }
+            issue = imported;
+        }
         if (!issue.has("project")) {
             setNamed(issue, "project", "key", configuration().project());
         }
@@ -135,14 +160,22 @@ public class JiraCreateCommand extends JiraCommand.Action {
                 epic = JiraCatalogCommands.issueId(answer);
             }
         }
-        var description = description();
-        var jira = client();
+        var description = description(document);
         if (epic != null) {
             setEpic(issue, jira);
         }
+        if (storyPoint != null) {
+            var field = JiraAgileCommands.storyPointsField(
+                    jira.request("GET", "field", null).getAsJsonArray());
+            if (field == null) {
+                throw wrong("Jira field metadata does not expose Story Points.");
+            }
+            issue.addProperty(field, storyPoint);
+        }
         if (description != null) {
             issue.add("description", JiraMarkdown.toJira(description,
-                    jira.apiVersion() == 3, format));
+                    jira.apiVersion() == 3, document != null && body == null && template == null
+                            && bodyFormat.format == null ? document.bodyFormat() : format));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
@@ -181,7 +214,7 @@ public class JiraCreateCommand extends JiraCommand.Action {
         }
     }
 
-    private String description() throws IOException {
+    private String description(JiraIssueDocument document) throws IOException {
         if (body != null) {
             return body;
         }
@@ -191,8 +224,8 @@ public class JiraCreateCommand extends JiraCommand.Action {
                             StandardCharsets.UTF_8)
                     : text(template);
         }
-        if (file != null) {
-            return text(markdown(file));
+        if (document != null) {
+            return document.body().isBlank() ? null : document.body();
         }
         if (!machine() && System.console() == null) {
             var input = new String(System.in.readAllBytes(),

@@ -217,8 +217,8 @@ public final class JiraIssueOperations {
             var epicField = names.contains("epic") && !jira.cloud()
                     ? JiraAgileCommands.epicField(metadata, "Epic Link",
                             "com.pyxis.greenhopper.jira:gh-epic-link") : null;
-            var pointsField = names.contains("story-point") ? storyPointsField(metadata) : null;
-            var document = new StringBuilder("---\n");
+            var pointsField = names.contains("story-point") ? JiraAgileCommands.storyPointsField(metadata) : null;
+            var values = new JsonObject();
             for (var name : names) {
                 var value = switch (name) {
                     case "key" -> issue.get("key");
@@ -226,42 +226,25 @@ public final class JiraIssueOperations {
                     case "story-point" -> pointsField == null ? null : fields.get(pointsField);
                     default -> fields.get(name);
                 };
-                document.append(name).append(": ");
                 if (name.equals("story-point") && value != null && !value.isJsonNull()) {
                     if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
                         throw wrong("Jira returned a nonnumeric Story Points value.");
                     }
-                    document.append(value.getAsBigDecimal().toPlainString());
+                    values.add(name, value);
                 } else {
-                    var text = value == null || value.isJsonNull() ? "" : display(value);
-                    document.append(new com.google.gson.JsonPrimitive(text).toString()
-                            .replace("\u0085", "\\u0085")
-                            .replace("\u2028", "\\u2028")
-                            .replace("\u2029", "\\u2029"));
+                    var text = value == null || value.isJsonNull() ? ""
+                            : name.equals("assignee") && value.isJsonObject()
+                                    ? label(value.getAsJsonObject(), jira.cloud() ? "accountId" : "name")
+                                    : display(value);
+                    values.addProperty(name, text);
                 }
-                document.append('\n');
             }
-            return document.append("---\n\n")
-                    .append(safe(JiraDescriptionMarkdown.render(
-                            fields.get("description"), jira.apiVersion() == 3))).toString();
+            return JiraIssueDocument.render(values, markdownDescription(
+                    fields.get("description"), jira.apiVersion() == 3));
         }
 
-        private static String storyPointsField(JsonArray metadata) throws IOException {
-            var matches = new LinkedHashSet<String>();
-            for (var value : metadata) {
-                var field = object(value);
-                var id = label(field, "id");
-                var name = label(field, "name");
-                if (id.matches("customfield_[0-9]+")
-                        && (name.equalsIgnoreCase("Story Points")
-                                || name.equalsIgnoreCase("Story point estimate"))) {
-                    matches.add(id);
-                }
-            }
-            if (matches.size() > 1) {
-                throw wrong("Jira field metadata has ambiguous Story Points fields.");
-            }
-            return matches.isEmpty() ? null : matches.iterator().next();
+        static String markdownDescription(JsonElement description, boolean adf) throws IOException {
+            return safe(JiraDescriptionMarkdown.render(description, adf));
         }
 
         private static JsonElement epicValue(JsonObject fields, String epicField)
