@@ -43,7 +43,7 @@ bash run-jira.sh issue list -p DEMO --config connection.conf
 
 ### 由 CLI 提供的需求工作流 Skill
 
-JAR 内置 `jira-requirements` Skill、执行说明、环境说明、规格书模板及 Jira 描述模板。CLI 默认离线导出，也可显式查询 Jira 附带项目环境快照；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
+JAR 内置 `jira-requirements` Skill、执行说明、环境说明、规格书模板及完整 Jira Issue 模板（YAML metadata + description）。CLI 默认离线导出，也可显式查询 Jira 附带项目环境快照；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
 
 ```powershell
 # 导出到新的项目级 Skill 目录；不需要连接配置或 token
@@ -59,17 +59,17 @@ jira --machine skill export --output exported-skill --templates team-templates
 jira --machine skill export --output project-skill --language zh --with-environment --project DEMO
 ```
 
-导出包含 `SKILL.md`、`references\workflow.md`、`references\environment.md`、`templates\specification.md` 和 `templates\jira-description.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow`、`environment` 和 `jira-description` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
+导出包含 `SKILL.md`、`references\workflow.md`、`references\environment.md`、`templates\specification.md` 和 `templates\jira-issue.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow`、`environment` 和 `jira-issue` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
 
 `--with-environment` 额外生成 `references\environment.json`，包含采集时间、连接/账号/项目范围、项目关联的 Issue Type（TaskType）、全部可见 Epic、看板及各 Scrum 看板的 Sprint，不查询或导出可指派人员目录。`--project/-p` 覆盖连接默认项目，仅能与该选项一起使用。连接、身份或项目查询失败则终止导出；其他目录查询失败可保留部分快照，每节记录 `status`、`complete`、脱敏错误和数量，机器协议 `data.environment` 返回这些摘要。Epic 和看板/Sprint 遍历分页；重复页、无进展或最多 1000 页的保护不会伪装成完整结果。actor 仅保存采集账号的稳定标识用于范围校验，不导出邮箱、头像或 token；快照不要自动提交到版本库。
 
 Sprint 信息依赖 Jira Software Agile API 和可见 Scrum 看板；查询成功（包括空列表）才标记 `available`。无可见 Scrum 看板标记 `no-visible-scrum-board`；403、404 或网络异常标记未知，不能直接断言不支持 Sprint。CLI 可查询 Sprint 及通过 `sprint add` 加入迭代，但 Issue 模板没有 `sprint` 别名，不默认执行写操作，也不自动创建、启动或关闭 Sprint。Skill 使用快照前检查范围和时间，写入前重新核验选择；候选不等于授权。
 
-默认从**当前工作目录**的 `.jira\templates` 读取同名 `specification.md`、`jira-description.md` 覆盖内置模板；与连接配置位置无关。`--templates DIR` 改为只从该目录选取覆盖，不混用默认项目目录。两个文件可只提供一个，缺失文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错，其他文件忽略。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。AI 按项目语言规范填充模板正文，不把使用说明或代码围栏上传到 Jira。
+默认从**当前工作目录**的 `.jira\templates` 读取同名 `specification.md`、`jira-issue.md` 覆盖内置模板；与连接配置位置无关。`--templates DIR` 改为只从该目录选取覆盖，不混用默认项目目录。两个文件可只提供一个，缺失文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错，其他文件忽略。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。Jira Issue 模板使用统一名称 `jira-issue.md`，不保留旧名称别名；模板代码块包含完整 metadata 和描述，AI 填充、提取整个代码块为可导入的 Issue 文档，不把使用说明或围栏上传到 Jira。项目覆盖需使用同名完整模板，CLI 不自动迁移。
 
-Skill 定义两条业务流程：新需求经澄清形成规格书，按模板生成 Jira 描述；用户确认目标及具体创建内容后直接创建，记录 key 并核验，不额外要求终端审批。已有 Jira 则先读取、严格导出并保留基线，AI 评审和生成规格/描述差异，**用户确认规格及具体差异后直接同步**，使用导出文件的更新时间检查，不使用 `--force`。规格、目标或内容改变后需重新确认。
+Skill 定义两条业务流程：新需求经澄清形成规格书，按模板生成包含 metadata 和描述的完整 Jira Issue 文档；用户确认目标及具体创建内容后直接创建，记录 key 并核验，不额外要求终端审批。已有 Jira 则先读取、严格导出并保留基线，AI 评审和生成规格、可编辑 metadata/描述差异，**用户确认规格及具体差异后直接同步**，不以新建模板覆盖基线，使用导出文件的更新时间检查，不使用 `--force`。规格、目标或内容改变后需重新确认。
 
-这是 Skill 的协作规范，不是 CLI 新增的授权机制；工具权限审批及 Jira 权限仍有效，CLI 不额外设置终端审批。导出格式不是服务器身份绑定，Skill 要求保持连接、用户及 Issue 身份一致；不能无损导出、发生冲突或写入结果未知时停止核验，不自动覆盖或重复创建。`issue template` 生成带 YAML frontmatter 的单个 Markdown Issue 文件，与此 Skill 的业务描述模板不同。
+这是 Skill 的协作规范，不是 CLI 新增的授权机制；工具权限审批及 Jira 权限仍有效，CLI 不额外设置终端审批。导出格式不是服务器身份绑定，Skill 要求保持连接、用户及 Issue 身份一致；不能无损导出、发生冲突或写入结果未知时停止核验，不自动覆盖或重复创建。`issue template` 生成带 YAML frontmatter 的单个 Markdown Issue 文件；Skill 模板使用相同 Issue 格式，并增加规格化的业务描述结构。
 
 ### AI 与脚本调用：`--machine`
 
@@ -485,7 +485,7 @@ Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history c
 
 ### CLI-provided requirements workflow skill
 
-The JAR bundles the `jira-requirements` skill, execution guide, environment guide, specification template, and Jira description template. Exports are offline by default, with explicit Jira queries available for a project environment snapshot. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
+The JAR bundles the `jira-requirements` skill, execution guide, environment guide, specification template, and complete Jira issue template (YAML metadata + description). Exports are offline by default, with explicit Jira queries available for a project environment snapshot. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
 
 ```powershell
 # Export to a new project skill directory; no connection configuration or token needed
@@ -501,17 +501,17 @@ jira --machine skill export --output exported-skill --templates team-templates
 jira --machine skill export --output project-skill --language en --with-environment --project DEMO
 ```
 
-Exports contain `SKILL.md`, `references\workflow.md`, `references\environment.md`, `templates\specification.md`, and `templates\jira-description.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, `environment`, and `jira-description` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
+Exports contain `SKILL.md`, `references\workflow.md`, `references\environment.md`, `templates\specification.md`, and `templates\jira-issue.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, `environment`, and `jira-issue` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
 
 `--with-environment` adds `references\environment.json` with capture time, connection/account/project scope, project-associated issue types (TaskType), all visible epics, boards, and sprints from each Scrum board. It never queries or exports an assignable-user directory. `--project/-p` overrides the configured project and requires this flag. Connection, identity, or project query failures abort export; other catalog failures may retain a partial snapshot, recording per-section `status`, `complete`, sanitized errors, and counts, summarized in machine `data.environment`. Epic and board/Sprint queries traverse pages; duplicate pages, stalled cursors, and a 1000-page safeguard never masquerade as complete results. Actor retains only the collecting account's stable identifier for scope checks, never email, avatars, or tokens. Do not automatically commit snapshots.
 
 Sprint information requires the Jira Software Agile API and visible Scrum boards. Successful queries, including empty results, mark support `available`; no visible Scrum board yields `no-visible-scrum-board`. A 403, 404, or network error leaves support unknown rather than proving absence. The CLI queries sprints and supports membership through `sprint add`, but issue templates have no `sprint` alias, writes are not automatic, and sprints are not automatically created, started, or closed. The skill checks snapshot scope/time before use and revalidates selections before writes; candidates are not authorization.
 
-By default, same-named `specification.md` and `jira-description.md` in `.jira\templates` under the **current working directory** override bundled templates, independently of connection-file location. `--templates DIR` selects only that override directory, without mixing in the default project directory. Either file can be supplied alone; absent files use bundled defaults in the selected language. Existing invalid, blank, non-UTF-8, or over-1-MiB templates fail rather than silently falling back; other files are ignored. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. The AI fills template bodies according to project language conventions instead of uploading instructions or fences.
+By default, same-named `specification.md` and `jira-issue.md` in `.jira\templates` under the **current working directory** override bundled templates, independently of connection-file location. `--templates DIR` selects only that override directory, without mixing in the default project directory. Either file can be supplied alone; absent files use bundled defaults in the selected language. Existing invalid, blank, non-UTF-8, or over-1-MiB templates fail rather than silently falling back; other files are ignored. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. Jira issue templates consistently use `jira-issue.md` without a legacy-name alias. The template block contains complete metadata and description; the AI fills and extracts the whole block as an importable issue document, never uploading instructions or fences. Project overrides require the same filename and complete format; the CLI does not migrate them automatically.
 
-The skill defines two business workflows. New requirements are clarified into a specification and projected into a Jira description. After the user confirms the target and concrete creation content, create directly, retain the key, and verify without additional terminal approval. For existing Jira issues, first read, strictly export, and retain a baseline; the AI reviews and prepares specification/description diffs. **After the user confirms the specification and concrete diff, synchronize directly** using the exported update-time check, without `--force`. Changed specifications, targets, or content require renewed confirmation.
+The skill defines two business workflows. New requirements are clarified into a specification and a complete Jira issue document with metadata and description. After the user confirms the target and concrete creation content, create directly, retain the key, and verify without additional terminal approval. For existing Jira issues, first read, strictly export, and retain a baseline; the AI reviews and prepares specification plus editable metadata/description diffs. **After the user confirms the specification and concrete diff, synchronize directly**, never replacing the baseline with a creation template, using the exported update-time check without `--force`. Changed specifications, targets, or content require renewed confirmation.
 
-These are skill collaboration rules, not new CLI authorization. Tool approvals and Jira permissions remain effective; the CLI adds no separate terminal approval. Exports do not bind server identity, so the skill requires the connection, principal, and Issue identity to remain consistent. Lossless-export failures, conflicts, and unknown write outcomes stop for reconciliation rather than automatic overwriting or recreation. `issue template` generates one Markdown issue file with YAML frontmatter, distinct from these business-description templates.
+These are skill collaboration rules, not new CLI authorization. Tool approvals and Jira permissions remain effective; the CLI adds no separate terminal approval. Exports do not bind server identity, so the skill requires the connection, principal, and Issue identity to remain consistent. Lossless-export failures, conflicts, and unknown write outcomes stop for reconciliation rather than automatic overwriting or recreation. `issue template` generates one Markdown issue file with YAML frontmatter; the skill template uses the same issue format with an added structured business description.
 
 ### AI and script invocation: `--machine`
 

@@ -28,7 +28,7 @@ final class JiraSkillCommands implements Runnable {
             Path.of("references", "workflow.md"),
             Path.of("references", "environment.md"),
             Path.of("templates", "specification.md"),
-            Path.of("templates", "jira-description.md"));
+            Path.of("templates", "jira-issue.md"));
 
     @Spec
     CommandSpec spec;
@@ -45,7 +45,8 @@ final class JiraSkillCommands implements Runnable {
                 description = "New skill directory; existing paths are never overwritten.")
         Path output;
         @Option(names = "--templates", paramLabel = "DIRECTORY",
-                description = "Override specification.md and/or jira-description.md from this directory. "
+                description = "Override specification.md and/or jira-issue.md "
+                        + "(complete issue template: metadata and description) from this directory. "
                         + "Otherwise use .jira/templates in the current directory; "
                         + "missing files fall back to bundled defaults.")
         Path templates;

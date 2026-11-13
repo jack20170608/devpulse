@@ -1,7 +1,7 @@
 ---
 name: jira-requirements
 description: >-
-  Turns software requirements into reviewed specifications and template-based Jira descriptions, then creates or updates issues with the devpulse Jira CLI. Use when users request requirement analysis, a specification, Jira creation from requirements, or review and synchronization of an existing Jira issue.
+  Turns software requirements into reviewed specifications and complete Jira issue documents with YAML metadata and descriptions, then creates or updates issues with the devpulse Jira CLI. Use when users request requirement analysis, a specification, Jira creation from requirements, or review and synchronization of an existing Jira issue.
 ---
 
 # 需求规格化与 Jira 同步
@@ -9,10 +9,10 @@ description: >-
 ### 工作流
 
 1. 先阅读 [执行说明](references/workflow.md)，确认用户要新建、评审已有 Issue，还是仅起草；仅起草不得调用写命令。
-2. 读取项目约定、[环境说明与快照](references/environment.md)、[规格书模板](templates/specification.md)和 [Jira 描述模板](templates/jira-description.md)。核对快照的项目、账号、时间和完整性，再展示 Epic、Issue Type 及 Sprint 候选；模板和候选均不是额外授权。
+2. 读取项目约定、[环境说明与快照](references/environment.md)、[规格书模板](templates/specification.md)和 [Jira Issue 模板](templates/jira-issue.md)（YAML metadata + description）。核对快照的项目、账号、时间和完整性，再展示 Epic、Issue Type 及 Sprint 候选；模板和候选均不是额外授权。
 3. 澄清背景、目标、范围、业务规则及验收标准，区分事实、假设和未决问题，形成规格书；不擅自扩大需求或拆成多个 Issue。
 4. 新需求：先生成规格和一个包含 YAML 字段及描述正文的 Markdown Issue 文件；用户确认目标及具体创建内容后，使用 `jira --machine issue create --template` 创建，不再增加终端审批。
-5. 已有 Issue：读取并保留原始内容与导出基线，评审缺口，生成规格书和描述差异；用户确认规格及差异后，直接使用 `jira --machine issue edit --template` 同步，不重复要求命令级批准。
+5. 已有 Issue：读取并保留原始内容与导出基线，评审缺口，生成规格书、可编辑 metadata 和描述差异；用户确认规格及差异后，直接使用 `jira --machine issue edit --template` 同步，不重复要求命令级批准。
 6. 核验 Jira 实际内容，将返回的 key/链接写回规格书，汇报已同步、仅起草或受阻，以及剩余问题。
 
 ### 快速示例
