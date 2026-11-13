@@ -38,6 +38,8 @@ HTTP 客户端不跟随重定向，设置连接及请求超时；拒绝远程明
 
 v3 使用 ADF，上传和导出只支持严格的 Markdown 子集，不能无损表示的节点拒绝往返；暂不支持 ADF 表格上传。`JiraMarkdown` 使用 CommonMark 的 GFM 表格扩展解析 Markdown，v2 将表格转换为 Wiki 表头和数据行，不保留列对齐标记。v2 直接写入默认将 Markdown 转为 Jira Wiki，也可显式提交原生 Wiki；导出保留原始 Wiki，并记录格式，避免有损转换。查看命令的近似 Markdown 渲染只读，不改变导出或上传规则。
 
+`issue view --format markdown` 将所选属性输出为 YAML frontmatter，正文复用只读 description 渲染，不查询评论。字段选择保留顺序；Epic 和 Story Points 按需共用一次字段元数据查询，不硬编码自定义字段 ID。此文档不包含更新基线；机器模式通过 `data.key` 和 `data.markdown` 返回，不改变原有默认 JSON 查看协议。
+
 评论、附件、工时、关联、克隆及状态流转由各自 API 执行，不共享导出文件的冲突检查；多请求操作不提供跨请求事务。完整命令、权限限制、分页与格式边界统一维护在模块使用说明中。
 
 创建和直接编辑命令共用 `TemplateFormat` mixin，`--template-format` 默认 `auto`，仅根据 `--template` 文件的后缀选择输入格式：`.md` / `.markdown` 不区分大小写，其他后缀及标准输入按 Wiki 处理；不检查内容猜测格式。显式模板格式或兼容的 `--body-format` 可覆盖自动判断；Wiki 仍要求 API v2。`issue edit --file` 仍使用导出元数据中的格式，其他描述来源和其他命令的默认格式不变。
@@ -79,6 +81,8 @@ This mode is a machine interface, not write authorization or user confirmation. 
 Direct creation and editing resolve fields against Jira instance metadata. Exports retain editable `/editmeta` fields and their original structure, storing field baselines, description hashes, API version, and body format. Updates send only modified fields and check `updated` before uploading; this non-atomic conflict check cannot guarantee exclusion of other clients' writes.
 
 v3 uses ADF; uploads and exports support a strict Markdown subset and reject nodes that cannot round-trip losslessly; ADF table uploads are not yet supported. `JiraMarkdown` parses Markdown with CommonMark's GFM tables extension, converting tables to Wiki headers and data rows for v2 without preserving column alignment markers. Direct v2 writes convert Markdown to Jira Wiki by default or accept explicitly selected native Wiki. Exports preserve original Wiki and record its format to avoid lossy conversion. Approximate Markdown rendering in view commands is read-only and does not change export/upload rules.
+
+`issue view --format markdown` renders selected properties as YAML frontmatter and reuses read-only description rendering for the body, without querying comments. Selection preserves field order; Epic and Story Points share one on-demand metadata request without hardcoded custom field IDs. This document has no update baseline. Machine mode returns `data.key` and `data.markdown` without changing the existing default JSON view protocol.
 
 Comments, attachments, worklogs, links, clones, and transitions use their respective APIs without sharing exported-file conflict checks. Multi-request operations provide no cross-request transaction. Complete commands, permission limits, pagination, and format boundaries live in the module usage guide.
 

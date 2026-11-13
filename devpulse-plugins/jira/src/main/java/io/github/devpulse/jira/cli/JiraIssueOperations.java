@@ -33,6 +33,10 @@ public final class JiraIssueOperations {
     @Command(name = "view", mixinStandardHelpOptions = true,
             description = "Print issue details and recent comments without a pager.")
     public static final class View extends JiraCommand.Action {
+        private static final List<String> MARKDOWN_FIELDS = List.of(
+                "summary", "key", "issuetype", "status", "priority",
+                "assignee", "reporter", "created", "updated", "epic", "story-point");
+
         @Parameters(index = "0", paramLabel = "KEY")
         String key;
         @Option(names = "--comments", defaultValue = "1", paramLabel = "N",
@@ -48,6 +52,16 @@ public final class JiraIssueOperations {
                 description = "Description display (default: markdown). "
                         + "Raw preserves Wiki text for v2 or ADF JSON for v3.")
         DescriptionFormat descriptionFormat;
+        enum OutputFormat { text, markdown }
+        @Option(names = "--format", defaultValue = "text", paramLabel = "text|markdown",
+                description = "Output format (default: text). Markdown prints YAML "
+                        + "frontmatter and description only, without links or comments.")
+        OutputFormat format;
+        @Option(names = "--fields", split = ",", paramLabel = "FIELD,...",
+                description = "Ordered Markdown frontmatter fields: summary,key,issuetype,"
+                        + "status,priority,assignee,reporter,created,updated,epic,story-point. "
+                        + "Default: all. Requires --format markdown.")
+        List<String> selectedFields;
 
         @Override
         protected void execute() throws IOException {
@@ -58,9 +72,22 @@ public final class JiraIssueOperations {
             if (plain && descriptionFormat != null) {
                 throw wrong("Use either --plain or --description-format, not both.");
             }
+            var outputFields = markdownFields();
             var jira = client();
             var issue = jira.issue(key).deepCopy();
             var fields = object(issue.get("fields"));
+            if (format == OutputFormat.markdown) {
+                var document = markdownDocument(jira, issue, fields, outputFields);
+                if (machine()) {
+                    var result = new JsonObject();
+                    result.addProperty("key", label(issue, "key"));
+                    result.addProperty("markdown", document);
+                    machineData = result;
+                } else {
+                    print(document);
+                }
+                return;
+            }
             var recent = new JsonArray();
             var total = 0;
             while (recent.size() < comments) {
@@ -143,6 +170,120 @@ public final class JiraIssueOperations {
                     print("");
                 }
             }
+        }
+
+        private List<String> markdownFields() throws IOException {
+            if (format != OutputFormat.markdown) {
+                if (selectedFields != null) {
+                    throw wrong("--fields requires --format markdown.");
+                }
+                return List.of();
+            }
+            var parsed = spec.commandLine().getParseResult();
+            if (parsed.hasMatchedOption("--raw") || parsed.hasMatchedOption("--json")
+                    || plain || descriptionFormat == DescriptionFormat.raw
+                    || (parsed.hasMatchedOption("--comments") && comments != 0)) {
+                throw wrong("--format markdown cannot be combined with --raw/--json, "
+                        + "--plain, --description-format raw, or nonzero --comments.");
+            }
+            if (selectedFields == null) {
+                return MARKDOWN_FIELDS;
+            }
+            var names = new LinkedHashSet<String>();
+            for (var field : selectedFields) {
+                var name = field.strip();
+                if (!MARKDOWN_FIELDS.contains(name) || !names.add(name)) {
+                    throw wrong("--fields contains an unknown, empty, or duplicate field.");
+                }
+            }
+            if (names.isEmpty()) {
+                throw wrong("--fields must select at least one field.");
+            }
+            return List.copyOf(names);
+        }
+
+        private String markdownDocument(JiraClient jira, JsonObject issue,
+                JsonObject fields, List<String> names) throws IOException {
+            var metadata = names.contains("story-point")
+                    || (names.contains("epic") && !jira.cloud())
+                    ? array(jira.request("GET", "field", null)) : new JsonArray();
+            var epicField = names.contains("epic") && !jira.cloud()
+                    ? JiraAgileCommands.epicField(metadata, "Epic Link",
+                            "com.pyxis.greenhopper.jira:gh-epic-link") : null;
+            var pointsField = names.contains("story-point") ? storyPointsField(metadata) : null;
+            var document = new StringBuilder("---\n");
+            for (var name : names) {
+                var value = switch (name) {
+                    case "key" -> issue.get("key");
+                    case "epic" -> epicValue(fields, epicField);
+                    case "story-point" -> pointsField == null ? null : fields.get(pointsField);
+                    default -> fields.get(name);
+                };
+                document.append(name).append(": ");
+                if (name.equals("story-point") && value != null && !value.isJsonNull()) {
+                    if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+                        throw wrong("Jira returned a nonnumeric Story Points value.");
+                    }
+                    document.append(value.getAsBigDecimal().toPlainString());
+                } else {
+                    var text = value == null || value.isJsonNull() ? "" : display(value);
+                    document.append(new com.google.gson.JsonPrimitive(text).toString()
+                            .replace("\u0085", "\\u0085")
+                            .replace("\u2028", "\\u2028")
+                            .replace("\u2029", "\\u2029"));
+                }
+                document.append('\n');
+            }
+            return document.append("---\n\n")
+                    .append(safe(JiraDescriptionMarkdown.render(
+                            fields.get("description"), jira.apiVersion() == 3))).toString();
+        }
+
+        private static String storyPointsField(JsonArray metadata) throws IOException {
+            var matches = new LinkedHashSet<String>();
+            for (var value : metadata) {
+                var field = object(value);
+                var id = label(field, "id");
+                var name = label(field, "name");
+                if (id.matches("customfield_[0-9]+")
+                        && (name.equalsIgnoreCase("Story Points")
+                                || name.equalsIgnoreCase("Story point estimate"))) {
+                    matches.add(id);
+                }
+            }
+            if (matches.size() > 1) {
+                throw wrong("Jira field metadata has ambiguous Story Points fields.");
+            }
+            return matches.isEmpty() ? null : matches.iterator().next();
+        }
+
+        private static JsonElement epicValue(JsonObject fields, String epicField)
+                throws IOException {
+            if (epicField != null) {
+                var value = fields.get(epicField);
+                if (value != null && !value.isJsonNull()) {
+                    return value;
+                }
+            }
+            var parent = fields.get("parent");
+            if (parent == null || !parent.isJsonObject()) {
+                return null;
+            }
+            var parentFields = parent.getAsJsonObject().get("fields");
+            if (parentFields == null || !parentFields.isJsonObject()) {
+                return null;
+            }
+            var type = parentFields.getAsJsonObject().get("issuetype");
+            if (type == null || !type.isJsonObject()) {
+                return null;
+            }
+            var issueType = type.getAsJsonObject();
+            var level = issueType.get("hierarchyLevel");
+            boolean epic = level != null && !level.isJsonNull()
+                    ? level.isJsonPrimitive() && level.getAsJsonPrimitive().isNumber()
+                            && level.getAsBigDecimal().compareTo(java.math.BigDecimal.ONE) == 0
+                    : "Epic".equalsIgnoreCase(label(issueType, "name"));
+            return epic ? parent.getAsJsonObject().get("key") : null;
         }
     }
 
