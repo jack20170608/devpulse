@@ -2,6 +2,7 @@ package io.github.devpulse.jira.cli;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.GsonBuilder;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,6 +26,7 @@ final class JiraSkillCommands implements Runnable {
     private static final List<Path> FILES = List.of(
             Path.of("SKILL.md"),
             Path.of("references", "workflow.md"),
+            Path.of("references", "environment.md"),
             Path.of("templates", "specification.md"),
             Path.of("templates", "jira-description.md"));
 
@@ -37,7 +39,7 @@ final class JiraSkillCommands implements Runnable {
     }
 
     @Command(name = "export", mixinStandardHelpOptions = true,
-            description = "Export the requirements-to-Jira skill offline to a new directory.")
+            description = "Export the requirements-to-Jira skill; optionally capture a read-only Jira environment snapshot.")
     static final class Export extends JiraCommand.Action {
         @Option(names = "--output", required = true, paramLabel = "DIRECTORY",
                 description = "New skill directory; existing paths are never overwritten.")
@@ -52,9 +54,20 @@ final class JiraSkillCommands implements Runnable {
                         + "${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}). "
                         + "Custom templates are copied without translation.")
         Language language;
+        @Option(names = "--with-environment",
+                description = "Query Jira and include a dated project environment snapshot. "
+                        + "Without this flag, export remains offline.")
+        boolean withEnvironment;
+        @Option(names = {"-p", "--project"}, paramLabel = "KEY_OR_ID",
+                description = "Environment project; defaults to connection configuration. "
+                        + "Requires --with-environment.")
+        String project;
 
         @Override
         protected void execute() throws IOException {
+            if (project != null && !withEnvironment) {
+                throw JiraCommand.wrong("--project requires --with-environment.");
+            }
             var destination = output.toAbsolutePath().normalize();
             if (destination.getParent() == null
                     || Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
@@ -92,6 +105,16 @@ final class JiraSkillCommands implements Runnable {
                             ? source.toAbsolutePath().normalize().toString() : "bundled");
                 }
             }
+            JsonObject environment = null;
+            if (withEnvironment) {
+                var connection = configuration();
+                var selectedProject = JiraCatalogCommands.project(project, connection.project());
+                var jira = client();
+                environment = new JiraSkillEnvironment(connection, jira::request, jira::agile)
+                        .collect(selectedProject);
+                contents.put(Path.of("references", "environment.json"),
+                        new GsonBuilder().setPrettyPrinting().create().toJson(environment) + "\n");
+            }
             Files.createDirectories(destination.getParent());
             var staging = Files.createTempDirectory(destination.getParent(), ".jira-skill-");
             try {
@@ -103,7 +126,7 @@ final class JiraSkillCommands implements Runnable {
                 }
                 Files.move(staging, destination);
             } finally {
-                for (var file : FILES.reversed()) {
+                for (var file : new java.util.ArrayList<>(contents.keySet()).reversed()) {
                     Files.deleteIfExists(staging.resolve(file));
                 }
                 Files.deleteIfExists(staging.resolve("templates"));
@@ -115,11 +138,34 @@ final class JiraSkillCommands implements Runnable {
             result.addProperty("language", language.name());
             result.addProperty("directory", destination.toString());
             var files = new JsonArray();
-            FILES.forEach(file -> files.add(file.toString()));
+            contents.keySet().forEach(file -> files.add(file.toString()));
             result.add("files", files);
             result.add("templateSources", sources);
+            if (environment != null) {
+                var summary = JiraSkillEnvironment.select(environment,
+                        "capturedAt", "finishedAt", "project");
+                for (var section : List.of("epics", "assignableUsers", "issueTypes", "boards", "sprints")) {
+                    var values = environment.getAsJsonObject(section);
+                    var status = JiraSkillEnvironment.select(values, "status", "complete", "reason", "support", "error");
+                    status.addProperty("count", values.getAsJsonArray("items").size());
+                    summary.add(section, status);
+                }
+                result.add("environment", summary);
+            }
             machineData = result;
             print("Exported " + NAME + " (" + language + ") to " + destination + ".");
+            if (environment != null) {
+                var incomplete = new java.util.ArrayList<String>();
+                for (var section : List.of("epics", "assignableUsers", "issueTypes", "boards", "sprints")) {
+                    if (!environment.getAsJsonObject(section).get("complete").getAsBoolean()) {
+                        incomplete.add(section);
+                    }
+                }
+                if (!incomplete.isEmpty()) {
+                    print("Environment snapshot is incomplete: " + String.join(", ", incomplete)
+                            + ". See references\\environment.json for scope and query status.");
+                }
+            }
         }
 
         private static String bundled(Path file, Language language) throws IOException {

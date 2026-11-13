@@ -9,6 +9,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -56,6 +58,17 @@ record JiraIssueDocument(JsonObject metadata, String body) {
             throw wrong("Issue document must not exceed 1 MiB.");
         }
         return parse(Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    static JiraIssueDocument readTemplate(Path file, InputStream input) throws IOException {
+        if (!file.toString().equals("-")) {
+            return read(file);
+        }
+        var bytes = input.readNBytes(SIZE_LIMIT + 1);
+        if (bytes.length > SIZE_LIMIT) {
+            throw wrong("Issue document must not exceed 1 MiB.");
+        }
+        return parse(StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString());
     }
 
     static JiraIssueDocument parse(String source) throws IOException {

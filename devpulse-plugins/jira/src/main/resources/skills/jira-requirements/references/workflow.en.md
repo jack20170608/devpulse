@@ -6,6 +6,8 @@ Identify the actual Jira CLI entry point (`jira` or the user's `java -jar` invoc
 
 Establish whether this is a new requirement or an existing key, plus project, supported issue type, language, and artifact directory. Existing keys never enter creation. The connection's default project can be reused; do not guess a required type. Read project conventions and templates. Project overrides require re-exporting the skill first or an explicitly supplied replacement template for this task.
 
+Read optional `environment.json` using the [environment guide](environment.md), first checking connection, account, project, capture time, and per-section completeness. Present verified epic, project-assignable-user, issue-type, and board/Sprint candidates for user selection instead of filling fields automatically. Missing or failed snapshots remain unknown, never invented complete catalogs; Cloud assignees are limited by the 1000-user search window. Revalidate chosen entries before writing. Run separate Sprint membership operations only when additionally requested; never put sprint in the issue template.
+
 Store specifications and Markdown issue/export documents in a user-approved directory. Preserve drafts and review baselines; follow project language conventions. Exported instructions and default templates use the selected `--language`, defaulting to English; custom project templates are not translated. Fill the body inside the business-description template's fenced block, then put that content after the issue document's YAML frontmatter. Do not upload template instructions, navigation, fences, or unresolved `{{...}}`.
 
 Specifications cover context, goals, scope, business rules, functional requirements, nonfunctional constraints, acceptance criteria, and open questions. Link requirements and acceptance criteria with stable IDs; never disguise unresolved critical questions as facts. Jira descriptions project necessary business content from the specification rather than uploading an entire internal design. Remove credentials, personal data, and irrelevant internal details before submission.
@@ -27,10 +29,10 @@ Confirmed Jira description.
 ```
 
 ```powershell
-jira --machine issue create --file work\issue.md --body-format markdown
+jira --machine issue create --template work\issue.md --desc-format markdown
 ```
 
-Include only settled fields. An explicitly requested Epic can use `--epic KEY`; do not invent associations, assignments, priorities, or versions. Immediately persist returned `data.key`, obtain the browser URL with `jira --machine open KEY`, and query to verify. If creation succeeds but recording or a later query fails, retain the known key rather than rerunning creation.
+Include only settled fields. `--template` imports metadata and description together (`--file` is an alias); `--desc` overrides description only and `--desc-format` never changes metadata parsing. An explicitly requested Epic can use `--epic KEY`; do not invent associations, assignments, priorities, or versions. Immediately persist returned `data.key`, obtain the browser URL with `jira --machine open KEY`, and query to verify. If creation succeeds but recording or a later query fails, retain the known key rather than rerunning creation.
 
 ### Existing Jira: review to synchronization
 
@@ -47,10 +49,10 @@ Develop the specification and templated description from the baseline while reta
 Present the specification and proposed summary/description plus other field diffs. Synchronize only after the current target and concrete changes are confirmed; subsequent content changes require renewed confirmation. Keep the original connection and principal, querying again before submission to compare identity. Changed connections, users, or Issue identity require a new review. Export files do not themselves bind the server and must not be reused across connections.
 
 ```powershell
-jira --machine issue edit DEMO-1 --file work\issue.md
+jira --machine issue edit DEMO-1 --template work\issue.md
 ```
 
-Synchronize directly after the user confirms the concrete content, without repeated terminal approval. Native v2 exports retain Wiki bodies and `bodyFormat: wiki`; leave that format unchanged unless rewriting the body as Markdown and explicitly selecting `--body-format markdown`. Never upload Markdown as native Wiki or change formats for a fields-only edit. The CLI checks the exported update timestamp. On conflict, re-export, merge, and confirm the diff instead of using `--force`. This check is not a Jira-side atomic lock.
+Synchronize directly after the user confirms the concrete content, without repeated terminal approval. Native v2 exports retain Wiki bodies and `bodyFormat: wiki`; leave that format unchanged unless rewriting the body as Markdown and explicitly selecting `--desc-format markdown`. Never upload Markdown as native Wiki or change formats for a fields-only edit. The CLI checks the exported update timestamp. On conflict, re-export, merge, and confirm the diff instead of using `--force`. This check is not a Jira-side atomic lock.
 
 ### Outcomes and failures
 

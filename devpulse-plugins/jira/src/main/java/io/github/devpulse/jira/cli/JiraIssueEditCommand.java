@@ -5,7 +5,6 @@ import static io.github.devpulse.jira.cli.JiraCommand.nonblank;
 import static io.github.devpulse.jira.cli.JiraCommand.object;
 import static io.github.devpulse.jira.cli.JiraCommand.setNamed;
 import static io.github.devpulse.jira.cli.JiraCommand.string;
-import static io.github.devpulse.jira.cli.JiraCommand.text;
 import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 
 import com.google.gson.JsonArray;
@@ -15,7 +14,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.math.BigDecimal;
 import java.util.HashSet;
@@ -30,9 +28,7 @@ import picocli.CommandLine.Parameters;
         description = "Edit selected issue fields, or update an exported file.")
 public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Mixin
-    JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
-    @Mixin
-    JiraCommand.TemplateFormat templateFormat = new JiraCommand.TemplateFormat();
+    JiraCommand.DescriptionFormat descriptionFormat = new JiraCommand.DescriptionFormat();
     @Parameters(index = "0", paramLabel = "KEY")
     String key;
     @Option(names = {"-s", "--summary"}, paramLabel = "TEXT",
@@ -69,19 +65,17 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     @Option(names = "--affects-version", paramLabel = "NAME",
             description = "Add an affected version; prefix with - to remove. Repeatable.")
     List<String> affectsVersions;
-    @Option(names = {"-b", "--body"}, paramLabel = "MARKDOWN",
-            description = "Replace description; an empty string clears it.")
+    @Option(names = {"--desc", "-b", "--body"}, paramLabel = "TEXT",
+            description = "Description only; - reads stdin, an empty string clears it. "
+                    + "Overrides the template description, not its metadata. "
+                    + "--body is a compatibility alias.")
     String body;
-    @Option(names = "--template", paramLabel = "FILE",
-            description = "Replace description from UTF-8 file, or - for stdin; "
-                    + "see --template-format for input format.")
-    Path template;
     @Option(names = "--custom", paramLabel = "FIELD=HOCON",
             description = "Set customfield_ID to a HOCON value. Repeatable.")
     List<String> custom;
-    @Option(names = "--file", paramLabel = "ISSUE.md",
-            description = "Read YAML metadata and description; flags override "
-                    + "the document, with export/concurrency checks retained.")
+    @Option(names = {"--template", "--file"}, paramLabel = "ISSUE.md|-",
+            description = "Complete Markdown issue document: YAML metadata and "
+                    + "description; - reads stdin. Flags override values, not baseline checks.")
     Path file;
     @Option(names = "--no-input",
             description = "Never prompt; at least one edit or --file is required.")
@@ -93,14 +87,14 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
 
     @Override
     protected void execute() throws IOException {
-        var format = templateFormat.resolve(template, bodyFormat);
-        if (body != null && template != null) {
-            throw wrong("Use either --body or --template, not both.");
+        if ("-".equals(body) && file != null && file.toString().equals("-")) {
+            throw wrong("Cannot read both --desc and --template from stdin.");
         }
         if (epic != null && parent != null) {
             throw wrong("Use either --epic or --parent, not both.");
         }
-        var document = file == null ? null : JiraIssueDocument.read(file);
+        var document = file == null ? null : JiraIssueDocument.readTemplate(file, System.in);
+        var format = descriptionFormat.resolve(document, body != null);
         var interactive = document == null && !hasEdits();
         if (interactive && (noInput || System.console() == null)) {
             throw wrong("Supply at least one edit option or --file; "
@@ -124,7 +118,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             if (assignee != null) {
                 overridden.add("assignee");
             }
-            if (body != null || template != null) {
+            if (body != null) {
                 overridden.add("description");
             }
             if (epic != null || parent != null) {
@@ -152,11 +146,10 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
             }
             fields = imported;
             if (description == null && !document.body().isBlank()) {
-                description = document.changedBody(bodyFormat.format,
+                description = document.changedBody(descriptionFormat.format,
                         document.string("descriptionSha256") != null ? null
                                 : JiraIssueOperations.View.markdownDescription(
                                         current.get("description"), jira.apiVersion() == 3));
-                format = bodyFormat.format == null ? document.bodyFormat() : bodyFormat.format;
             }
         }
         if (interactive) {
@@ -247,7 +240,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
                 || assignee != null || parent != null || labels != null
                 || components != null || fixVersions != null
                 || affectsVersions != null || body != null
-                || template != null || custom != null;
+                || custom != null;
     }
 
     private void prepareFields(JsonObject fields) throws IOException {
@@ -260,15 +253,7 @@ public final class JiraIssueEditCommand extends JiraCommand.Action {
     }
 
     private String description() throws IOException {
-        if (body != null) {
-            return body;
-        }
-        if (template == null) {
-            return null;
-        }
-        return template.toString().equals("-")
-                ? new String(System.in.readAllBytes(), StandardCharsets.UTF_8)
-                : text(template);
+        return JiraCommand.readBody(body, System.in);
     }
 
     private String prompt(String label) throws IOException {

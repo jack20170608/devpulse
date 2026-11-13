@@ -6,6 +6,21 @@
 
 [项目首页](../readme.MD)
 
+### 快速安装
+
+在仓库根目录先运行 `bash build.sh dist`，然后进入 `devpulse-dist`：
+
+```bash
+cd devpulse-dist
+./install.sh jira
+# 或安装 Pulse
+./install.sh pulse
+export PATH="$HOME/.local/bin:$PATH"
+jira --help
+```
+
+默认从安装脚本旁的 `target` 目录安装，无需 `--local`、`--tool` 或 `--base-url`；存在多个版本时自动安装版本号最高的归档，也可使用 `./install.sh jira --version 0.1.2` 明确选择。不自动构建或下载；在 Windows 上使用 Git Bash，也可执行 `bash install.sh jira`。默认安装到 `$HOME/.local`，仍会校验归档和 JAR，且不覆盖非受管文件。
+
 ### 工具边界
 
 `pulse` 包含任务运行以及 `init`、`review`、`status`、`stop` 子命令；`jira` 是独立工具。`gather` 也有自己的可执行 JAR，但目前不发布安装归档。`devpulse-cli/target/devpulse.jar` 保留旧的 `devpulse <子命令>` 用法，不进入单工具发行包。选择安装 Jira 不会安装 Pulse；选择安装 Pulse 不会安装 Jira 或 Gather 命令。
@@ -24,7 +39,7 @@ Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接�
 
 ### 按需安装、升级和卸载
 
-从可信仓库取得 `devpulse-dist/install.sh`，不要直接执行未经审核的远程脚本。**正式发布渠道暂未配置，当前没有公开可下载的版本。**未来发布时先将根 `pom.xml` 的 `<revision>` 改为非 `SNAPSHOT` 版本，再上传两个归档及各自的 SHA-256 文件到同一可信地址。安装器需 `tar`、`sha256sum` 和 Bash；HTTPS 下载还需 `curl`。通过 `--base-url` 指定发行文件的 HTTPS 地址、`file://` URL 或普通本地目录，也可使用 `--local` 快速安装。安装器校验所选归档及 JAR，不在终端用户机器上运行 Maven。默认前缀为 `$HOME/.local`，应把该目录下的 `bin` 加入 `PATH`。
+从可信仓库取得 `devpulse-dist/install.sh`，不要直接执行未经审核的远程脚本。**正式发布渠道暂未配置，当前没有公开可下载的版本。**未来发布时先将根 `pom.xml` 的 `<revision>` 改为非 `SNAPSHOT` 版本，再上传两个归档及各自的 SHA-256 文件到同一可信地址。安装器需 `tar`、`sha256sum` 和 Bash；HTTPS 下载还需 `curl`。通过 `--base-url` 指定发行文件的 HTTPS 地址、`file://` URL 或普通本地目录，也可直接传入工具名，从默认本地目录安装。安装器校验所选归档及 JAR，不在终端用户机器上运行 Maven。默认前缀为 `$HOME/.local`，应把该目录下的 `bin` 加入 `PATH`。
 
 ```bash
 RELEASE_URL="https://example.org/devpulse/releases/v0.1.0"
@@ -44,24 +59,24 @@ bash devpulse-dist/install.sh --uninstall --tool pulse
 ```bash
 bash build.sh dist
 
-# 按需安装；自动定位脚本旁的 target，并识别所选工具的唯一归档版本
-bash devpulse-dist/install.sh --local --tool pulse
-bash devpulse-dist/install.sh --local --tool jira
+# 按需安装；自动定位脚本旁的 target，并选择所选工具的最高版本
+bash devpulse-dist/install.sh pulse
+bash devpulse-dist/install.sh jira
 
 export PATH="$HOME/.local/bin:$PATH"
 pulse --help
 jira --help
 ```
 
-`--local` 不自动构建；归档和校验文件应先生成在 `devpulse-dist/target/`。默认目录相对于安装脚本定位，与调用时的工作目录无关。所选工具有多个版本时必须传入 `--version`，不猜测最新版本。重复安装同版本时，在归档及 JAR 校验通过后直接覆盖安装器管理的 JAR 和启动入口，无需先卸载；校验失败保留原安装，不覆盖非受管版本目录或软链接。显式版本应与根 `pom.xml` 的 `<revision>` 一致。
+本地安装默认开启，原有 `--local --tool jira` 用法仍兼容。不自动构建；归档和校验文件应先生成在 `devpulse-dist/target/`。默认目录相对于安装脚本定位，与调用时的工作目录无关。未传入 `--version` 时使用 `LC_ALL=C sort -V` 选择最高版本，例如 `0.1.10` 高于 `0.1.9`，不按文件修改时间选择。这是自然版本排序，并非严格的 SemVer 优先级规则；预发布版本也参与排序。需要支持 `-V` 的 GNU 兼容 `sort`（Git Bash 自带；macOS 可安装 GNU coreutils，或显式传入 `--version` 跳过排序）。重复安装同版本时，在归档及 JAR 校验通过后直接覆盖安装器管理的 JAR 和启动入口，无需先卸载；校验失败保留原安装，不覆盖非受管版本目录或软链接。显式版本应与根 `pom.xml` 的 `<revision>` 一致。
 
 本地源推荐直接传目录，无需手工拼接 `file://` 或调用 `cygpath`：
 
 ```bash
-bash devpulse-dist/install.sh --local --tool jira --base-url "./devpulse-dist/target"
+bash devpulse-dist/install.sh jira --base-url "./devpulse-dist/target"
 bash devpulse-dist/install.sh --tool jira --version 0.1.0-SNAPSHOT \
   --base-url 'D:\release files\devpulse'
-bash devpulse-dist/install.sh --local --tool jira --base-url "/opt/devpulse/releases"
+bash devpulse-dist/install.sh jira --base-url "/opt/devpulse/releases"
 ```
 
 支持相对路径、POSIX 绝对路径、Git Bash 的 `/d/...` 和 Windows 的 `D:/...`、`D:\...`；Git Bash 与 WSL 会转换常见盘符路径，WSL 使用默认 `/mnt/<盘符>` 挂载布局。Linux/macOS 无法直接访问未挂载的 Windows 盘符，应传实际挂载路径。空格、中文、`#` 和字面 `%` 的普通目录路径无需 URL 编码，但必须正确加引号。保留 `file://` 支持，包括 `file:///D:/...`、`file:///d/...`、`file://localhost/...` 和 `%20` 等百分号编码；URL 中的字面 `%` 必须写为 `%25`。本地源直接复制文件，不经过 curl；目录、归档或校验文件缺失时给出具体路径。
@@ -77,6 +92,21 @@ bash devpulse-dist/install.sh --local --tool jira --base-url "/opt/devpulse/rele
 ## English
 
 [Project home](../readme.MD)
+
+### Quick installation
+
+Run `bash build.sh dist` from the repository root first, then enter `devpulse-dist`:
+
+```bash
+cd devpulse-dist
+./install.sh jira
+# Or install Pulse
+./install.sh pulse
+export PATH="$HOME/.local/bin:$PATH"
+jira --help
+```
+
+By default, install from `target` beside the installer without `--local`, `--tool`, or `--base-url`; when multiple versions exist, automatically install the highest-version archive, or select one explicitly with `./install.sh jira --version 0.1.2`. No automatic builds or downloads occur. On Windows, use Git Bash; `bash install.sh jira` also works. Installation defaults to `$HOME/.local`, still verifies the archive and JAR, and never overwrites unmanaged files.
 
 ### Tool boundaries
 
@@ -96,7 +126,7 @@ For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct ex
 
 ### Selective installation, upgrades, and removal
 
-Obtain `devpulse-dist/install.sh` from a trusted checkout; do not execute an unreviewed remote script directly. **No formal publishing channel is configured yet, so no publicly downloadable version exists.** For a future release, change the root `pom.xml`'s `<revision>` to a non-`SNAPSHOT` version and upload both archives and their SHA-256 files to the same trusted location. The installer needs `tar`, `sha256sum`, and Bash; HTTPS downloads additionally need `curl`. Pass `--base-url` with an HTTPS address, `file://` URL, or plain local directory, or use `--local` for quick installation. The installer checks the selected archive and JAR without using Maven on the target machine. The default prefix is `$HOME/.local`; add its `bin` directory to `PATH`.
+Obtain `devpulse-dist/install.sh` from a trusted checkout; do not execute an unreviewed remote script directly. **No formal publishing channel is configured yet, so no publicly downloadable version exists.** For a future release, change the root `pom.xml`'s `<revision>` to a non-`SNAPSHOT` version and upload both archives and their SHA-256 files to the same trusted location. The installer needs `tar`, `sha256sum`, and Bash; HTTPS downloads additionally need `curl`. Pass `--base-url` with an HTTPS address, `file://` URL, or plain local directory, or simply supply the tool name to install from the default local directory. The installer checks the selected archive and JAR without using Maven on the target machine. The default prefix is `$HOME/.local`; add its `bin` directory to `PATH`.
 
 ```bash
 RELEASE_URL="https://example.org/devpulse/releases/v0.1.0"
@@ -116,24 +146,24 @@ Prepare JDK 25+, Maven, Bash, `tar`, and `sha256sum`, then run these commands fr
 ```bash
 bash build.sh dist
 
-# Install as needed; find target beside the script and infer the tool's unique archive version
-bash devpulse-dist/install.sh --local --tool pulse
-bash devpulse-dist/install.sh --local --tool jira
+# Install as needed; find target beside the script and select the tool's highest version
+bash devpulse-dist/install.sh pulse
+bash devpulse-dist/install.sh jira
 
 export PATH="$HOME/.local/bin:$PATH"
 pulse --help
 jira --help
 ```
 
-`--local` does not build automatically; generate archives and checksum files in `devpulse-dist/target/` first. The default directory is resolved relative to the installer, independently of the caller's working directory. When multiple versions of the selected tool exist, specify `--version`; the installer never guesses the latest version. Reinstalling the same version directly replaces its installer-managed JAR and launcher after archive and JAR verification, without uninstalling first. Verification failures preserve the previous installation; unmanaged version directories and symlinks are not overwritten. Match explicit versions to `<revision>` in the root `pom.xml`.
+Local installation is enabled by default; the original `--local --tool jira` usage remains compatible. No automatic builds occur; generate archives and checksum files in `devpulse-dist/target/` first. The default directory is resolved relative to the installer, independently of the caller's working directory. Without `--version`, use `LC_ALL=C sort -V` to select the highest version, so `0.1.10` sorts above `0.1.9`, independently of file modification times. This is natural version sorting, not strict SemVer precedence; prerelease versions also participate. A GNU-compatible `sort` supporting `-V` is required (included with Git Bash; on macOS, install GNU coreutils or pass an explicit `--version` to skip sorting). Reinstalling the same version directly replaces its installer-managed JAR and launcher after archive and JAR verification, without uninstalling first. Verification failures preserve the previous installation; unmanaged version directories and symlinks are not overwritten. Match explicit versions to `<revision>` in the root `pom.xml`.
 
 For local sources, pass the directory directly instead of constructing a `file://` URL or calling `cygpath`:
 
 ```bash
-bash devpulse-dist/install.sh --local --tool jira --base-url "./devpulse-dist/target"
+bash devpulse-dist/install.sh jira --base-url "./devpulse-dist/target"
 bash devpulse-dist/install.sh --tool jira --version 0.1.0-SNAPSHOT \
   --base-url 'D:\release files\devpulse'
-bash devpulse-dist/install.sh --local --tool jira --base-url "/opt/devpulse/releases"
+bash devpulse-dist/install.sh jira --base-url "/opt/devpulse/releases"
 ```
 
 Supported forms include relative paths, absolute POSIX paths, Git Bash `/d/...`, and Windows `D:/...` or `D:\...`. Git Bash and WSL convert common drive paths; WSL assumes the default `/mnt/<drive>` layout. Linux/macOS cannot directly access an unmounted Windows drive; supply its actual mounted path instead. Plain directory paths containing spaces, Chinese characters, `#`, or literal `%` need quoting but no URL encoding. Existing `file://` support is retained, including `file:///D:/...`, `file:///d/...`, `file://localhost/...`, and percent escapes such as `%20`; a literal `%` in a URL must be `%25`. Local sources are copied directly without curl, with specific path errors for missing directories, archives, or checksum files.

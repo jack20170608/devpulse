@@ -17,6 +17,7 @@ import io.github.devpulse.jira.JiraClient;
 import io.github.devpulse.jira.JiraConfiguration;
 import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -26,7 +27,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -100,6 +100,10 @@ public final class JiraCommand implements Runnable {
 
     static String text(Path file) throws IOException {
         return Files.readString(file, StandardCharsets.UTF_8);
+    }
+
+    static String readBody(String body, InputStream input) throws IOException {
+        return "-".equals(body) ? new String(input.readAllBytes(), StandardCharsets.UTF_8) : body;
     }
 
     static com.typesafe.config.Config load(Path file)
@@ -225,40 +229,19 @@ public final class JiraCommand implements Runnable {
         }
     }
 
-    static final class TemplateFormat {
-        enum Format { auto, markdown, wiki }
-
-        @Option(names = "--template-format", paramLabel = "auto|markdown|wiki",
-                defaultValue = "auto",
-                description = "Template input format: ${COMPLETION-CANDIDATES}. "
-                        + "Default: auto; .md/.markdown (case-insensitive) "
-                        + "means Markdown, otherwise Wiki (including stdin). "
+    static final class DescriptionFormat {
+        @Option(names = {"--desc-format", "--body-format"}, paramLabel = "markdown|wiki",
+                description = "Description format: ${COMPLETION-CANDIDATES}. "
+                        + "Default: markdown, or the document/export body format. "
+                        + "Metadata is unaffected. --body-format is a compatibility alias. "
                         + "Wiki requires REST API v2.")
-        Format format = Format.auto;
+        JiraMarkdown.Format format;
 
-        JiraMarkdown.Format resolve(Path template, BodyFormat bodyFormat)
-                throws IOException {
-            if (format != Format.auto) {
-                if (template == null) {
-                    throw wrong("--template-format requires --template.");
-                }
-                if (bodyFormat.format != null) {
-                    throw wrong("Use either --template-format or --body-format "
-                            + "to select an explicit format, not both.");
-                }
-                return JiraMarkdown.Format.valueOf(format.name());
+        JiraMarkdown.Format resolve(JiraIssueDocument document, boolean explicitBody) throws IOException {
+            if (format != null) {
+                return format;
             }
-            if (bodyFormat.format != null) {
-                return bodyFormat.format;
-            }
-            if (template == null) {
-                return JiraMarkdown.Format.markdown;
-            }
-            var name = template.getFileName();
-            var filename = name == null ? ""
-                    : name.toString().toLowerCase(Locale.ROOT);
-            return filename.endsWith(".md") || filename.endsWith(".markdown")
-                    ? JiraMarkdown.Format.markdown : JiraMarkdown.Format.wiki;
+            return document != null && !explicitBody ? document.bodyFormat() : JiraMarkdown.Format.markdown;
         }
     }
 
@@ -458,7 +441,7 @@ public final class JiraCommand implements Runnable {
             + "fields; reject changed remote issues by default.")
     static final class Update extends Action {
         @Mixin
-        BodyFormat bodyFormat = new BodyFormat();
+        DescriptionFormat descriptionFormat = new DescriptionFormat();
         @Option(names = "--file", required = true, paramLabel = "ISSUE.md")
         Path file;
         @Option(names = "--force", description = "Override the remote "
@@ -474,7 +457,7 @@ public final class JiraCommand implements Runnable {
             edit.file = file;
             edit.force = force;
             edit.noInput = true;
-            edit.bodyFormat = bodyFormat;
+            edit.descriptionFormat = descriptionFormat;
             edit.spec = spec;
             edit.execute();
             machineData = edit.machineData;

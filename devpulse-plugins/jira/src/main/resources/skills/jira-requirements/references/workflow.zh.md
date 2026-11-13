@@ -6,6 +6,8 @@
 
 先确认目标是新需求还是已有 key，以及项目、实际支持的 Issue 类型、语言和产物目录。已有 key 不走创建分支。项目可复用连接配置的默认值，不能猜测必填类型。读取项目规范和模板；需要项目模板覆盖时，应先由用户重新导出 Skill，或明确提供本次替代模板。
 
+按 [环境说明](environment.md) 读取可选的 `environment.json`，先核对连接、账号、目标项目、采集时间及各节的完整性。向用户提供已核验的 Epic、项目可指派成员、Issue Type 和看板/Sprint 候选，让用户选择而非自动填值。快照不存在或查询失败时标为未知，不编造完整列表；Cloud 可指派用户快照受 1000 用户窗口限制。写入前重新核验所选项的当前适用性。仅在用户另外明确要求时才执行独立的 Sprint 加入操作，不将 sprint 写入 Issue 模板。
+
 在用户认可的目录保存规格书和 Markdown Issue/导出文件。保留已有稿件，不覆盖审阅基线；遵循项目语言约定。导出包的说明与默认模板按 `--language` 选择语言，默认英文；项目自定义模板不会自动翻译。填充业务描述模板代码块中的正文，再放入 Issue 文件 YAML frontmatter 之后；不上传模板说明、导航、代码围栏或未替换的 `{{...}}`。
 
 规格书覆盖背景、目标、范围、业务规则、功能需求、非功能约束、验收标准和未决问题。需求与验收标准用稳定 ID 关联；未确认的关键问题不能伪装成既定事实。Jira 描述是规格书的必要业务摘要，不是整份内部设计文档；上传前剔除凭据、个人数据及无关内部细节。
@@ -27,10 +29,10 @@ Confirmed Jira description.
 ```
 
 ```powershell
-jira --machine issue create --file work\issue.md --body-format markdown
+jira --machine issue create --template work\issue.md --desc-format markdown
 ```
 
-仅包含用户确定的字段；Epic 可用明确的 `--epic KEY`，不要猜测关联、指派、优先级或版本。成功后立即保存返回的 `data.key`，使用 `jira --machine open KEY` 取得浏览器链接，再查询核验。若创建成功但本地记录或后续查询失败，保留已知 key，不能重跑创建。
+仅包含用户确定的字段；`--template` 同时导入 metadata 和描述（`--file` 为别名），`--desc` 只覆盖描述，`--desc-format` 不改变 metadata 的解析。Epic 可用明确的 `--epic KEY`，不要猜测关联、指派、优先级或版本。成功后立即保存返回的 `data.key`，使用 `jira --machine open KEY` 取得浏览器链接，再查询核验。若创建成功但本地记录或后续查询失败，保留已知 key，不能重跑创建。
 
 ### 已有 Jira：评审到同步
 
@@ -47,10 +49,10 @@ jira --machine export DEMO-1 --file work\baseline.md
 向用户展示规格和拟提交的标题/描述及其他字段差异。只有本次目标和具体差异已确认后才同步；后续内容改变须重新确认。固定原来的连接和用户，提交前再次查询并比较目标身份；连接、用户或 Issue 身份变化即停止重新评审。导出文件自身不绑定服务器，不能跨连接复用。
 
 ```powershell
-jira --machine issue edit DEMO-1 --file work\issue.md
+jira --machine issue edit DEMO-1 --template work\issue.md
 ```
 
-用户确认具体内容后直接同步，不重复要求终端批准。v2 原生导出保留 Wiki 正文和 `bodyFormat: wiki`；只有将正文重写为 Markdown 并显式指定 `--body-format markdown` 时才切换格式。不能把 Markdown 当作原生 Wiki 上传，也不能为仅修改字段而切换格式。CLI 检查导出时的更新时间；冲突时不使用 `--force`，重新导出、合并并确认差异。检查不是 Jira 端原子锁。
+用户确认具体内容后直接同步，不重复要求终端批准。v2 原生导出保留 Wiki 正文和 `bodyFormat: wiki`；只有将正文重写为 Markdown 并显式指定 `--desc-format markdown` 时才切换格式。不能把 Markdown 当作原生 Wiki 上传，也不能为仅修改字段而切换格式。CLI 检查导出时的更新时间；冲突时不使用 `--force`，重新导出、合并并确认差异。检查不是 Jira 端原子锁。
 
 ### 结果与故障
 

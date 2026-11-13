@@ -249,6 +249,58 @@ class JiraIssueDocumentTest {
     }
 
     @Test
+    void recognizesLocalizedStoryPointsWithoutGuessingNumericFields() throws Exception {
+        var metadata = JsonParser.parseString("""
+                [{"id":"customfield_10020","name":"故事点",
+                  "schema":{"custom":"com.atlassian.jira.plugin.system.customfieldtypes:float"}},
+                 {"id":"customfield_10021","name":"Budget",
+                  "schema":{"custom":"com.atlassian.jira.plugin.system.customfieldtypes:float"}}]
+                """).getAsJsonArray();
+
+        assertThat(JiraAgileCommands.storyPointsField(metadata)).isEqualTo("customfield_10020");
+        assertThat(document("story-point: 5").fields(true, false, Set.of(), metadata)
+                .get("customfield_10020").getAsInt()).isEqualTo(5);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"name\":\"故事点估算\"}",
+            "{\"name\":\"团队估算\",\"untranslatedName\":\"Story Points\"}",
+            "{\"name\":\"团队估算\",\"untranslatedName\":\"Story point estimate\"}",
+            "{\"name\":null,\"untranslatedName\":\"Story Points\"}"
+    })
+    void recognizesStoryPointsByLocalizedOrUntranslatedName(String properties) throws Exception {
+        var field = JsonParser.parseString(properties).getAsJsonObject();
+        field.addProperty("id", "customfield_10020");
+        var metadata = new JsonArray();
+        metadata.add(field);
+
+        assertThat(JiraAgileCommands.storyPointsField(metadata)).isEqualTo("customfield_10020");
+    }
+
+    @Test
+    void rejectsAmbiguousLocalizedStoryPointsFields() {
+        var metadata = JsonParser.parseString("""
+                [{"id":"customfield_10020","name":"故事点"},
+                 {"id":"customfield_10021","name":"Estimate","untranslatedName":"Story Points"}]
+                """).getAsJsonArray();
+
+        assertThatThrownBy(() -> JiraAgileCommands.storyPointsField(metadata))
+                .isInstanceOf(IOException.class).hasMessageContaining("ambiguous");
+    }
+
+    @Test
+    void doesNotInferStoryPointsFromNumericSchemaOrSystemFieldNames() throws Exception {
+        var metadata = JsonParser.parseString("""
+                [{"id":"customfield_10021","name":"Budget","untranslatedName":null,
+                  "schema":{"custom":"com.atlassian.jira.plugin.system.customfieldtypes:float"}},
+                 {"id":"timeestimate","name":"Story Points"}]
+                """).getAsJsonArray();
+
+        assertThat(JiraAgileCommands.storyPointsField(metadata)).isNull();
+    }
+
+    @Test
     void rejectsMissingAndAmbiguousDynamicFields() throws Exception {
         var document = document("story-point: 3");
         var ambiguous = FIELD_METADATA.deepCopy();

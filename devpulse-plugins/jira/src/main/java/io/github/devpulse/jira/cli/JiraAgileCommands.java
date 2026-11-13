@@ -108,7 +108,7 @@ public final class JiraAgileCommands {
                             + "--name must equal --summary, or omit --summary.");
                 }
                 if (summary == null && file != null) {
-                    var summary = JiraIssueDocument.read(file).string("summary");
+                    var summary = issueDocument().string("summary");
                     if (summary != null && !name.equals(summary)) {
                         throw wrong("This Cloud project has no Epic Name field; "
                                 + "--name must match the template summary.");
@@ -469,11 +469,21 @@ public final class JiraAgileCommands {
         for (var value : metadata) {
             var field = object(value);
             var id = string(field, "id");
-            var name = field.has("name") && !field.get("name").isJsonNull()
-                    ? field.get("name").getAsString() : "";
-            if (id.matches("customfield_[0-9]+") && (name.equalsIgnoreCase("Story Points")
-                    || name.equalsIgnoreCase("Story point estimate"))) {
-                matches.add(id);
+            if (!id.matches("customfield_[0-9]+")) {
+                continue;
+            }
+            for (var property : List.of("name", "untranslatedName")) {
+                var valueName = field.get(property);
+                if (valueName == null || !valueName.isJsonPrimitive()
+                        || !valueName.getAsJsonPrimitive().isString()) {
+                    continue;
+                }
+                var name = valueName.getAsString().strip();
+                if (name.equalsIgnoreCase("Story Points")
+                        || name.equalsIgnoreCase("Story point estimate")
+                        || name.equals("故事点") || name.equals("故事点估算")) {
+                    matches.add(id);
+                }
             }
         }
         if (matches.size() > 1) {

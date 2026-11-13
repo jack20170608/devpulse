@@ -4,7 +4,6 @@ import static io.github.devpulse.jira.cli.JiraCommand.customFields;
 import static io.github.devpulse.jira.cli.JiraCommand.nonblank;
 import static io.github.devpulse.jira.cli.JiraCommand.setNamed;
 import static io.github.devpulse.jira.cli.JiraCommand.string;
-import static io.github.devpulse.jira.cli.JiraCommand.text;
 import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 
 import com.google.gson.JsonArray;
@@ -27,13 +26,12 @@ import picocli.CommandLine.Option;
                 + "Markdown issue documents.")
 public class JiraCreateCommand extends JiraCommand.Action {
     @Mixin
-    JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
-    @Mixin
-    JiraCommand.TemplateFormat templateFormat = new JiraCommand.TemplateFormat();
-    @Option(names = "--file", paramLabel = "ISSUE.md",
-            description = "YAML metadata and description in one Markdown file; "
-                    + "explicit flags override document fields.")
+    JiraCommand.DescriptionFormat descriptionFormat = new JiraCommand.DescriptionFormat();
+    @Option(names = {"--template", "--file"}, paramLabel = "ISSUE.md|-",
+            description = "Complete Markdown issue document: YAML metadata and "
+                    + "description; - reads stdin. Explicit flags override it.")
     Path file;
+    private JiraIssueDocument document;
     @Option(names = {"-p", "--project"}, paramLabel = "KEY",
             description = "Project key; defaults to template or connection configuration.")
     String project;
@@ -73,14 +71,11 @@ public class JiraCreateCommand extends JiraCommand.Action {
     @Option(names = "--story-point", paramLabel = "NUMBER",
             description = "Story Points; overrides document metadata.")
     BigDecimal storyPoint;
-    @Option(names = {"-b", "--body"}, paramLabel = "MARKDOWN",
-            description = "Description text; conflicts with --template.")
+    @Option(names = {"--desc", "-b", "--body"}, paramLabel = "TEXT",
+            description = "Description only; - reads stdin. "
+                    + "Overrides the template description, not its metadata. "
+                    + "--body is a compatibility alias.")
     String body;
-    @Option(names = "--template", paramLabel = "FILE",
-            description = "UTF-8 description file, or - for stdin; "
-                    + "overrides the issue document body. "
-                    + "See --template-format for input format.")
-    Path template;
     @Option(names = "--custom", paramLabel = "FIELD=HOCON",
             description = "Repeat to set customfield_ID using a "
                     + "HOCON value; overrides template custom fields.")
@@ -91,10 +86,9 @@ public class JiraCreateCommand extends JiraCommand.Action {
 
     @Override
     protected void execute() throws IOException {
-        if (body != null && template != null) {
-            throw wrong("Use either --body or --template, not both.");
+        if ("-".equals(body) && file != null && file.toString().equals("-")) {
+            throw wrong("Cannot read both --desc and --template from stdin.");
         }
-        var format = templateFormat.resolve(template, bodyFormat);
         var epicSupplied = epic != null;
         if (epic != null && epic.isBlank()) {
             epic = null;
@@ -105,7 +99,8 @@ public class JiraCreateCommand extends JiraCommand.Action {
                 throw wrong("Use either --epic or --parent, not both.");
             }
         }
-        var document = file == null ? null : JiraIssueDocument.read(file);
+        var document = issueDocument();
+        var format = descriptionFormat.resolve(document, body != null);
         var issue = new JsonObject();
         setNamed(issue, "project", "key", project);
         setNamed(issue, "issuetype", "name", type);
@@ -124,7 +119,7 @@ public class JiraCreateCommand extends JiraCommand.Action {
         if (assignee != null) {
             overridden.add("assignee");
         }
-        if (body != null || template != null) {
+        if (body != null) {
             overridden.add("description");
         }
         if (epicSupplied || parent != null) {
@@ -174,8 +169,7 @@ public class JiraCreateCommand extends JiraCommand.Action {
         }
         if (description != null) {
             issue.add("description", JiraMarkdown.toJira(description,
-                    jira.apiVersion() == 3, document != null && body == null && template == null
-                            && bodyFormat.format == null ? document.bodyFormat() : format));
+                    jira.apiVersion() == 3, format));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
@@ -194,6 +188,13 @@ public class JiraCreateCommand extends JiraCommand.Action {
         var created = jira.create(issue);
         machineData = created;
         print("Created " + string(created, "key"));
+    }
+
+    JiraIssueDocument issueDocument() throws IOException {
+        if (document == null && file != null) {
+            document = JiraIssueDocument.readTemplate(file, System.in);
+        }
+        return document;
     }
 
     private void setEpic(JsonObject issue, JiraClient jira) throws IOException {
@@ -216,13 +217,7 @@ public class JiraCreateCommand extends JiraCommand.Action {
 
     private String description(JiraIssueDocument document) throws IOException {
         if (body != null) {
-            return body;
-        }
-        if (template != null) {
-            return template.toString().equals("-")
-                    ? new String(System.in.readAllBytes(),
-                            StandardCharsets.UTF_8)
-                    : text(template);
+            return JiraCommand.readBody(body, System.in);
         }
         if (document != null) {
             return document.body().isBlank() ? null : document.body();
@@ -233,8 +228,8 @@ public class JiraCreateCommand extends JiraCommand.Action {
             return input.isEmpty() ? null : input;
         }
         if (!noInput && System.console() != null) {
-            return prompt("Description (optional; use --template "
-                    + "for multiline text)");
+            return prompt("Description (optional; use --desc - "
+                    + "for multiline stdin)");
         }
         return null;
     }

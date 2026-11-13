@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage() {
     cat <<'USAGE'
-Usage: install.sh --tool pulse|jira --version VERSION --base-url URL [--prefix DIR]
+Usage: ./install.sh pulse|jira [--version VERSION] [--prefix DIR]
+       install.sh --tool pulse|jira --version VERSION --base-url URL [--prefix DIR]
        install.sh --local --tool pulse|jira [--version VERSION] [--base-url DIR] [--prefix DIR]
        install.sh --uninstall --tool pulse|jira [--prefix DIR]
 
@@ -11,8 +12,9 @@ Installs one tool without Maven or administrator access (requires Java to run).
 The default prefix is ~/.local. Add PREFIX/bin to PATH.
 The source must contain the release tar.gz and its adjacent .tar.gz.sha256 file.
 --base-url accepts HTTPS, file:// URLs, or local directory paths (quote spaces).
---local defaults to target beside this script and infers the version only when
-exactly one archive for the selected tool exists. It does not run a build.
+Defaults to local installation from target beside this script; --local is optional.
+Local sources select the highest version using sort -V unless --version is given.
+Version sorting requires GNU-compatible sort. The installer does not run a build.
 Installing another version upgrades only the selected tool; uninstall removes
 only installer-managed files for the selected tool. Reinstalling the same
 version replaces its managed files after verification.
@@ -83,7 +85,10 @@ while (($#)); do
             option="$1"
             (($# >= 2)) || die "$option requires a value"
             case "$option" in
-                --tool) tool="$2" ;;
+                --tool)
+                    [[ -z "$tool" ]] || die 'select exactly one tool'
+                    tool="$2"
+                    ;;
                 --version) version="$2" ;;
                 --prefix) prefix="$2" ;;
                 --base-url) base_url="$2" ;;
@@ -92,17 +97,21 @@ while (($#)); do
             ;;
         --uninstall) uninstall=true; shift ;;
         --local) local_install=true; shift ;;
+        pulse|jira)
+            [[ -z "$tool" ]] || die 'select exactly one tool'
+            tool="$1"
+            shift
+            ;;
         -h|--help) usage; exit 0 ;;
         *) die "unknown argument: $1" ;;
     esac
 done
 
-[[ "$tool" == pulse || "$tool" == jira ]] || die 'use --tool pulse or --tool jira'
+[[ "$tool" == pulse || "$tool" == jira ]] || die 'use install.sh pulse or install.sh jira'
 if [[ "$uninstall" == false ]]; then
-    if [[ "$local_install" == true && -z "$base_url" ]]; then
+    if [[ -z "$base_url" ]]; then
         base_url="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/target"
     fi
-    [[ -n "$base_url" ]] || die 'provide --base-url or use --local'
     case "$base_url" in
         https://*)
             [[ "$local_install" == false ]] || die '--local requires a local directory, not HTTPS'
@@ -117,14 +126,15 @@ if [[ "$uninstall" == false ]]; then
             source_dir="$(cd -- "$source_dir" && pwd -P)"
             ;;
     esac
-    if [[ "$local_install" == true && -z "$version" ]]; then
+    if [[ -n "$source_dir" && -z "$version" ]]; then
         archives=()
         for candidate in "$source_dir"/devpulse-"$tool"-*.tar.gz; do
             [[ -f "$candidate" ]] && archives+=("$candidate")
         done
         ((${#archives[@]} > 0)) || die "no $tool release archive in $source_dir; build with bash build.sh dist"
-        ((${#archives[@]} == 1)) || die "multiple $tool release archives in $source_dir; specify --version"
-        version="${archives[0]##*/}"
+        latest_archive="$(printf '%s\n' "${archives[@]}" | LC_ALL=C sort -V | tail -n 1)" ||
+            die 'cannot sort local versions; install GNU-compatible sort or specify --version'
+        version="${latest_archive##*/}"
         version="${version#devpulse-"$tool"-}"
         version="${version%.tar.gz}"
     fi

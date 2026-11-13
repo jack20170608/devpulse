@@ -43,7 +43,7 @@ bash run-jira.sh issue list -p DEMO --config connection.conf
 
 ### 由 CLI 提供的需求工作流 Skill
 
-JAR 内置 `jira-requirements` Skill、执行说明、规格书模板及 Jira 描述模板。CLI 只负责离线导出和 Jira 操作；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
+JAR 内置 `jira-requirements` Skill、执行说明、环境说明、规格书模板及 Jira 描述模板。CLI 默认离线导出，也可显式查询 Jira 附带项目环境快照；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
 
 ```powershell
 # 导出到新的项目级 Skill 目录；不需要连接配置或 token
@@ -54,9 +54,16 @@ jira skill export --output chinese-skill --language zh
 
 # 显式选择项目模板目录，也支持 --machine 返回导出清单与模板来源
 jira --machine skill export --output exported-skill --templates team-templates
+
+# 显式联网，只读采集目标项目的环境信息；需要连接配置和 token
+jira --machine skill export --output project-skill --language zh --with-environment --project DEMO
 ```
 
-导出包含 `SKILL.md`、`references\workflow.md`、`templates\specification.md` 和 `templates\jira-description.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow` 和 `jira-description` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
+导出包含 `SKILL.md`、`references\workflow.md`、`references\environment.md`、`templates\specification.md` 和 `templates\jira-description.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow`、`environment` 和 `jira-description` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
+
+`--with-environment` 额外生成 `references\environment.json`，包含采集时间、连接/账号/项目范围、项目关联的 Issue Type（TaskType）、全部可见 Epic、项目可指派用户、看板及各 Scrum 看板的 Sprint。`--project/-p` 覆盖连接默认项目，仅能与该选项一起使用。连接、身份或项目查询失败则终止导出；其他目录查询失败可保留部分快照，每节记录 `status`、`complete`、脱敏错误和数量，机器协议 `data.environment` 返回这些摘要。Epic 和看板/Sprint 遍历分页；重复页、无进展或最多 1000 页的保护不会伪装成完整结果。Cloud 用户查询受官方前 1000 用户窗口限制，遍历窗口后仍标记 `partial`，不宣称取得全部成员；不擅自枚举全站用户或提升权限。成员不是 group 花名册，仅保存账号标识、显示名和 active，不导出邮箱、头像或 token；快照不要自动提交到版本库。
+
+Sprint 信息依赖 Jira Software Agile API 和可见 Scrum 看板；查询成功（包括空列表）才标记 `available`。无可见 Scrum 看板标记 `no-visible-scrum-board`；403、404 或网络异常标记未知，不能直接断言不支持 Sprint。CLI 可查询 Sprint 及通过 `sprint add` 加入迭代，但 Issue 模板没有 `sprint` 别名，不默认执行写操作，也不自动创建、启动或关闭 Sprint。Skill 使用快照前检查范围和时间，写入前重新核验选择；候选不等于授权。
 
 默认从**当前工作目录**的 `.jira\templates` 读取同名 `specification.md`、`jira-description.md` 覆盖内置模板；与连接配置位置无关。`--templates DIR` 改为只从该目录选取覆盖，不混用默认项目目录。两个文件可只提供一个，缺失文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错，其他文件忽略。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。AI 按项目语言规范填充模板正文，不把使用说明或代码围栏上传到 Jira。
 
@@ -83,7 +90,7 @@ jira --machine issue comment add DEMO-1 "Approved comment"
 {"schemaVersion":1,"ok":true,"data":{"key":"DEMO-1","changed":true},"messages":[]}
 ```
 
-机器模式强制禁止交互提示，并禁用隐式 stdin 读取。创建描述、评论正文缺失时不会等待打开的输入管道；需要 stdin 时显式使用 `--template -`（创建/编辑还需按输入选择 `--template-format markdown|wiki`）。缺少必填值直接失败。查询仍只取一页，不自动追踪分页游标；不与 `--plain`、`--csv` 等冲突的输出选项混用。CLI 的人类诊断不输出到 stderr，也不混入 JSON；为防止输入或服务端内容泄漏，本地错误只提供通用说明。JVM 启动器自身的 stderr 不属于本协议。
+机器模式强制禁止交互提示，并禁用隐式 stdin 读取。创建描述、评论正文缺失时不会等待打开的输入管道；创建/编辑用 `--desc -` 读取纯描述，用 `--template -` 读取完整 YAML metadata + 正文，二者不能同时读取 stdin。评论仍用 `--template -` 读取评论正文。缺少必填值直接失败。查询仍只取一页，不自动追踪分页游标；不与 `--plain`、`--csv` 等冲突的输出选项混用。CLI 的人类诊断不输出到 stderr，也不混入 JSON；为防止输入或服务端内容泄漏，本地错误只提供通用说明。JVM 启动器自身的 stderr 不属于本协议。
 
 失败时返回 `error` 对象，包含稳定的 `code`、说明性 `message`、`outcome`（`failed` 或 `unknown`）、`retryable`，HTTP 失败还包含 `httpStatus`。不返回 Jira 错误正文或 token。`retryable` 仅作提示，不代表 CLI 自动重试或允许绕过审批；写操作失败后应先核验远端状态，多请求命令可能已部分完成。
 
@@ -159,7 +166,7 @@ labels: ["backend"]
 This is the issue description.
 ```
 
-metadata 的空字符串或省略字段表示不修改，显式 `null` 表示清空，列表也可用 `[]` 清空；必填的 summary、issuetype 和创建时的 project 不能清空。描述正文为空时保留原描述；空正文配合 `description: null` 清空，也可显式使用 `--body ""`。支持常用 REST 字段及 `customfield_数字`；components、fixVersions、versions 接受名称数组或 REST 引用对象。经办人使用 Cloud accountId 或 DC 用户名，不用显示名猜测身份。status、created、reporter 不自动回写，project 仅用于创建；创建忽略旧 key 和更新时间。编辑时 key 如存在必须匹配目标，updated 如存在用于冲突检查。YAML 拒绝重复键、别名、锚点、合并键、未知标签、超过 64 层嵌套及超过 1 MiB 的文件。
+metadata 的空字符串或省略字段表示不修改，显式 `null` 表示清空，列表也可用 `[]` 清空；必填的 summary、issuetype 和创建时的 project 不能清空。描述正文为空时保留原描述；空正文配合 `description: null` 清空，也可显式使用 `--desc ""`。支持常用 REST 字段及 `customfield_数字`；components、fixVersions、versions 接受名称数组或 REST 引用对象。经办人使用 Cloud accountId 或 DC 用户名，不用显示名猜测身份。status、created、reporter 不自动回写，project 仅用于创建；创建忽略旧 key 和更新时间。编辑时 key 如存在必须匹配目标，updated 如存在用于冲突检查。YAML 拒绝重复键、别名、锚点、合并键、未知标签、超过 64 层嵌套及超过 1 MiB 的文件。
 
 `update` 和 `comment-update` 上传前比较导出时和当前 Jira 的 `updated` 值，发现变化默认拒绝；`--force` 显式跳过检查。评论导出创建 `.md` 与同名 `.conf` 元数据，成功更新后需要重新导出。**这是上传前检查，不是原子并发锁**：检查与更新之间若发生并发写入仍可能冲突。顶层 `transition` 使用 `transitions` 查到的**转换 ID**；`issue move` 还支持转换名称或目标状态名称。新评论、状态转换和附件不使用导出文件的并发检查。
 
@@ -181,9 +188,9 @@ bash run-jira.sh issue create --no-input \
 
 # 从 UTF-8 文件或标准输入读取多行描述
 bash run-jira.sh issue create --no-input \
-  -p DEMO -t Task -s "Document deployment" --template description.md
+  -p DEMO -t Task -s "Document deployment" --desc - < description.md
 printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
-  -p DEMO -t Task -s "Document deployment" --template -
+  -p DEMO -t Task -s "Document deployment" --desc -
 
 # 可选 Epic；省略 --epic 或传入空字符串均可跳过
 bash run-jira.sh issue create --no-input \
@@ -196,18 +203,20 @@ bash run-jira.sh issue create --no-input \
   --custom 'customfield_10002={value="Backend"}'
 
 # 单文件模式；显式参数覆盖文件中的对应字段
-bash run-jira.sh issue create --file issue.md -s "Updated summary"
+bash run-jira.sh issue create --template issue.md -s "Updated summary"
+# 只覆盖模板中的 description，仍保留 metadata
+bash run-jira.sh issue create --template issue.md --desc "New description"
 ```
 
-必填项为项目（`-p/--project`）、类型（`-t/--type`）和标题（`-s/--summary`）；也可由 `--file` 顶部的 project、issuetype、summary 提供，项目和类型支持原始 REST `id` 对象。未显式提供项目且模板中没有该字段时使用连接配置的默认项目。终端中默认补问仍缺少的必填项；未指定描述来源时，再询问可选描述。`--no-input` 禁止所有提示；无终端时也不会等待交互，必填项缺失则报错且不会创建 Issue。创建会直接提交，不额外询问确认；脚本建议始终指定 `--no-input`。
+必填项为项目（`-p/--project`）、类型（`-t/--type`）和标题（`-s/--summary`）；也可由 `--template` 顶部的 project、issuetype、summary 提供，项目和类型支持原始 REST `id` 对象。`--file` 是 `--template` 的兼容别名，两者不可同时指定。未显式提供项目且模板中没有该字段时使用连接配置的默认项目。终端中默认补问仍缺少的必填项；未指定描述来源时，再询问可选描述。`--no-input` 禁止所有提示；无终端时也不会等待交互，必填项缺失则报错且不会创建 Issue。创建会直接提交，不额外询问确认；脚本建议始终指定 `--no-input`。
 
 `-y/--priority` 设置优先级名称；`-l/--label`、`-C/--component`、`--fix-version` 和 `--affects-version` 可重复，显式提供时**替换**模板中的整个对应列表，不按逗号拆分。`-P/--parent` 设置父问题 key，是否可用由 Jira 的项目类型和层级决定。`-a/--assignee` 在 Cloud 使用账户 `accountId`，在 Data Center 使用用户名；特殊值 `me` 查询当前用户，`x` 取消指派，`default` 使用项目默认经办人。不按显示名模糊查找用户。
 
 `--epic KEY` 可选地指定所属 Epic；显式参数覆盖文件中的 epic/parent，空字符串跳过文件中的 Epic。终端创建时，在必填项之后询问 Epic key，按 Enter 跳过；`--no-input`、文件模式、已设置父任务或 `epic create` 不补问。Cloud 使用 `fields.parent.key`；Data Center 根据字段元数据查找 Epic Link。`--epic` 不与 `--parent` 同时使用，metadata 也不能同时指定 epic 和 parent。`--story-point NUMBER` 覆盖文件中的 story-point，字段按实例元数据发现，不硬编码编号。Jira 最终校验关联目标、层级、字段和权限。
 
-描述优先级为 `-b/--body` 或 `--template`、`--file` 的正文、管道输入或交互输入；`--body` 与 `--template` 互斥。`--template` 仍是仅含描述的文件，不导入 metadata；完整 Issue 文档使用 `--file`。`--template -` 显式读取标准输入直至结束；没有其他来源且无终端时也会读取标准输入。标准输入或 Issue 文件正文为空时省略 description；不再要求相邻文件。
+`--template ISSUE.md` 读取完整 Issue 文档，必须包含 YAML frontmatter 和其后的描述正文；不再接受仅含描述的旧模板。`--desc TEXT` 仅指定 Jira description，可与模板组合并覆盖模板正文，不影响 metadata。描述优先级为显式 `--desc`、模板正文、管道或交互输入。`--desc -` 显式读取纯描述；`--template -` 显式读取完整 Issue 文档，二者不能同时使用 stdin。没有其他来源且无终端时仍可隐式读取纯描述，机器模式除外。空 stdin 或模板正文默认省略 description；编辑中的清空规则见下文。
 
-创建和直接编辑时，`--template-format auto|markdown|wiki` 默认 `auto`：`--template` 文件的 `.md` / `.markdown` 后缀不区分大小写，识别为 Markdown 并转换；其他后缀、无后缀和 `--template -` 均按 Wiki 原样提交，不根据内容猜测。可显式指定 `--template-format markdown` 或 `wiki` 覆盖后缀判断；显式格式要求提供 `--template`，不能与 `--body-format` 同时指定。为兼容已有用法，`--template-format auto` 下显式的 `--body-format` 优先于后缀判断。Wiki 仅支持 API v2；API v3 的非 Markdown 后缀模板或标准输入需显式指定 Markdown。此规则仅影响 `issue create --template` 和 `issue edit --template`，其他描述来源和评论的默认格式不变；`issue edit --file` 仍按导出元数据选择格式。
+`--desc-format markdown|wiki` 只控制 description 的解析，不改变 metadata 格式。显式指定时优先；否则显式 `--desc`（包括 stdin）默认 Markdown，模板正文遵循其 bodyFormat，缺省也为 Markdown。Wiki 仅支持 API v2。不再按文件后缀猜测描述格式，`--template-format` 已移除。create/edit 保留 `--body`、`--body-format` 和 `-b` 兼容别名；update 也使用 `--desc-format`，保留 `--body-format` 别名。YAML 的 bodyFormat 不改名；评论、工时等仍使用 `--body-format`。
 
 `--custom customfield_ID=HOCON_VALUE` 可重复，支持字符串、数字、布尔值、`null`、对象和数组；字符串含空格或特殊字符时应按 HOCON 规则加双引号，并使用 shell 引号保护整个参数。只接受原始 `customfield_数字` 标识，不解析显示名；显式值覆盖文件中同名字段。更复杂的字段配置仍建议使用 `--file`。本地校验必填项和输入格式，Jira 最终校验创建权限、字段可用性及额外必填字段；当前不自动发现创建元数据，也不提供编辑器或交互式用户/字段选择。描述转换仍受下面的 Markdown 边界限制。
 
@@ -229,9 +238,9 @@ bash run-jira.sh issue edit DEMO-1 --no-input \
   --affects-version v1.1 --affects-version=-v1.0
 
 # 从 UTF-8 文件或标准输入替换描述
-bash run-jira.sh issue edit DEMO-1 --no-input --template description.md
+bash run-jira.sh issue edit DEMO-1 --no-input --desc - < description.md
 printf 'Updated description.\n' | bash run-jira.sh issue edit DEMO-1 \
-  --no-input --template -
+  --no-input --desc -
 
 # 取消指派、自定义字段、类型与父任务
 bash run-jira.sh issue edit DEMO-1 --no-input -a x \
@@ -242,20 +251,20 @@ bash run-jira.sh issue edit DEMO-1 --no-input -t Sub-task -P DEMO-2
 # 导出基线后编辑单个文件；显式参数优先，KEY 必须一致
 bash run-jira.sh export DEMO-1 --file exported.md
 # 编辑 exported.md 的属性和正文，保留基线
-bash run-jira.sh issue edit DEMO-1 --file exported.md -s "CLI summary" --no-input
+bash run-jira.sh issue edit DEMO-1 --template exported.md -s "CLI summary" --no-input
 ```
 
 `edit` 由独立的 `JiraIssueEditCommand` 实现，问题 key 或 ID 为必填位置参数；使用导出文件时必须与文件中的 `key` 完全一致。直接编辑支持标题（`-s`）、类型（`-t`）、优先级（`-y`）、经办人（`-a`）、父任务（`-P`）、描述以及原始 `customfield_数字` 自定义字段；自定义值的 HOCON 解析规则与创建相同。经办人使用 Cloud `accountId` 或 Data Center 用户名，支持 `me` 自指派和 `x` 取消指派，不支持 `default` 或按显示名查找。类型和父任务变更受 Jira 实例的编辑权限与层级规则限制；此命令不负责跨项目移动或状态流转。
 
 标签（`-l/--label`）、组件（`-C/--component`）、修复版本（`--fix-version`）、影响版本（`--affects-version`）均可重复：普通值表示新增，前缀 `-` 表示移除，建议用 `--label=-old` 这类等号写法避免与选项混淆。不按逗号拆分；重复的同向操作去重，同一值同时新增和移除会在请求 Jira 前报错。增删通过 Jira `update` 操作提交，不先读取整个列表再覆盖。未指定的字段保持不变；若需清空或替换整个列表，使用导出文件模式明确编辑对应数组。
 
-`-b/--body` 和 `--template` 互斥；`--template -` 显式读取标准输入直至结束。空描述文本或空描述文件会清空远端描述，未提供描述来源则不修改；交互模式中的空输入仅表示保留，不能用于清空。没有编辑参数时才交互询问标题、优先级、经办人与单行描述；按 Enter 保留，若全部保留则不提交。`--no-input` 或没有终端时，必须提供编辑参数或 `--file`。指定编辑参数会直接提交，不额外询问确认。
+`-b/--desc` 可与 `--template` 组合，只覆盖 description。显式空文本或 `--desc -` 读到空输入会清空远端描述；模板正文为空则保留描述，除非 metadata 明确写入 `description: null`。交互模式中的空输入仅表示保留，不能清空。没有编辑参数和模板时才交互询问标题、优先级、经办人与单行描述；按 Enter 保留，全部保留则不提交。`--no-input` 或没有终端时，必须提供编辑参数或模板；指定变更后直接提交，不额外询问确认。
 
-`issue edit --template` 与创建使用相同的 `--template-format` 自动识别和显式覆盖规则；空模板文件仍表示清空描述。`--template-format markdown|wiki` 要求 `--template`，可与 `--file` 一起使用以覆盖文档正文。
+`issue edit --template` 与创建使用相同的完整文档输入规则；纯描述文件通过 `--desc - < description.md` 输入。`--desc-format` 仅选择描述格式，metadata 始终使用 YAML；不再提供 `--template-format`。
 
 直接编辑先读取当前问题，仅发送显式变更，跳过可识别的未变化字段；写入前通过 `/editmeta` 检查字段可编辑性及所需的 `set`、`add`、`remove` 操作，并再次比较问题的 `updated` 值，发现并发变化则拒绝提交。`--force` 只跳过更新时间检查，不绕过 Jira 字段权限。**更新时间检查不是原子并发锁**；检查与实际写入之间仍可能出现竞争。描述转换仍受下面的 Markdown 边界限制。
 
-`--file ISSUE.md` 接受模板、view 文档或严格导出；显式字段和描述参数优先，列表增删参数优先于文件中的整个对应列表。`--epic`、`--story-point` 也支持编辑。存在导出基线时保留字段差异、模式、API 版本及导出时间检查，不允许文件新增未导出的字段；显式参数仍需通过当前 `/editmeta`。顶层 `update --file ISSUE.md` 只接受严格导出并复用编辑逻辑。成功更新后重新导出，不新增顶层 `edit`。
+`--template ISSUE.md`（兼容别名 `--file`）接受模板、view 文档或严格导出；显式字段和描述参数优先，列表增删参数优先于文件中的整个对应列表。`--epic`、`--story-point` 也支持编辑。存在导出基线时保留字段差异、模式、API 版本及导出时间检查，不允许文件新增未导出的字段；显式参数仍需通过当前 `/editmeta`。顶层 `update --file ISSUE.md` 只接受严格导出并复用编辑逻辑。成功更新后重新导出，不新增顶层 `edit`。
 
 ### 指派用户：`issue assign`
 
@@ -415,24 +424,25 @@ Sprint 显式 ID 或 `--current`、`--prev`、`--next` 复用问题筛选；无�
 
 ### Markdown 边界
 
-以下默认 Markdown 的规则不包含 `issue create --template` 和 `issue edit --template` 的自动后缀选择；这两种来源使用上文的 `--template-format` 规则。
+以下规则作用于 description/评论正文，不作用于 Issue 模板的 YAML metadata。严格导出的模板正文默认遵循记录的 bodyFormat。
 
 API v3 描述、评论使用 ADF，支持普通段落、1–6 级标题、简单列表、无语言标注代码块，以及文本、加粗、斜体、行内代码、HTTP(S) 链接。复杂或未知 ADF 节点、富文本标记、嵌套列表及无法无损表示的内容会拒绝导出；编辑后的不支持语法会拒绝上传，而不是静默丢弃。
 
-API v2（包括显式选择 v2 的 Cloud）使用 Jira Wiki 格式而非 ADF。创建、直接编辑和新增评论默认以 Markdown 解析正文；支持段落、标题、加粗、斜体、行内代码、带或不带语言的代码块、简单及嵌套列表、引用、链接、图片、分隔线和 GFM 表格，并转换为 Wiki。表格表头使用 `||`，数据单元格使用 `|`；支持单元格内的强调、行内代码、链接和转义竖线，保留空单元格，但不保留列对齐标记。HTML（包括表格中的 `<br>`）、带标题的链接/图片、多段落列表项及无法安全转换的内容会明确报错；不提供任务列表和删除线扩展转换。API v3 暂不支持 ADF 表格上传，Markdown 表格会明确报错。需要直接使用 Wiki 表格、宏、用户提及等原生格式时，添加 `--body-format wiki`，正文将原样提交，不进行 Markdown 解析或格式猜测。`*文字*` 在默认 Markdown 模式下为斜体，在 Wiki 模式下为加粗。Wiki 模式只适用于 API v2。
+API v2（包括显式选择 v2 的 Cloud）使用 Jira Wiki 格式而非 ADF。创建、直接编辑和新增评论默认以 Markdown 解析正文；支持段落、标题、加粗、斜体、行内代码、带或不带语言的代码块、简单及嵌套列表、引用、链接、图片、分隔线和 GFM 表格，并转换为 Wiki。表格表头使用 `||`，数据单元格使用 `|`；支持单元格内的强调、行内代码、链接和转义竖线，保留空单元格，但不保留列对齐标记。HTML（包括表格中的 `<br>`）、带标题的链接/图片、多段落列表项及无法安全转换的内容会明确报错；不提供任务列表和删除线扩展转换。API v3 暂不支持 ADF 表格上传，Markdown 表格会明确报错。需要原生 Wiki 时，create/edit 使用 `--desc-format wiki`，评论等使用 `--body-format wiki`，正文原样提交，不进行 Markdown 解析或格式猜测。`*文字*` 在默认 Markdown 模式下为斜体，在 Wiki 模式下为加粗。Wiki 模式只适用于 API v2。
 
 ```bash
-# .md / .markdown 后缀自动识别 Markdown，不区分大小写
-bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
-# 创建和直接编辑时其他后缀自动按 Wiki 提交；也可显式覆盖格式
-bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --no-input
-bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.txt --template-format markdown --no-input
-bash run-jira.sh issue edit DEMO-1 --template template.wiki --no-input
+# 完整 Issue 模板：metadata + description
+bash run-jira.sh issue create --template issue.md --no-input
+# 单独提供描述时默认 Markdown；原生 Wiki 必须显式选择
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --desc - --no-input < description.md
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --desc - --desc-format wiki --no-input < description.wiki
+# 覆盖模板正文时不影响 metadata 或基线
+bash run-jira.sh issue edit DEMO-1 --template exported.md --desc - --desc-format wiki --no-input < description.wiki
 # 评论仍需显式指定 Wiki
 bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
 ```
 
-v2 的 `export` 和 `comment-export` 保留原始 Wiki 正文，不执行有损的 Wiki → Markdown 转换；Issue 的 YAML metadata 记录 `bodyFormat: "wiki"`，评论仍用相邻 HOCON 元数据；v3 记录 `"markdown"`。更新默认使用导出格式，未修改的描述不会重新转换；`--body-format markdown|wiki` 可显式覆盖。切换格式应重写正文，不能只修改格式标记。其他可编辑字段保留结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
+v2 的 `export` 和 `comment-export` 保留原始 Wiki 正文，不执行有损的 Wiki → Markdown 转换；Issue 的 YAML metadata 记录 `bodyFormat: "wiki"`，评论仍用相邻 HOCON 元数据；v3 记录 `"markdown"`。更新默认使用导出格式，未修改的描述不会重新转换；Issue 使用 `--desc-format markdown|wiki` 显式覆盖，comment-update 仍使用 `--body-format`。切换格式应重写正文，不能只修改格式标记。其他可编辑字段保留结构，不将插件字段强行转换成 Markdown。附件大小限制为 25 MB。
 
 ## English
 
@@ -475,7 +485,7 @@ Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history c
 
 ### CLI-provided requirements workflow skill
 
-The JAR bundles the `jira-requirements` skill, execution guide, specification template, and Jira description template. The CLI only exports assets offline and performs Jira operations. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
+The JAR bundles the `jira-requirements` skill, execution guide, environment guide, specification template, and Jira description template. Exports are offline by default, with explicit Jira queries available for a project environment snapshot. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
 
 ```powershell
 # Export to a new project skill directory; no connection configuration or token needed
@@ -486,9 +496,16 @@ jira skill export --output chinese-skill --language zh
 
 # Select a template directory explicitly; --machine reports files and template sources
 jira --machine skill export --output exported-skill --templates team-templates
+
+# Explicit online read-only collection; requires connection configuration and token
+jira --machine skill export --output project-skill --language en --with-environment --project DEMO
 ```
 
-Exports contain `SKILL.md`, `references\workflow.md`, `templates\specification.md`, and `templates\jira-description.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, and `jira-description` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
+Exports contain `SKILL.md`, `references\workflow.md`, `references\environment.md`, `templates\specification.md`, and `templates\jira-description.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, `environment`, and `jira-description` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
+
+`--with-environment` adds `references\environment.json` with capture time, connection/account/project scope, project-associated issue types (TaskType), all visible epics, project-assignable users, boards, and sprints from each Scrum board. `--project/-p` overrides the configured project and requires this flag. Connection, identity, or project query failures abort export; other catalog failures may retain a partial snapshot, recording per-section `status`, `complete`, sanitized errors, and counts, summarized in machine `data.environment`. Epic and board/Sprint queries traverse pages; duplicate pages, stalled cursors, and a 1000-page safeguard never masquerade as complete results. Cloud user search is officially limited to a 1000-user window: export scans it but still marks assignees `partial`, never claiming all members or enumerating site-wide users/elevating permissions unasked. Members are not group rosters; only identifiers, display names, and active are stored, never email, avatars, or tokens. Do not automatically commit snapshots.
+
+Sprint information requires the Jira Software Agile API and visible Scrum boards. Successful queries, including empty results, mark support `available`; no visible Scrum board yields `no-visible-scrum-board`. A 403, 404, or network error leaves support unknown rather than proving absence. The CLI queries sprints and supports membership through `sprint add`, but issue templates have no `sprint` alias, writes are not automatic, and sprints are not automatically created, started, or closed. The skill checks snapshot scope/time before use and revalidates selections before writes; candidates are not authorization.
 
 By default, same-named `specification.md` and `jira-description.md` in `.jira\templates` under the **current working directory** override bundled templates, independently of connection-file location. `--templates DIR` selects only that override directory, without mixing in the default project directory. Either file can be supplied alone; absent files use bundled defaults in the selected language. Existing invalid, blank, non-UTF-8, or over-1-MiB templates fail rather than silently falling back; other files are ignored. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. The AI fills template bodies according to project language conventions instead of uploading instructions or fences.
 
@@ -515,7 +532,7 @@ Each invocation writes one JSON object to stdout with `schemaVersion: 1` and `ok
 {"schemaVersion":1,"ok":true,"data":{"key":"DEMO-1","changed":true},"messages":[]}
 ```
 
-Machine mode forces noninteractive execution and disables implicit stdin reads. Missing creation descriptions or comment bodies do not wait on an open input pipe. Explicitly use `--template -` for stdin, selecting `--template-format markdown|wiki` for creation/editing as appropriate. Missing required values fail immediately. Queries still fetch one page without following cursors automatically. Do not mix conflicting output flags such as `--plain` or `--csv`. Human CLI diagnostics are omitted from stderr and JSON; local errors use generic explanations to avoid leaking inputs or server content. JVM launcher stderr is outside this protocol.
+Machine mode forces noninteractive execution and disables implicit stdin reads. Missing creation descriptions or comment bodies do not wait on an open input pipe. Create/edit use `--desc -` for a description or `--template -` for complete YAML metadata plus body, never both stdin sources together. Comments retain `--template -` for comment text. Missing required values fail immediately. Queries still fetch one page without following cursors automatically. Do not mix conflicting output flags such as `--plain` or `--csv`. Human CLI diagnostics are omitted from stderr and JSON; local errors use generic explanations to avoid leaking inputs or server content. JVM launcher stderr is outside this protocol.
 
 Failures return an `error` object containing a stable `code`, explanatory `message`, `outcome` (`failed` or `unknown`), and `retryable`; HTTP failures also include `httpStatus`. Jira error bodies and tokens are not returned. `retryable` is advisory, not automatic retry or permission to bypass approval. Verify remote state before retrying writes; multi-request commands may have partially completed.
 
@@ -591,7 +608,7 @@ labels: ["backend"]
 This is the issue description.
 ```
 
-Empty strings or omitted metadata leave fields unchanged; explicit `null` clears them, and `[]` clears lists. Required summary, issuetype, and project at creation cannot be cleared. An empty document body preserves the description; pair it with `description: null` to clear, or explicitly use `--body ""`. Common REST fields and `customfield_digits` are supported; components, fixVersions, and versions accept name arrays or REST references. Assignees use Cloud account IDs or DC usernames, never guessed display names. Status, created, and reporter are not written automatically; project applies only to creation, which ignores old keys and timestamps. On edit, a supplied key must match and updated enables conflict checking. YAML rejects duplicate keys, aliases, anchors, merge keys, unknown tags, nesting beyond 64 levels, and files over 1 MiB.
+Empty strings or omitted metadata leave fields unchanged; explicit `null` clears them, and `[]` clears lists. Required summary, issuetype, and project at creation cannot be cleared. An empty document body preserves the description; pair it with `description: null` to clear, or explicitly use `--desc ""`. Common REST fields and `customfield_digits` are supported; components, fixVersions, and versions accept name arrays or REST references. Assignees use Cloud account IDs or DC usernames, never guessed display names. Status, created, and reporter are not written automatically; project applies only to creation, which ignores old keys and timestamps. On edit, a supplied key must match and updated enables conflict checking. YAML rejects duplicate keys, aliases, anchors, merge keys, unknown tags, nesting beyond 64 levels, and files over 1 MiB.
 
 Before upload, `update` and `comment-update` compare Jira's current `updated` value with its value at export, refusing stale changes by default; `--force` explicitly bypasses this check. Comment export creates a `.md` file and adjacent `.conf` metadata; re-export after a successful update. **This preflight check is not an atomic concurrency lock**: a write between checking and updating can still race. Top-level `transition` uses the **transition ID** returned by `transitions`; `issue move` also accepts transition or destination status names. New comments, transitions, and attachments do not use the export file's concurrency check.
 
@@ -613,9 +630,9 @@ bash run-jira.sh issue create --no-input \
 
 # Read multiline descriptions from a UTF-8 file or stdin
 bash run-jira.sh issue create --no-input \
-  -p DEMO -t Task -s "Document deployment" --template description.md
+  -p DEMO -t Task -s "Document deployment" --desc - < description.md
 printf 'Deployment steps.\n' | bash run-jira.sh issue create --no-input \
-  -p DEMO -t Task -s "Document deployment" --template -
+  -p DEMO -t Task -s "Document deployment" --desc -
 
 # Optional Epic; omit --epic or supply an empty string to skip
 bash run-jira.sh issue create --no-input \
@@ -628,18 +645,20 @@ bash run-jira.sh issue create --no-input \
   --custom 'customfield_10002={value="Backend"}'
 
 # Single-file workflow; explicit flags override corresponding document fields
-bash run-jira.sh issue create --file issue.md -s "Updated summary"
+bash run-jira.sh issue create --template issue.md -s "Updated summary"
+# Override only description while retaining metadata
+bash run-jira.sh issue create --template issue.md --desc "New description"
 ```
 
-Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are required. They may come from project, issuetype, and summary in `--file` frontmatter; project and type accept raw REST `id` objects. If no project flag or template field is supplied, the connection configuration's default project is used. In a terminal, remaining missing values are prompted by default, followed by an optional description if none was supplied. `--no-input` disables all prompts; without a terminal, creation never waits for input, and missing required fields fail without creating an issue. Creation submits directly without additional confirmation; scripts should specify `--no-input`.
+Project (`-p/--project`), type (`-t/--type`), and summary (`-s/--summary`) are required. They may come from project, issuetype, and summary in `--template` frontmatter; project and type accept raw REST `id` objects. `--file` is a compatibility alias for `--template`; do not specify both. If no project flag or template field is supplied, the connection configuration's default project is used. In a terminal, remaining missing values are prompted by default, followed by an optional description if none was supplied. `--no-input` disables all prompts; without a terminal, creation never waits for input, and missing required fields fail without creating an issue. Creation submits directly without additional confirmation; scripts should specify `--no-input`.
 
 `-y/--priority` sets the priority name. Repeat `-l/--label`, `-C/--component`, `--fix-version`, and `--affects-version` for multiple values; explicit lists **replace** the entire corresponding template list and are not comma-separated. `-P/--parent` sets the parent issue key, subject to Jira's project type and hierarchy. `-a/--assignee` accepts a Cloud `accountId` or Data Center username; special values are `me` to look up the current user, `x` to unassign, and `default` for the project's default assignee. Display-name fuzzy lookup is not supported.
 
 `--epic KEY` optionally selects an Epic; explicit flags override file epic/parent, while an empty flag skips the file Epic. Terminal creation prompts after required fields; Enter skips. No extra prompt occurs with `--no-input`, file mode, an existing parent, or `epic create`. Cloud uses `fields.parent.key`; DC discovers Epic Link through metadata. Do not combine `--epic` and `--parent`, or metadata epic and parent. `--story-point NUMBER` overrides file story-point using instance metadata rather than hardcoded IDs. Jira ultimately validates associations, hierarchy, fields, and permissions.
 
-Description precedence is `-b/--body` or `--template`, then the `--file` body, then piped or interactive input; `--body` and `--template` are mutually exclusive. `--template` remains description-only and imports no metadata; use `--file` for complete issue documents. `--template -` explicitly reads stdin until EOF; without another source or terminal, creation also reads stdin. Empty stdin or issue document bodies omit description; adjacent files are no longer required.
+`--template ISSUE.md` reads a complete issue document with mandatory YAML frontmatter and its description body; old description-only templates are no longer accepted. `--desc TEXT` specifies only Jira description and can override the template body without affecting metadata. Description precedence is explicit desc, template body, then piped or interactive input. `--desc -` reads a description; `--template -` reads a complete issue document, never both from stdin. Without another source or terminal, implicit description stdin remains available outside machine mode. Empty stdin or template bodies omit description by default; edit clearing rules follow below.
 
-For creation and direct editing, `--template-format auto|markdown|wiki` defaults to `auto`: `.md` / `.markdown` suffixes on `--template` files are matched case-insensitively and converted from Markdown. Other suffixes, extensionless files, and `--template -` are submitted unchanged as Wiki, without content guessing. Explicit `--template-format markdown` or `wiki` overrides suffix detection, requires `--template`, and cannot be combined with `--body-format`. For compatibility, explicit `--body-format` takes precedence over suffix detection when `--template-format auto` is used. Wiki requires API v2; with API v3, explicitly select Markdown for non-Markdown suffixes or stdin templates. This rule affects only `issue create --template` and `issue edit --template`; defaults for other description sources and comments are unchanged. `issue edit --file` still selects its format from export metadata.
+`--desc-format markdown|wiki` controls only description parsing, never metadata. An explicit format wins; otherwise explicit desc, including stdin, defaults to Markdown, while template bodies follow bodyFormat or default to Markdown. Wiki requires API v2. Filename guessing and `--template-format` have been removed. Create/edit retain `--body`, `--body-format`, and `-b` compatibility aliases; update also uses `--desc-format` with a `--body-format` alias. YAML bodyFormat is unchanged; comments and worklogs retain `--body-format`.
 
 Repeat `--custom customfield_ID=HOCON_VALUE` for strings, numbers, booleans, `null`, objects, or arrays. Double-quote strings containing spaces or special characters according to HOCON rules, and shell-quote the entire argument. Only raw `customfield_digits` identifiers are accepted, not display names; explicit values override matching file fields. Prefer `--file` for more complex fields. Local validation checks required fields and input shapes; Jira ultimately validates creation permissions, field availability, and additional required fields. Creation metadata discovery, editor integration, and interactive user/field selection are not currently provided. Description conversion remains subject to the Markdown limits below.
 
@@ -661,9 +680,9 @@ bash run-jira.sh issue edit DEMO-1 --no-input \
   --affects-version v1.1 --affects-version=-v1.0
 
 # Replace description from a UTF-8 file or stdin
-bash run-jira.sh issue edit DEMO-1 --no-input --template description.md
+bash run-jira.sh issue edit DEMO-1 --no-input --desc - < description.md
 printf 'Updated description.\n' | bash run-jira.sh issue edit DEMO-1 \
-  --no-input --template -
+  --no-input --desc -
 
 # Unassign, set custom fields, or change type and parent
 bash run-jira.sh issue edit DEMO-1 --no-input -a x \
@@ -674,20 +693,20 @@ bash run-jira.sh issue edit DEMO-1 --no-input -t Sub-task -P DEMO-2
 # Edit one exported file; explicit flags win, and KEY must match
 bash run-jira.sh export DEMO-1 --file exported.md
 # Edit exported.md properties and body, preserving the baseline
-bash run-jira.sh issue edit DEMO-1 --file exported.md -s "CLI summary" --no-input
+bash run-jira.sh issue edit DEMO-1 --template exported.md -s "CLI summary" --no-input
 ```
 
 `edit` is implemented in the separate `JiraIssueEditCommand` class. An issue key or ID is a required positional argument; with an export file, it must exactly match the file's `key`. Direct edits support summary (`-s`), type (`-t`), priority (`-y`), assignee (`-a`), parent (`-P`), description, and raw `customfield_digits` fields, using the same HOCON custom-value rules as creation. Assignees use Cloud `accountId` or Data Center usernames, with `me` for self-assignment and `x` to unassign; `default` and display-name lookup are not supported. Type and parent changes are subject to Jira permissions and hierarchy rules; this command does not move issues between projects or transition status.
 
 Labels (`-l/--label`), components (`-C/--component`), fix versions (`--fix-version`), and affected versions (`--affects-version`) are repeatable: ordinary values add entries, and a `-` prefix removes them. Prefer equals syntax such as `--label=-old` to avoid option ambiguity. Values are not comma-separated. Duplicate operations in the same direction are deduplicated; adding and removing the same value fails before contacting Jira. Changes use Jira's `update` operations rather than reading and overwriting whole lists. Unspecified fields remain unchanged; use exported-file mode to explicitly clear or replace entire arrays.
 
-`-b/--body` and `--template` are mutually exclusive; `--template -` explicitly reads stdin until EOF. Empty description text or an empty description file clears the remote description; omitting a description source leaves it unchanged. Empty interactive input means keep, not clear. Only invocations without edit flags prompt for summary, priority, assignee, and a single-line description; Enter keeps each field, and keeping everything performs no write. With `--no-input` or no terminal, edit flags or `--file` are required. Supplying edits submits directly without an additional confirmation.
+`-b/--desc` may accompany `--template`, overriding only description. Explicit empty text or empty input to `--desc -` clears the remote description; an empty template body preserves it unless metadata explicitly contains `description: null`. Empty interactive input means keep, not clear. Only invocations without edit flags or templates prompt for summary, priority, assignee, and a single-line description; Enter keeps each field, and keeping everything performs no write. With `--no-input` or no terminal, edits or a template are required. Changes submit directly without additional confirmation.
 
-`issue edit --template` uses the same automatic detection and explicit overrides via `--template-format` as creation; an empty description template still clears the description. `--template-format markdown|wiki` requires `--template` and can accompany `--file` to override the document body.
+`issue edit --template` shares creation's complete-document rules. Read description-only files with `--desc - < description.md`. `--desc-format` selects description format only; metadata always remains YAML. `--template-format` is no longer available.
 
 Direct editing reads the current issue, sends only explicit changes, and skips recognizable unchanged fields. Before writing, it checks `/editmeta` for field editability and the required `set`, `add`, or `remove` operations, then compares the issue's `updated` value again and refuses concurrent changes. `--force` bypasses only the timestamp check, not Jira field permissions. **The timestamp check is not an atomic concurrency lock**; a write can still race between checking and submission. Description conversion remains subject to the Markdown limits below.
 
-`--file ISSUE.md` accepts templates, view documents, or strict exports. Explicit fields and description flags win; list add/remove flags override the corresponding whole-file lists. Edit also supports `--epic` and `--story-point`. Exports retain field differences, mode, API version, and export timestamp checks; file fields not originally exported are rejected, while explicit flags still require current `/editmeta` permission. Top-level `update --file ISSUE.md` requires a strict export and reuses editing logic. Export again after success; there is no top-level `edit`.
+`--template ISSUE.md` (compatibility alias `--file`) accepts templates, view documents, or strict exports. Explicit fields and description flags win; list add/remove flags override the corresponding whole-file lists. Edit also supports `--epic` and `--story-point`. Exports retain field differences, mode, API version, and export timestamp checks; file fields not originally exported are rejected, while explicit flags still require current `/editmeta` permission. Top-level `update --file ISSUE.md` requires a strict export and reuses editing logic. Export again after success; there is no top-level `edit`.
 
 ### Assigning users: `issue assign`
 
@@ -847,21 +866,22 @@ Explicit sprint IDs and `--current`, `--prev`, or `--next` reuse issue filters. 
 
 ### Markdown limits
 
-The Markdown defaults below exclude automatic suffix selection for `issue create --template` and `issue edit --template`, which follow the `--template-format` rules above.
+These rules apply to descriptions/comment bodies, never issue-template YAML metadata. Strict exported template bodies default to their recorded bodyFormat.
 
 API v3 descriptions and comments use ADF and support paragraphs, headings (levels 1–6), simple lists, unlabelled code fences, text, bold, italic, inline code, and HTTP(S) links. Export refuses complex or unknown ADF nodes/marks, nested lists, and content that cannot be represented losslessly; unsupported edited syntax is rejected rather than silently dropped.
 
-API v2, including Cloud explicitly configured for v2, uses Jira Wiki rather than ADF. Creation, direct editing, and new comments parse bodies as Markdown by default, converting paragraphs, headings, bold, italic, inline code, labelled or unlabelled code blocks, simple and nested lists, quotes, links, images, thematic breaks, and GFM tables to Wiki. Table headers use `||` and data cells use `|`; emphasis, inline code, links, escaped pipes, and empty cells are supported, but column alignment markers are not preserved. HTML (including `<br>` in tables), titled links/images, multi-paragraph list items, and content that cannot be converted safely produce explicit errors. Task-list and strikethrough extension conversion is not provided. API v3 does not yet support ADF table uploads and explicitly rejects Markdown tables. For native Wiki tables, macros, user mentions, and other native syntax, add `--body-format wiki` to submit the body unchanged, without Markdown parsing or format guessing. `*text*` means italic in default Markdown mode and bold in Wiki mode. Wiki mode requires API v2.
+API v2, including Cloud explicitly configured for v2, uses Jira Wiki rather than ADF. Creation, direct editing, and new comments parse bodies as Markdown by default, converting paragraphs, headings, bold, italic, inline code, labelled or unlabelled code blocks, simple and nested lists, quotes, links, images, thematic breaks, and GFM tables to Wiki. Table headers use `||` and data cells use `|`; emphasis, inline code, links, escaped pipes, and empty cells are supported, but column alignment markers are not preserved. HTML (including `<br>` in tables), titled links/images, multi-paragraph list items, and content that cannot be converted safely produce explicit errors. Task-list and strikethrough extension conversion is not provided. API v3 does not yet support ADF table uploads and explicitly rejects Markdown tables. For native Wiki, create/edit use `--desc-format wiki`, while comments retain `--body-format wiki`, submitting bodies unchanged without Markdown parsing or format guessing. `*text*` means italic in default Markdown mode and bold in Wiki mode. Wiki mode requires API v2.
 
 ```bash
-# .md / .markdown suffixes automatically select Markdown, case-insensitively
-bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.md --no-input
-# Other suffixes select Wiki for creation and direct editing; explicit overrides are available
-bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --template template.wiki --no-input
-bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --template template.txt --template-format markdown --no-input
-bash run-jira.sh issue edit DEMO-1 --template template.wiki --no-input
+# Complete issue template: metadata plus description
+bash run-jira.sh issue create --template issue.md --no-input
+# Standalone descriptions default to Markdown; native Wiki requires explicit selection
+bash run-jira.sh issue create -p DEMO -t Task -s "Markdown description" --desc - --no-input < description.md
+bash run-jira.sh issue create -p DEMO -t Task -s "Wiki description" --desc - --desc-format wiki --no-input < description.wiki
+# Overriding the template body does not change metadata or baselines
+bash run-jira.sh issue edit DEMO-1 --template exported.md --desc - --desc-format wiki --no-input < description.wiki
 # Comments still require explicit Wiki selection
 bash run-jira.sh comment DEMO-1 --file template.wiki --body-format wiki
 ```
 
-For v2, `export` and `comment-export` preserve original Wiki bodies without lossy conversion. Issue YAML metadata records `bodyFormat: "wiki"`; comments still use adjacent HOCON metadata. v3 records `"markdown"`. Updates default to the exported format and never reconvert unchanged descriptions; `--body-format markdown|wiki` overrides it explicitly. Rewrite the body when switching formats rather than merely editing the marker. Other fields retain structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.
+For v2, `export` and `comment-export` preserve original Wiki bodies without lossy conversion. Issue YAML metadata records `bodyFormat: "wiki"`; comments still use adjacent HOCON metadata. v3 records `"markdown"`. Updates default to the exported format and never reconvert unchanged descriptions; issues use `--desc-format markdown|wiki`, while comment-update retains `--body-format`. Rewrite the body when switching formats rather than merely editing the marker. Other fields retain structure instead of forcing plugin fields into Markdown. Attachments are limited to 25 MB.
