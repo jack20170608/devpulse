@@ -53,6 +53,11 @@ public final class JiraIssueAssignCommand extends JiraCommand.Action {
             user = resolve(jira, identifier, interactive);
         }
         jira.assign(key, user);
+        var result = new JsonObject();
+        result.addProperty("key", key);
+        result.addProperty("assignee", user);
+        result.addProperty("changed", true);
+        machineData = result;
         print(user == null ? "Unassigned " + key + "."
                 : "Assigned " + key + " to " + assignee + ".");
     }

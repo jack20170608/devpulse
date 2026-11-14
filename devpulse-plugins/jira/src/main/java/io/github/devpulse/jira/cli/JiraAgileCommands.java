@@ -143,6 +143,7 @@ public final class JiraAgileCommands {
             var selected = issues(this, issues, noInput);
             client().agile("POST", "epic/" + encode(epic) + "/issue",
                     membership(selected));
+            machineData = membershipResult("epic", epic, selected, true);
             print("Added " + selected.size() + " issue(s) to Epic " + epic + ".");
         }
     }
@@ -157,6 +158,7 @@ public final class JiraAgileCommands {
         protected void execute() throws IOException {
             var selected = issues(this, issues, noInput);
             client().agile("POST", "epic/none/issue", membership(selected));
+            machineData = membershipResult("epic", null, selected, false);
             print("Removed " + selected.size() + " issue(s) from their Epics.");
         }
     }
@@ -176,6 +178,7 @@ public final class JiraAgileCommands {
             var selected = issues(this, issues, noInput);
             client().agile("POST", "sprint/" + sprint + "/issue",
                     membership(selected));
+            machineData = membershipResult("sprint", sprint, selected, true);
             print("Added " + selected.size() + " issue(s) to sprint "
                     + sprint + ".");
         }
@@ -497,6 +500,21 @@ public final class JiraAgileCommands {
         var values = new JsonArray();
         issues.forEach(values::add);
         result.add("issues", values);
+        return result;
+    }
+
+    private static JsonObject membershipResult(String type, String id,
+            List<String> issues, boolean added) {
+        var result = new JsonObject();
+        result.addProperty("type", type);
+        if (id != null) {
+            result.addProperty("id", id);
+        }
+        var values = new JsonArray();
+        issues.forEach(values::add);
+        result.add("issues", values);
+        result.addProperty("changed", true);
+        result.addProperty("added", added);
         return result;
     }
 

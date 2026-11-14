@@ -124,6 +124,11 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
         }
         var id = string(selected, "id");
         jira.transition(key, id, fields, updates);
+        var result = new com.google.gson.JsonObject();
+        result.addProperty("key", key);
+        result.addProperty("transitionId", id);
+        result.addProperty("changed", true);
+        machineData = result;
         print("Transitioned " + key + " with ID " + id + ".");
     }
 

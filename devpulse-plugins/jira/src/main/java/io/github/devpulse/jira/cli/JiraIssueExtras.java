@@ -6,7 +6,9 @@ import static io.github.devpulse.jira.cli.JiraCommand.text;
 import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import io.github.devpulse.jira.JiraClient;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -22,6 +24,121 @@ import picocli.CommandLine.Spec;
 
 public final class JiraIssueExtras {
     private JiraIssueExtras() {}
+
+    static JsonObject attachmentUploadData(String key,
+            JiraClient.AttachmentUpload upload) {
+        var result = new JsonObject();
+        result.addProperty("key", key);
+        result.addProperty("filename", upload.filename());
+        result.addProperty("size", upload.size());
+        result.addProperty("mimeType", upload.contentType());
+        result.addProperty("sha256", upload.sha256());
+        var attachments = new JsonArray();
+        for (var value : upload.attachments()) {
+            attachments.add(attachmentMetadata(value));
+        }
+        result.add("attachments", attachments);
+        return result;
+    }
+
+    private static JsonObject attachmentMetadata(JsonElement value) {
+        var source = value.getAsJsonObject();
+        var result = new JsonObject();
+        for (var field : new String[]{"id", "filename", "size",
+                "mimeType", "created"}) {
+            if (source.has(field)) {
+                result.add(field, source.get(field).deepCopy());
+            }
+        }
+        return result;
+    }
+
+    @Command(name = "attachment", mixinStandardHelpOptions = true,
+            description = "Manage issue attachments.",
+            subcommands = {AttachmentAdd.class, AttachmentList.class,
+                    AttachmentDelete.class})
+    public static final class Attachment implements Runnable {
+        @Spec CommandSpec spec;
+        @Override public void run() {
+            spec.commandLine().usage(spec.commandLine().getOut());
+        }
+    }
+
+    @Command(name = "add", mixinStandardHelpOptions = true,
+            description = "Upload one file to an issue.")
+    public static final class AttachmentAdd extends JiraCommand.Action {
+        @Parameters(index = "0", paramLabel = "KEY")
+        String key;
+        @Option(names = "--file", required = true, paramLabel = "PATH")
+        Path file;
+
+        @Override protected void execute() throws IOException {
+            key = nonblank(key, "Issue key");
+            var upload = client().attach(key, file);
+            machineData = attachmentUploadData(key, upload);
+            print("Attached " + file.getFileName() + " to " + key + ".");
+        }
+    }
+
+    @Command(name = "list", mixinStandardHelpOptions = true,
+            description = "List attachment metadata for an issue.")
+    public static final class AttachmentList extends JiraCommand.Action {
+        @Parameters(index = "0", paramLabel = "KEY")
+        String key;
+
+        @Override protected void execute() throws IOException {
+            key = nonblank(key, "Issue key");
+            var values = client().attachments(key);
+            var attachments = new JsonArray();
+            for (var value : values) {
+                attachments.add(attachmentMetadata(value));
+            }
+            if (machine()) {
+                var result = new JsonObject();
+                result.addProperty("key", key);
+                result.add("attachments", attachments);
+                machineData = result;
+            } else {
+                for (var value : attachments) {
+                    var attachment = value.getAsJsonObject();
+                    print(string(attachment, "id") + " "
+                            + string(attachment, "filename") + " "
+                            + string(attachment, "size") + " "
+                            + string(attachment, "mimeType"));
+                }
+            }
+        }
+    }
+
+    @Command(name = "delete", mixinStandardHelpOptions = true,
+            description = "Delete an attachment after verifying its issue.")
+    public static final class AttachmentDelete extends JiraCommand.Action {
+        @Parameters(index = "0", paramLabel = "KEY")
+        String key;
+        @Parameters(index = "1", paramLabel = "ATTACHMENT_ID")
+        String id;
+
+        @Override protected void execute() throws IOException {
+            key = nonblank(key, "Issue key");
+            id = nonblank(id, "Attachment ID");
+            var jira = client();
+            var found = jira.attachments(key).asList().stream()
+                    .anyMatch(value -> value.isJsonObject()
+                            && value.getAsJsonObject().has("id")
+                            && value.getAsJsonObject().get("id").getAsString()
+                                    .equals(id));
+            if (!found) {
+                throw wrong("Attachment ID does not belong to the specified issue.");
+            }
+            jira.deleteAttachment(id);
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            result.addProperty("attachmentId", id);
+            result.addProperty("deleted", true);
+            machineData = result;
+            print("Deleted attachment " + id + " from " + key + ".");
+        }
+    }
 
     @Command(name = "comment", mixinStandardHelpOptions = true,
             description = "Manage issue comments.", subcommands = CommentAdd.class)
@@ -72,8 +189,15 @@ public final class JiraIssueExtras {
                 properties.add(property);
                 data.add("properties", properties);
             }
-            jira.request("POST", "issue/" + key + "/comment", data);
-            changed(key, true);
+            var created = object(jira.request("POST",
+                    "issue/" + key + "/comment", data));
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            if (created.has("id")) {
+                result.add("commentId", created.get("id").deepCopy());
+            }
+            result.addProperty("created", true);
+            machineData = result;
             print("Commented on " + key + ".");
         }
     }
@@ -127,7 +251,15 @@ public final class JiraIssueExtras {
                 data.add("comment", bodyFormat.toJira(
                         nonblank(comment, "--comment"), jira));
             }
-            jira.request("POST", "issue/" + key + "/worklog", data);
+            var created = object(jira.request("POST",
+                    "issue/" + key + "/worklog", data));
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            if (created.has("id")) {
+                result.add("worklogId", created.get("id").deepCopy());
+            }
+            result.addProperty("created", true);
+            machineData = result;
             print("Logged time on " + key + ".");
         }
     }

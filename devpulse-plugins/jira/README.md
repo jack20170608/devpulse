@@ -82,9 +82,11 @@ jira issue view DEMO-1 --machine
 jira --machine issue create -p DEMO -t Task -s "Approved task"
 jira --machine issue edit DEMO-1 -s "Approved summary"
 jira --machine issue comment add DEMO-1 "Approved comment"
+jira --machine issue attachment add DEMO-1 --file evidence.png
+jira --machine issue attachment list DEMO-1
 ```
 
-每次调用向 stdout 输出一个 JSON 对象，包含 `schemaVersion: 1` 和 `ok`。成功时包含 `data` 和 `messages`：原本支持 `--json` 的查询自动选择原始 JSON，保留分页信息；创建返回 Jira 的创建结果（含 `key`），编辑及评论返回 `{key, changed}`，`me` 返回账户标识对象，`open` 返回 `{url}` 且不启动浏览器。其他命令暂以 `data: null` 和人类文本 `messages` 返回；帮助及版本也是文本消息，**不要将 messages 当作稳定的机器字段解析**。
+每次调用向 stdout 输出一个 JSON 对象，包含 `schemaVersion: 1` 和 `ok`。成功时包含 `data` 和 `messages`：原本支持 `--json` 的查询自动选择原始 JSON，保留分页信息；Jira 写操作返回结构化结果，例如创建返回 issue key，评论返回 comment id，附件上传返回附件元数据、文件 SHA-256 和大小，附件删除返回附件 id，编辑返回 `{key, changed}`。附件列表返回附件 id、文件名、大小、MIME 类型及创建时间。`me` 返回账户标识对象，`open` 返回 `{url}` 且不启动浏览器。其他暂未结构化的命令及帮助/版本以 `data: null` 和人类文本 `messages` 返回，**不要将 messages 当作稳定的机器字段解析**。
 
 ```json
 {"schemaVersion":1,"ok":true,"data":{"key":"DEMO-1","changed":true},"messages":[]}
@@ -147,7 +149,12 @@ bash run-jira.sh comment-export DEMO-1 123 --file existing-comment.md
 # 编辑 existing-comment.md 后上传
 bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
 bash run-jira.sh attach DEMO-1 --file diagram.png
+bash run-jira.sh issue attachment add DEMO-1 --file evidence.png
+bash run-jira.sh issue attachment list DEMO-1
+bash run-jira.sh issue attachment delete DEMO-1 10001
 ```
+
+附件每次上传一个、最大 25 MB；CLI 返回上传文件内容的 SHA-256，列表提供 Jira 附件 ID 及可核对元数据。删除前 CLI 会验证该附件 ID 属于指定 Issue。`issue attachment add|list|delete` 是推荐入口；旧的顶层 `attach` 保持兼容。上传超时或结果未知时，先列出附件并核对，不要盲目重复上传。
 
 `init`、`issue template` 和 `export` 只创建新文件，不覆盖已有文件。Issue 文件统一为 UTF-8 `.md` / `.markdown`，顶部 `---` 包裹 YAML metadata，其后是描述正文，不再创建相邻的 Issue `.conf`。创建需要项目、类型和标题，项目可由连接配置提供。导出保留 Jira `/editmeta` 返回的字段；常用引用字段转换为名称、key 或用户标识，自定义字段保留 JSON/YAML 结构。`originalFields`、`descriptionSha256`、`key`、`updated`、`mode`、`apiVersion`、`bodyFormat` 保存在同一文件中，不要手动修改基线；`update` 只发送修改过的字段，成功后重新导出。
 
@@ -524,9 +531,11 @@ jira issue view DEMO-1 --machine
 jira --machine issue create -p DEMO -t Task -s "Approved task"
 jira --machine issue edit DEMO-1 -s "Approved summary"
 jira --machine issue comment add DEMO-1 "Approved comment"
+jira --machine issue attachment add DEMO-1 --file evidence.png
+jira --machine issue attachment list DEMO-1
 ```
 
-Each invocation writes one JSON object to stdout with `schemaVersion: 1` and `ok`. Success includes `data` and `messages`. Queries already supporting `--json` automatically select raw JSON, preserving pagination. Creation returns Jira's creation result including `key`; edits and comments return `{key, changed}`; `me` returns an account identifier object; `open` returns `{url}` without launching a browser. Other commands currently return `data: null` and human text in `messages`; help and version also use text messages. **Do not parse messages as stable machine fields.**
+Each invocation writes one JSON object to stdout with `schemaVersion: 1` and `ok`. Success includes `data` and `messages`. Queries already supporting `--json` automatically select raw JSON, preserving pagination. Jira write operations return structured results, such as created issue keys, comment IDs, and attachment metadata, SHA-256, and size; attachment deletion returns the attachment ID. Attachment listing returns IDs, filenames, sizes, MIME types, and creation times. `me` returns an account identifier object; `open` returns `{url}` without launching a browser. Commands without a structured result and help/version currently return `data: null` and human text in `messages`. **Do not parse messages as stable machine fields.**
 
 ```json
 {"schemaVersion":1,"ok":true,"data":{"key":"DEMO-1","changed":true},"messages":[]}
@@ -589,7 +598,12 @@ bash run-jira.sh comment-export DEMO-1 123 --file existing-comment.md
 # Edit existing-comment.md before uploading
 bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
 bash run-jira.sh attach DEMO-1 --file diagram.png
+bash run-jira.sh issue attachment add DEMO-1 --file evidence.png
+bash run-jira.sh issue attachment list DEMO-1
+bash run-jira.sh issue attachment delete DEMO-1 10001
 ```
+
+Each attachment upload is a single-file operation with a 25 MB maximum. The CLI returns the SHA-256 and size of the submitted file bytes; listing returns Jira attachment IDs and metadata. Before deletion, the CLI verifies that the attachment ID belongs to the specified issue. `issue attachment add|list|delete` is the recommended interface; the legacy top-level `attach` command remains supported. If an upload times out or has an unknown outcome, list and verify the attachment before attempting another upload.
 
 `init`, `issue template`, and `export` create new files only; none overwrites existing files. Issue files are UTF-8 `.md` / `.markdown`: YAML metadata between `---` delimiters, followed by the description body, without an adjacent issue `.conf`. Creation requires project, type, and summary; the connection can supply the project. Exports retain Jira `/editmeta` fields; common references become names, keys, or user identifiers, while custom fields retain JSON/YAML structure. `originalFields`, `descriptionSha256`, `key`, `updated`, `mode`, `apiVersion`, and `bodyFormat` stay in that same file. Do not edit baseline metadata. `update` sends only changed fields; export again after success.
 

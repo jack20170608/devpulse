@@ -378,6 +378,7 @@ public final class JiraCommand implements Runnable {
                     JiraIssueOperations.View.class, JiraIssueOperations.Link.class,
                     JiraIssueOperations.Unlink.class, JiraIssueOperations.Clone.class,
                     JiraIssueOperations.Delete.class,
+                    JiraIssueExtras.Attachment.class,
                     IssueTemplate.class})
     static final class Issue implements Runnable {
         @Spec
@@ -504,6 +505,7 @@ public final class JiraCommand implements Runnable {
                         + "transitions " + key + " first.");
             }
             jira.transition(key, id);
+            changed(key, true);
             print("Transitioned " + key + " with ID " + id + ".");
         }
     }
@@ -520,8 +522,15 @@ public final class JiraCommand implements Runnable {
         @Override
         protected void execute() throws IOException {
             var jira = client();
-            jira.comment(key, bodyFormat.toJira(text(file), jira));
-            changed(key, true);
+            var created = jira.comment(key,
+                    bodyFormat.toJira(text(file), jira));
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            if (created.has("id")) {
+                result.add("commentId", created.get("id").deepCopy());
+            }
+            result.addProperty("created", true);
+            machineData = result;
             print("Commented on " + key + ".");
         }
     }
@@ -616,6 +625,11 @@ public final class JiraCommand implements Runnable {
             }
             jira.editComment(key, id,
                     bodyFormat.toJira(content, jira, data));
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            result.addProperty("commentId", id);
+            result.addProperty("changed", true);
+            machineData = result;
             print("Updated comment " + id + ". "
                     + "Re-export before the next update.");
         }
@@ -631,7 +645,8 @@ public final class JiraCommand implements Runnable {
 
         @Override
         protected void execute() throws IOException {
-            client().attach(key, file);
+            machineData = JiraIssueExtras.attachmentUploadData(
+                    key, client().attach(key, file));
             print("Attached " + file.getFileName() + " to " + key + ".");
         }
     }

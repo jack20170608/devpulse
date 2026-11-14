@@ -13,10 +13,16 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Base64;
 
 public final class JiraClient {
+    public record AttachmentUpload(JsonArray attachments, String sha256,
+            long size, String contentType, String filename) {
+    }
+
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NEVER).build();
@@ -92,7 +98,8 @@ public final class JiraClient {
         if (!result.isJsonArray()) {
             throw new IOException("Expected a JSON array from Jira.");
         }
-        return result.getAsJsonArray();
+        return new AttachmentUpload(result.getAsJsonArray(),
+                sha256(content), content.length, contentType, name);
     }
 
     public void assign(String key, String user) throws IOException {
@@ -218,10 +225,11 @@ public final class JiraClient {
         request("POST", "issue/" + segment(key) + "/transitions", body);
     }
 
-    public void comment(String key, JsonElement body) throws IOException {
+    public JsonObject comment(String key, JsonElement body) throws IOException {
         var data = new JsonObject();
         data.add("body", body);
-        request("POST", "issue/" + segment(key) + "/comment", data);
+        return object(request("POST", "issue/" + segment(key)
+                + "/comment", data));
     }
 
     public JsonObject comment(String key, String id) throws IOException {
@@ -237,8 +245,30 @@ public final class JiraClient {
                 + numeric(id), data);
     }
 
-    public void attach(String key, Path file) throws IOException {
+    public JsonArray attachments(String key) throws IOException {
+        var issue = object(request("GET", "issue/" + segment(key)
+                + "?fields=attachment", null));
+        var fields = issue.get("fields");
+        if (fields == null || !fields.isJsonObject()) {
+            throw new IOException("Jira returned no attachment fields.");
+        }
+        var attachments = fields.getAsJsonObject().get("attachment");
+        if (attachments == null || !attachments.isJsonArray()) {
+            throw new IOException("Jira returned an invalid attachment list.");
+        }
+        return attachments.getAsJsonArray();
+    }
+
+    public AttachmentUpload attach(String key, Path file) throws IOException {
         if (!Files.isRegularFile(file) || Files.size(file) > 25_000_000) {
+            throw new IOException("Attachment must be a regular file "
+                    + "of at most 25 MB.");
+        }
+        byte[] content;
+        try (var input = Files.newInputStream(file)) {
+            content = input.readNBytes(25_000_001);
+        }
+        if (content.length > 25_000_000) {
             throw new IOException("Attachment must be a regular file "
                     + "of at most 25 MB.");
         }
@@ -248,10 +278,15 @@ public final class JiraClient {
                 || name.contains("\"")) {
             throw new IOException("Unsafe attachment filename.");
         }
+        var contentType = Files.probeContentType(file);
+        if (contentType == null
+                || !contentType.matches("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+")) {
+            contentType = "application/octet-stream";
+        }
         var prefix = ("--" + boundary + "\r\n"
                 + "Content-Disposition: form-data; name=\"file\"; "
                 + "filename=\"" + name + "\"\r\n"
-                + "Content-Type: application/octet-stream\r\n\r\n")
+                + "Content-Type: " + contentType + "\r\n\r\n")
                 .getBytes(StandardCharsets.UTF_8);
         var suffix = ("\r\n--" + boundary + "--\r\n")
                 .getBytes(StandardCharsets.UTF_8);
@@ -261,10 +296,40 @@ public final class JiraClient {
                         + boundary)
                 .POST(HttpRequest.BodyPublishers.concat(
                         HttpRequest.BodyPublishers.ofByteArray(prefix),
-                        HttpRequest.BodyPublishers.ofFile(file),
+                        HttpRequest.BodyPublishers.ofByteArray(content),
                         HttpRequest.BodyPublishers.ofByteArray(suffix)))
                 .build();
-        send(request);
+        JsonElement result;
+        try {
+            result = JsonParser.parseString(send(request));
+        } catch (com.google.gson.JsonParseException exception) {
+            throw new JiraRequestException(
+                    "Jira returned invalid attachment JSON.",
+                    "INVALID_RESPONSE", null, true, false, exception);
+        }
+        if (!result.isJsonArray()) {
+            throw new JiraRequestException(
+                    "Jira returned an invalid attachment response.",
+                    "INVALID_RESPONSE", null, true, false, null);
+        }
+        return result.getAsJsonArray();
+    }
+
+    public void deleteAttachment(String id) throws IOException {
+        if (id == null || !id.matches("[0-9]+")) {
+            throw new IOException("Attachment ID must be numeric.");
+        }
+        request("DELETE", "attachment/" + id, null);
+    }
+
+    public static String sha256(byte[] content) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256")
+                    .digest(content);
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable.", exception);
+        }
     }
 
     public JsonElement request(String method, String path, JsonObject data)

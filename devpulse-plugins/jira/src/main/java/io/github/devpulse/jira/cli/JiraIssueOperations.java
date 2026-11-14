@@ -332,6 +332,12 @@ public final class JiraIssueOperations {
             body.add("inwardIssue", reference("key", selected.reverse() ? other : key));
             body.add("outwardIssue", reference("key", selected.reverse() ? key : other));
             jira.request("POST", "issueLink", body);
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            result.addProperty("otherKey", other);
+            result.addProperty("linkTypeId", selected.id());
+            result.addProperty("created", true);
+            machineData = result;
             print("Linked " + key + " and " + other + ".");
         }
 
@@ -370,7 +376,16 @@ public final class JiraIssueOperations {
                 link.addProperty("title", title);
                 var body = new JsonObject();
                 body.add("object", link);
-                client().request("POST", "issue/" + encode(key) + "/remotelink", body);
+                var created = object(client().request("POST",
+                        "issue/" + encode(key) + "/remotelink", body));
+                var result = new JsonObject();
+                result.addProperty("key", key);
+                result.addProperty("url", url);
+                if (created.has("id")) {
+                    result.add("remoteLinkId", created.get("id").deepCopy());
+                }
+                result.addProperty("created", true);
+                machineData = result;
                 print("Added remote link to " + key + ".");
             }
         }
@@ -423,6 +438,11 @@ public final class JiraIssueOperations {
             for (var id : ids) {
                 jira.request("DELETE", "issueLink/" + id, null);
             }
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            result.addProperty("otherKey", other);
+            result.addProperty("removed", ids.size());
+            machineData = result;
             print("Removed " + ids.size() + " link(s) between "
                     + key + " and " + other + ".");
         }
@@ -443,6 +463,11 @@ public final class JiraIssueOperations {
             key = issueKey(required(this, key, "Issue key to delete", noInput));
             client().request("DELETE", "issue/" + encode(key)
                     + "?deleteSubtasks=" + cascade, null);
+            var result = new JsonObject();
+            result.addProperty("key", key);
+            result.addProperty("deleted", true);
+            result.addProperty("cascade", cascade);
+            machineData = result;
             print("Deleted " + key + ".");
         }
     }
@@ -567,8 +592,13 @@ public final class JiraIssueOperations {
                 spec.commandLine().getErr().println("jira: omitted "
                         + skipped.size() + " unsupported field value(s).");
             }
-            print("Created " + string(jira.create(fields), "key")
-                    + " from " + key + ".");
+            var created = jira.create(fields);
+            var result = new JsonObject();
+            result.addProperty("key", string(created, "key"));
+            result.addProperty("sourceKey", key);
+            result.addProperty("created", true);
+            machineData = result;
+            print("Created " + string(created, "key") + " from " + key + ".");
         }
     }
 
