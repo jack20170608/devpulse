@@ -2,7 +2,7 @@ package io.github.devpulse.jira.cli;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.GsonBuilder;
+import io.github.devpulse.jira.JiraConfiguration;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -39,82 +39,52 @@ final class JiraSkillCommands implements Runnable {
     }
 
     @Command(name = "export", mixinStandardHelpOptions = true,
-            description = "Export the requirements-to-Jira skill; optionally capture a read-only Jira environment snapshot.")
+            description = "Export the requirements-to-Jira skill offline; the skill reads the "
+                    + "environment snapshot saved by jira env refresh.")
     static final class Export extends JiraCommand.Action {
         @Option(names = "--output", required = true, paramLabel = "DIRECTORY",
                 description = "New skill directory; existing paths are never overwritten.")
         Path output;
-        @Option(names = "--templates", paramLabel = "DIRECTORY",
-                description = "Override specification.md and/or jira-issue.md "
-                        + "(complete issue template: metadata and description) from this directory. "
-                        + "Otherwise use .jira/templates in the current directory; "
-                        + "missing files fall back to bundled defaults.")
-        Path templates;
+        @Option(names = "--profile", paramLabel = "NAME",
+                description = "Template profile (.jira/profiles/NAME, then ~/.jira/profiles/NAME). "
+                        + "Otherwise use the configuration's profile, an interactive choice when "
+                        + "several profiles exist, or default. Missing files use bundled templates.")
+        String profile;
+        @Option(names = "--no-input",
+                description = "Never prompt for a profile.")
+        boolean noInput;
         @Option(names = "--language", defaultValue = "en", paramLabel = "en|zh",
                 description = "Language of bundled skill instructions and templates: "
                         + "${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}). "
                         + "Custom templates are copied without translation.")
         Language language;
-        @Option(names = "--with-environment",
-                description = "Query Jira and include a dated project environment snapshot. "
-                        + "Without this flag, export remains offline.")
-        boolean withEnvironment;
-        @Option(names = {"-p", "--project"}, paramLabel = "KEY_OR_ID",
-                description = "Environment project; defaults to connection configuration. "
-                        + "Requires --with-environment.")
-        String project;
 
         @Override
         protected void execute() throws IOException {
-            if (project != null && !withEnvironment) {
-                throw JiraCommand.wrong("--project requires --with-environment.");
-            }
             var destination = output.toAbsolutePath().normalize();
             if (destination.getParent() == null
                     || Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
                 throw JiraCommand.wrong("Skill output must be a new directory; choose another path.");
             }
-            var overrides = templates == null
-                    ? Path.of(".jira", "templates") : templates;
-            boolean present = Files.exists(overrides, LinkOption.NOFOLLOW_LINKS);
-            if ((templates != null || present) && !Files.isDirectory(overrides)) {
-                throw JiraCommand.wrong("Template override directory is missing or invalid.");
-            }
+            var selected = selectProfile();
             var contents = new LinkedHashMap<Path, String>();
             var sources = new JsonObject();
             for (var file : FILES) {
                 var name = file.getFileName().toString();
-                var source = overrides.resolve(name);
                 boolean template = file.startsWith("templates");
-                boolean overridden = template && present
-                        && Files.exists(source, LinkOption.NOFOLLOW_LINKS);
-                String content;
-                if (overridden) {
-                    if (!Files.isRegularFile(source) || Files.size(source) > 1024 * 1024) {
-                        throw JiraCommand.wrong("Template override must be a UTF-8 file of at most 1 MiB.");
-                    }
-                    content = Files.readString(source, StandardCharsets.UTF_8);
-                    if (content.isBlank()) {
-                        throw JiraCommand.wrong("Template override must not be empty.");
-                    }
-                } else {
+                var content = template && selected != null
+                        ? JiraProfiles.read(selected.directory(), name) : null;
+                boolean overridden = content != null;
+                if (!overridden) {
                     content = bundled(file, language);
                 }
                 contents.put(file, content);
                 if (template) {
                     sources.addProperty(name, overridden
-                            ? source.toAbsolutePath().normalize().toString() : "bundled");
+                            ? JiraProfiles.file(selected.directory(), name)
+                                    .toAbsolutePath().normalize().toString()
+                            : "bundled");
                 }
-            }
-            JsonObject environment = null;
-            if (withEnvironment) {
-                var connection = configuration();
-                var selectedProject = JiraCatalogCommands.project(project, connection.project());
-                var jira = client();
-                environment = new JiraSkillEnvironment(connection, jira::request, jira::agile)
-                        .collect(selectedProject);
-                contents.put(Path.of("references", "environment.json"),
-                        new GsonBuilder().setPrettyPrinting().create().toJson(environment) + "\n");
             }
             Files.createDirectories(destination.getParent());
             var staging = Files.createTempDirectory(destination.getParent(), ".jira-skill-");
@@ -141,35 +111,78 @@ final class JiraSkillCommands implements Runnable {
             var files = new JsonArray();
             contents.keySet().forEach(file -> files.add(file.toString()));
             result.add("files", files);
-            result.add("templateSources", sources);
-            if (environment != null) {
-                var summary = JiraSkillEnvironment.select(environment,
-                        "capturedAt", "finishedAt", "project");
-                for (var section : List.of("epics", "issueTypes", "boards", "sprints")) {
-                    var values = environment.getAsJsonObject(section);
-                    var status = JiraSkillEnvironment.select(values, "status", "complete", "reason", "support", "error");
-                    status.addProperty("count", values.getAsJsonArray("items").size());
-                    summary.add(section, status);
-                }
-                result.add("environment", summary);
+            if (selected != null) {
+                result.add("profile", selected.json());
+            } else {
+                result.add("profile", com.google.gson.JsonNull.INSTANCE);
             }
+            result.add("templateSources", sources);
             machineData = result;
-            print("Exported " + NAME + " (" + language + ") to " + destination + ".");
-            if (environment != null) {
-                var incomplete = new java.util.ArrayList<String>();
-                for (var section : List.of("epics", "issueTypes", "boards", "sprints")) {
-                    if (!environment.getAsJsonObject(section).get("complete").getAsBoolean()) {
-                        incomplete.add(section);
+            print("Exported " + NAME + " (" + language + ") to " + destination
+                    + (selected == null ? " using bundled templates."
+                    : " using profile " + selected.name() + " (" + selected.scope() + ")."));
+        }
+
+        private JiraProfiles.Location selectProfile() throws IOException {
+            var name = profile;
+            boolean implicit = false;
+            if (name == null) {
+                var file = JiraConfiguration.find(explicitConfigFile());
+                if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                    name = JiraConfiguration.load(file).profile();
+                }
+            }
+            if (name == null) {
+                var available = JiraProfiles.names();
+                var console = System.console();
+                if (available.size() > 1 && !noInput && console != null) {
+                    name = choose(available, console);
+                } else {
+                    name = JiraProfiles.DEFAULT;
+                    implicit = true;
+                }
+            }
+            var found = JiraProfiles.find(name);
+            if (found.isPresent()) {
+                return found.get();
+            }
+            if (implicit && JiraProfiles.names().isEmpty()) {
+                return null;
+            }
+            throw JiraProfiles.missing(name);
+        }
+
+        private String choose(List<String> available, java.io.Console console) throws IOException {
+            var err = spec.commandLine().getErr();
+            for (int index = 0; index < available.size(); index++) {
+                err.println("  " + (index + 1) + ") " + available.get(index));
+            }
+            int fallback = Math.max(0, available.indexOf(JiraProfiles.DEFAULT));
+            while (true) {
+                err.print("Profile [" + available.get(fallback) + "]: ");
+                err.flush();
+                var answer = console.readLine();
+                if (answer == null) {
+                    throw JiraCommand.wrong("Input ended; no profile was selected.");
+                }
+                answer = answer.strip();
+                if (answer.isEmpty()) {
+                    return available.get(fallback);
+                }
+                if (available.contains(answer)) {
+                    return answer;
+                }
+                if (answer.matches("\\d{1,3}")) {
+                    int choice = Integer.parseInt(answer);
+                    if (choice >= 1 && choice <= available.size()) {
+                        return available.get(choice - 1);
                     }
                 }
-                if (!incomplete.isEmpty()) {
-                    print("Environment snapshot is incomplete: " + String.join(", ", incomplete)
-                            + ". See references\\environment.json for scope and query status.");
-                }
+                err.println("Choose a listed number or profile name.");
             }
         }
 
-        private static String bundled(Path file, Language language) throws IOException {
+        static String bundled(Path file, Language language) throws IOException {
             boolean bilingual = file.equals(Path.of("templates", "specification.md"));
             var source = bilingual ? file : file.resolveSibling(
                     file.getFileName().toString().replace(".md", "." + language.name() + ".md"));

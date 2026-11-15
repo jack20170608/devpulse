@@ -2,13 +2,14 @@
 
 ### Reading and validity
 
-This directory contains `environment.json` only when exported with `--with-environment`. Otherwise export is entirely offline; a missing snapshot does not mean there are no epics, issue types, or sprints. Ask the user to export to a new directory when needed; never initialize configuration or broaden the query scope unasked.
+Environment snapshots are maintained by `jira env refresh` (also offered by `jira init`), not shipped with skill exports. Read `.jira\environment\<PROJECT_KEY>.json` in the current working directory first, then `~\.jira\environment\<PROJECT_KEY>.json` in the user's home, matching the scope (local or global) of the connection configuration in use. A missing snapshot does not mean there are no epics, issue types, or sprints. When it is missing or stale, ask the user to refresh it; run the following command on their behalf only when explicitly asked. It replaces the project's previous snapshot and never broadens the query scope:
 
 ```powershell
-jira --machine skill export --output refreshed-skill --language en --with-environment --project DEMO
+jira --machine env refresh        # configuration in use; add -g for global, -p KEY for another project
+jira --machine env show           # summarize the saved snapshot
 ```
 
-Before use, check schemaVersion, capturedAt/finishedAt, serverUrl, mode, apiVersion, project, and actor. The snapshot belongs to the connection, account, and target project at collection time, not the entire Jira instance. Never reuse it across changed connections, accounts, or projects. There is no guaranteed fixed validity period: revalidate selected epics, types, and sprints before submission. Export to a new directory instead of overwriting old snapshots.
+Before use, check schemaVersion, capturedAt/finishedAt, serverUrl, mode, apiVersion, project, and actor. The snapshot belongs to the connection, account, and target project at collection time, not the entire Jira instance. Never reuse it across changed connections, accounts, or projects. There is no guaranteed fixed validity period: revalidate selected epics, types, and sprints before submission.
 
 Each dataset has `status`, `complete`, and `items`; failures may include reason, error.code, and httpStatus. `partial` or `unavailable` does not mean an empty list or an unsupported feature. Inaccessible content is invisible; multi-page queries are not transactional and concurrent changes can cause failures. Candidates are neither user selections nor authorization.
 

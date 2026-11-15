@@ -1,5 +1,6 @@
 package io.github.devpulse.jira.cli;
 
+import static io.github.devpulse.jira.cli.JiraCommand.object;
 import static io.github.devpulse.jira.cli.JiraCommand.nonblank;
 import static io.github.devpulse.jira.cli.JiraCommand.string;
 import static io.github.devpulse.jira.cli.JiraCommand.text;
@@ -73,7 +74,7 @@ public final class JiraIssueExtras {
         Path file;
 
         @Override protected void execute() throws IOException {
-            key = nonblank(key, "Issue key");
+            issueKey(key);
             var upload = client().attach(key, file);
             machineData = attachmentUploadData(key, upload);
             print("Attached " + file.getFileName() + " to " + key + ".");
@@ -87,7 +88,7 @@ public final class JiraIssueExtras {
         String key;
 
         @Override protected void execute() throws IOException {
-            key = nonblank(key, "Issue key");
+            issueKey(key);
             var values = client().attachments(key);
             var attachments = new JsonArray();
             for (var value : values) {
@@ -119,7 +120,7 @@ public final class JiraIssueExtras {
         String id;
 
         @Override protected void execute() throws IOException {
-            key = nonblank(key, "Issue key");
+            issueKey(key);
             id = nonblank(id, "Attachment ID");
             var jira = client();
             var found = jira.attachments(key).asList().stream()

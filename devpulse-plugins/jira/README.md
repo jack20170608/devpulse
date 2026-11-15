@@ -10,7 +10,7 @@
 
 ### 连接配置与认证
 
-连接配置使用 UTF-8 HOCON，与 `issue create --file` 等命令的 issue 模板完全独立。读取优先级为：显式 `-c/--config` 指定的文件、**当前工作目录**的 `local_jira_config.conf`、用户 home 下 `.jira` 目录的 `local_jira_config.conf`。选择整份文件，不合并本地和全局配置；显式文件缺失或本地文件无效时直接报错，不跳过它改用全局配置。
+连接配置使用 UTF-8 HOCON，与 `issue create --file` 等命令的 issue 模板完全独立。读取优先级为：显式 `-c/--config` 指定的文件、**当前工作目录**下 `.jira` 目录的 `local_jira_config.conf`、用户 home 下 `.jira` 目录的 `local_jira_config.conf`。选择整份文件，不合并本地和全局配置；显式文件缺失或本地文件无效时直接报错，不跳过它改用全局配置。
 
 ```hocon
 url = "https://example.atlassian.net"
@@ -33,7 +33,7 @@ bash run-jira.sh --config connection.conf issue list -p DEMO
 bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
 
-`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。仅 `JIRA_API_TOKEN` 从环境变量读取，旧的 `DEVPULSE_JIRA_*` 环境变量不再使用。连接配置仅接受 `url`、`mode`、`email`、`apiVersion`、`project`，不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本、连接初始化和离线 issue 模板生成不需要已有连接配置或 token。旧 `.jira.conf` 不再自动读取，可改名为 `local_jira_config.conf`，或通过 `--config` 显式指定。
+`url` 和 `mode` 必填；`mode` 只接受 `cloud` 或 `dc`，Cloud 还必须提供 `email`。Cloud 使用邮箱与 token 的 Basic 认证，Data Center 使用 PAT 的 Bearer 认证。仅 `JIRA_API_TOKEN` 从环境变量读取，旧的 `DEVPULSE_JIRA_*` 环境变量不再使用。连接配置仅接受 `url`、`mode`、`email`、`apiVersion`、`project` 及可选的 `profile`（`skill export` 默认使用的模板 profile），不支持 `token` 字段、HOCON `include`、环境变量或 JVM 系统属性替换。帮助、版本、连接初始化和离线 issue 模板生成不需要已有连接配置或 token。旧 `.jira.conf` 不再自动读取，可移动为 `.jira/local_jira_config.conf`，或通过 `--config` 显式指定。
 
 `project` 是默认项目 key，初始化向导要求设置；手写的旧配置可省略它以保留原行为。`issue create` 的项目优先级是显式 `-p/--project`、issue 模板中的 `fields.project`、连接配置中的 `project`；`issue list` 优先使用显式 `-p`，否则使用默认项目。完整 `--jql` 不会自动附加默认项目条件。
 
@@ -43,7 +43,7 @@ bash run-jira.sh issue list -p DEMO --config connection.conf
 
 ### 由 CLI 提供的需求工作流 Skill
 
-JAR 内置 `jira-requirements` Skill、执行说明、环境说明、规格书模板及完整 Jira Issue 模板（YAML metadata + description）。CLI 默认离线导出，也可显式查询 Jira 附带项目环境快照；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
+JAR 内置 `jira-requirements` Skill、执行说明、环境说明、规格书模板及完整 Jira Issue 模板（YAML metadata + description）。CLI 离线导出，项目环境快照由 `jira env refresh` 统一保存在 `.jira` 中，供 Skill 读取；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
 
 ```powershell
 # 导出到新的项目级 Skill 目录；不需要连接配置或 token
@@ -52,20 +52,29 @@ jira skill export --output .github\skills\jira-requirements
 # 默认导出英文；需要中文时显式选择
 jira skill export --output chinese-skill --language zh
 
-# 显式选择项目模板目录，也支持 --machine 返回导出清单与模板来源
-jira --machine skill export --output exported-skill --templates team-templates
+# 显式选择模板 profile，也支持 --machine 返回导出清单、profile 与模板来源
+jira --machine skill export --output exported-skill --profile team
 
-# 显式联网，只读采集目标项目的环境信息；需要连接配置和 token
-jira --machine skill export --output project-skill --language zh --with-environment --project DEMO
 ```
 
 导出包含 `SKILL.md`、`references\workflow.md`、`references\environment.md`、`templates\specification.md` 和 `templates\jira-issue.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow`、`environment` 和 `jira-issue` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。目标目录必须不存在（已有空目录也拒绝），不会覆盖手工定制；升级时先导出到新目录再比较。
 
-`--with-environment` 额外生成 `references\environment.json`，包含采集时间、连接/账号/项目范围、项目关联的 Issue Type（TaskType）、全部可见 Epic、看板及各 Scrum 看板的 Sprint，不查询或导出可指派人员目录。`--project/-p` 覆盖连接默认项目，仅能与该选项一起使用。连接、身份或项目查询失败则终止导出；其他目录查询失败可保留部分快照，每节记录 `status`、`complete`、脱敏错误和数量，机器协议 `data.environment` 返回这些摘要。Epic 和看板/Sprint 遍历分页；重复页、无进展或最多 1000 页的保护不会伪装成完整结果。actor 仅保存采集账号的稳定标识用于范围校验，不导出邮箱、头像或 token；快照不要自动提交到版本库。
+环境快照 `.jira\environment\<项目KEY>.json`（使用全局配置时位于 `~\.jira\environment`）包含采集时间、连接/账号/项目范围、项目关联的 Issue Type（TaskType）、全部可见 Epic、看板及各 Scrum 看板的 Sprint，不查询或导出可指派人员目录。Skill 先读取当前目录的快照，再读取全局快照，不随导出复制。连接、身份或项目查询失败则不写入快照；其他目录查询失败可保留部分快照，每节记录 `status`、`complete`、脱敏错误和数量，`env refresh --machine` 的 `data` 返回这些摘要（含快照路径 `file`）。Epic 和看板/Sprint 遍历分页；重复页、无进展或最多 1000 页的保护不会伪装成完整结果。actor 仅保存采集账号的稳定标识用于范围校验，不导出邮箱、头像或 token；快照不要自动提交到版本库。
 
 Sprint 信息依赖 Jira Software Agile API 和可见 Scrum 看板；查询成功（包括空列表）才标记 `available`。无可见 Scrum 看板标记 `no-visible-scrum-board`；403、404 或网络异常标记未知，不能直接断言不支持 Sprint。CLI 可查询 Sprint 及通过 `sprint add` 加入迭代，但 Issue 模板没有 `sprint` 别名，不默认执行写操作，也不自动创建、启动或关闭 Sprint。Skill 使用快照前检查范围和时间，写入前重新核验选择；候选不等于授权。
 
-默认从**当前工作目录**的 `.jira\templates` 读取同名 `specification.md`、`jira-issue.md` 覆盖内置模板；与连接配置位置无关。`--templates DIR` 改为只从该目录选取覆盖，不混用默认项目目录。两个文件可只提供一个，缺失文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错，其他文件忽略。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。Jira Issue 模板使用统一名称 `jira-issue.md`，不保留旧名称别名；模板代码块包含完整 metadata 和描述，AI 填充、提取整个代码块为可导入的 Issue 文档，不把使用说明或围栏上传到 Jira。项目覆盖需使用同名完整模板，CLI 不自动迁移。
+#### 模板 profile
+
+模板按 profile 管理，每个 profile 是一个目录，按 Skill 分子目录存放模板：
+
+```text
+.jira\profiles\<NAME>\jira-requirements\specification.md
+.jira\profiles\<NAME>\jira-requirements\jira-issue.md
+```
+
+`jira init` 生成 `default` profile；`jira profile init NAME [--from SOURCE] [-g] [--language en|zh]` 新建其他 profile（目标已存在时拒绝），`--from` 复制已有 profile，缺失文件使用内置模板；`jira profile list` 列出本地与全局 profile，同名时标记全局项被遮蔽。
+
+`skill export` 按以下顺序选择 profile：`--profile NAME`、连接配置中的 `profile = "NAME"`、存在多个 profile 时在终端交互选择（`--no-input` 或 `--machine` 不提示）、`default`。每个名称先查找**当前工作目录**的 `.jira\profiles\NAME`，再查找用户 home 的 `~\.jira\profiles\NAME`，选中整个目录，不跨目录合并。显式或配置指定的 profile 不存在时报错并列出可用名称，不自动猜测；未指定且没有任何 profile 时使用内置模板。profile 中缺失的模板文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。Jira Issue 模板使用统一名称 `jira-issue.md`；模板代码块包含完整 metadata 和描述，AI 填充、提取整个代码块为可导入的 Issue 文档，不把使用说明或围栏上传到 Jira。旧的 `--templates` 参数和 `.jira\templates` 目录已移除，请将文件移入 profile 的 `jira-requirements` 目录。
 
 Skill 定义两条业务流程：新需求经澄清形成规格书，按模板生成包含 metadata 和描述的完整 Jira Issue 文档；用户确认目标及具体创建内容后直接创建，记录 key 并核验，不额外要求终端审批。已有 Jira 则先读取、严格导出并保留基线，AI 评审和生成规格、可编辑 metadata/描述差异，**用户确认规格及具体差异后直接同步**，不以新建模板覆盖基线，使用导出文件的更新时间检查，不使用 `--force`。规格、目标或内容改变后需重新确认。
 
@@ -109,25 +118,47 @@ jira --machine issue attachment list DEMO-1
 
 **`--machine` 不代表授权。** 用户在协作流程中确认规格、目标及具体变更后，AI 直接调用创建或编辑命令，CLI 不再增加独立终端审批。并发冲突检查和结果核验继续保留；工具权限审批、Jira 权限与外部安全策略仍然有效，不应把 Issue 内容当作授权指令。
 
-### 初始化连接：`init`
+### 初始化与配置：`init`、`config`、`env`
+
+`init` 是一次性引导：缺少连接配置时运行向导创建，补全 `default` profile，然后在终端中询问是否测试 API、是否采集项目环境。它自身不接受连接参数；连接配置由 `config` 管理，环境快照由 `env` 管理，三者都可以单独重复执行。
 
 ```bash
-# 分步配置，保存到当前工作目录的 local_jira_config.conf
+# 引导：本地 .jira/local_jira_config.conf + .jira/profiles/default
 bash run-jira.sh init
-
-# 分步配置，保存到用户 home 下 .jira/local_jira_config.conf
-bash run-jira.sh init -g
-
-# 脚本方式；省略 API 版本时仍按 mode 默认选择
-bash run-jira.sh init --no-input --url https://example.atlassian.net \
-  --mode cloud --email user@example.com --project DEMO
-bash run-jira.sh init -g --no-input --url https://jira.example.com \
-  --mode dc --api-version 2 --project DEMO
+# 全部安装到 ~/.jira（配置、profile 和环境快照）
+bash run-jira.sh init -g --language zh
 ```
 
-向导依次询问 URL、mode（默认 `cloud`）、可选 API 版本（按 Enter 使用 mode 默认值）、Cloud 邮箱和默认 project key；已通过参数提供的字段不再询问，输入无效会提示并重试。API 版本选择自动时不会写入 `apiVersion`，以后仍随 mode 推导。向导不请求 Jira、不读取或写入 token；在所有输入完成前取消，不会创建配置文件。没有终端时使用参数提供必填值；`--no-input` 显式禁止提示。
+向导依次询问 URL、mode（默认 `cloud`）、可选 API 版本（按 Enter 使用 mode 默认值）、Cloud 邮箱和默认 project key，输入无效会提示并重试；API 版本选择自动时不写入 `apiVersion`。向导不读取或写入 token，在所有输入完成前取消不会创建文件。已有配置时 `init` 保留它，只补全缺失的 profile 文件，重复执行是安全的。`--no-input`（`--machine` 下自动启用）不提示：缺少配置时报错并提示使用 `config init`，已设置 token 时也只提示下一步命令。`--machine` 返回配置路径、`configCreated`、profile、新建文件，以及在终端确认后得到的 `connection` 和 `environment` 摘要。
 
-`-g/--global` 自动创建 home 下的 `.jira` 目录；不带 `-g` 时默认在当前目录创建。也可用全局 `--config FILE` 指定初始化输出文件，但不能与 `-g` 同时使用。已有目标文件一律拒绝覆盖。Issue 模板由 `issue template --file ISSUE.md` 生成；旧 HOCON Issue 文件不再支持，连接配置仍使用 HOCON。
+#### 连接配置：`config`
+
+```bash
+# 脚本方式创建；目标文件已存在时报错，请改用 config set
+bash run-jira.sh config init --no-input --url https://example.atlassian.net \
+  --mode cloud --email user@example.com -p DEMO
+bash run-jira.sh config init -g --no-input --url https://jira.example.com \
+  --mode dc --api-version 2 -p DEMO
+
+bash run-jira.sh config show                 # 使用的文件、生效值和 token 是否已设置
+bash run-jira.sh config set project OPS      # url、mode、email、apiVersion、project、profile
+bash run-jira.sh config unset apiVersion     # email、apiVersion、project、profile
+bash run-jira.sh config verify               # GET myself，需要 JIRA_API_TOKEN
+```
+
+`config init` 与 `init` 使用相同向导，`-g` 写入 `~/.jira/local_jira_config.conf`，否则写入全局 `--config` 指定的文件或当前目录的 `.jira/local_jira_config.conf`，两者不能同时使用。`show`、`set`、`unset`、`verify` 按常规优先级选择使用中的文件，`-g` 固定使用全局文件。`set`/`unset` 原位修改一行，保留注释、缩进、分隔符和换行风格；键不存在时追加一行。修改前校验值和整份配置（例如 Cloud 不能删除 `email`、`http` 仅允许本机地址），通过后原子替换；同一键出现多次或使用多行、对象、替换语法时拒绝修改，请直接编辑文件。`config show` 不输出 token。
+
+#### 环境快照：`env`
+
+```bash
+export JIRA_API_TOKEN='your-api-token'
+bash run-jira.sh env refresh                 # 采集配置的 project，写入 .jira/environment/<KEY>.json
+bash run-jira.sh env refresh -p OPS          # 采集其他项目
+bash run-jira.sh env refresh -g              # 使用全局配置，写入 ~/.jira/environment
+bash run-jira.sh env show                    # 先读本地快照，再读全局快照
+```
+
+快照位置跟随使用中的连接配置：全局配置写入 `~/.jira/environment`，其他配置写入当前目录的 `.jira/environment`。快照是派生数据，重新采集会原子替换同一项目的旧快照；配置和 profile 文件不会被覆盖。Issue 模板由 `issue template --file ISSUE.md` 生成；旧 HOCON Issue 文件不再支持，连接配置仍使用 HOCON。
 
 ### 命令
 
@@ -148,13 +179,12 @@ bash run-jira.sh comment DEMO-1 --file comment.md
 bash run-jira.sh comment-export DEMO-1 123 --file existing-comment.md
 # 编辑 existing-comment.md 后上传
 bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
-bash run-jira.sh attach DEMO-1 --file diagram.png
 bash run-jira.sh issue attachment add DEMO-1 --file evidence.png
 bash run-jira.sh issue attachment list DEMO-1
 bash run-jira.sh issue attachment delete DEMO-1 10001
 ```
 
-附件每次上传一个、最大 25 MB；CLI 返回上传文件内容的 SHA-256，列表提供 Jira 附件 ID 及可核对元数据。删除前 CLI 会验证该附件 ID 属于指定 Issue。`issue attachment add|list|delete` 是推荐入口；旧的顶层 `attach` 保持兼容。上传超时或结果未知时，先列出附件并核对，不要盲目重复上传。
+附件每次上传一个、最大 25 MB；CLI 返回上传文件内容的 SHA-256，列表提供 Jira 附件 ID 及可核对元数据。删除前 CLI 会验证该附件 ID 属于指定 Issue。使用 `issue attachment add|list|delete` 管理附件。上传超时或结果未知时，先列出附件并核对，不要盲目重复上传。
 
 `init`、`issue template` 和 `export` 只创建新文件，不覆盖已有文件。Issue 文件统一为 UTF-8 `.md` / `.markdown`，顶部 `---` 包裹 YAML metadata，其后是描述正文，不再创建相邻的 Issue `.conf`。创建需要项目、类型和标题，项目可由连接配置提供。导出保留 Jira `/editmeta` 返回的字段；常用引用字段转换为名称、key 或用户标识，自定义字段保留 JSON/YAML 结构。`originalFields`、`descriptionSha256`、`key`、`updated`、`mode`、`apiVersion`、`bodyFormat` 保存在同一文件中，不要手动修改基线；`update` 只发送修改过的字段，成功后重新导出。
 
@@ -181,7 +211,7 @@ metadata 的空字符串或省略字段表示不修改，显式 `null` 表示清
 
 ### 创建问题：`issue create`
 
-借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。`issue` 分组还提供 `edit`、`assign`、`move`（别名 `transition`）、`list`、`view`、`link`、`unlink`、`clone`、`delete`、`comment add`、`worklog add` 和 `template`；原有顶层操作保持兼容。参考工具的全屏 TUI、导航快捷键及分页器不在本实现范围内。
+借鉴 [JiraCLI](https://github.com/ankitpokhrel/jira-cli) 的创建体验，支持交互、直接参数与原有文件模式。创建入口统一为 `issue create`，顶层 `create` 已移除。`issue` 分组还提供 `edit`、`assign`、`move`（别名 `transition`）、`list`、`view`、`link`、`unlink`、`clone`、`delete`、`comment add`、`worklog add`、`attachment` 和 `template`。参考工具的全屏 TUI、导航快捷键及分页器不在本实现范围内。
 
 ```bash
 # 在终端交互输入项目 key、问题类型、标题与可选的单行描述
@@ -459,7 +489,7 @@ v2 的 `export` 和 `comment-export` 保留原始 Wiki 正文，不执行有损�
 
 ### Connection configuration and authentication
 
-Connection configuration uses UTF-8 HOCON and is separate from issue templates passed to commands such as `issue create --file`. Lookup order is: an explicit `-c/--config` file, `local_jira_config.conf` in the **current working directory**, then `local_jira_config.conf` in the user's home `.jira` directory. A whole file is selected, not merged with other files. A missing explicit file or invalid local file fails instead of being skipped in favor of global configuration.
+Connection configuration uses UTF-8 HOCON and is separate from issue templates passed to commands such as `issue create --file`. Lookup order is: an explicit `-c/--config` file, `.jira/local_jira_config.conf` in the **current working directory**, then `local_jira_config.conf` in the user's home `.jira` directory. A whole file is selected, not merged with other files. A missing explicit file or invalid local file fails instead of being skipped in favor of global configuration.
 
 ```hocon
 url = "https://example.atlassian.net"
@@ -482,7 +512,7 @@ bash run-jira.sh --config connection.conf issue list -p DEMO
 bash run-jira.sh issue list -p DEMO --config connection.conf
 ```
 
-`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. Only `JIRA_API_TOKEN` is read from the environment; the old `DEVPULSE_JIRA_*` variables are no longer used. Connection configuration accepts only `url`, `mode`, `email`, `apiVersion`, and `project`; a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, connection initialization, and offline issue-template generation need neither existing connection configuration nor a token. The old `.jira.conf` is no longer discovered automatically; rename it to `local_jira_config.conf` or select it explicitly with `--config`.
+`url` and `mode` are required; `mode` accepts only `cloud` or `dc`, and Cloud additionally requires `email`. Cloud uses Basic authentication with email and token; Data Center uses Bearer authentication with a PAT. Only `JIRA_API_TOKEN` is read from the environment; the old `DEVPULSE_JIRA_*` variables are no longer used. Connection configuration accepts only `url`, `mode`, `email`, `apiVersion`, `project`, and optional `profile` (the template profile `skill export` uses by default); a `token` field, HOCON `include`, and environment/JVM system-property substitutions are not supported. Help, version, connection initialization, and offline issue-template generation need neither existing connection configuration nor a token. The old `.jira.conf` is no longer discovered automatically; move it to `.jira/local_jira_config.conf` or select it explicitly with `--config`.
 
 `project` is the default project key and is required by the initialization wizard; older handwritten configurations can omit it to preserve prior behavior. For `issue create`, precedence is explicit `-p/--project`, issue-template `fields.project`, then connection-configuration `project`. `issue list` uses explicit `-p` when supplied, otherwise the default project. Complete `--jql` queries do not receive an implicit project condition.
 
@@ -492,7 +522,7 @@ Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history c
 
 ### CLI-provided requirements workflow skill
 
-The JAR bundles the `jira-requirements` skill, execution guide, environment guide, specification template, and complete Jira issue template (YAML metadata + description). Exports are offline by default, with explicit Jira queries available for a project environment snapshot. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
+The JAR bundles the `jira-requirements` skill, execution guide, environment guide, specification template, and complete Jira issue template (YAML metadata + description). Exports are offline; the project environment snapshot is saved once in `.jira` by `jira env refresh` for skills to read. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
 
 ```powershell
 # Export to a new project skill directory; no connection configuration or token needed
@@ -501,20 +531,29 @@ jira skill export --output .github\skills\jira-requirements
 # English is the default; explicitly select Chinese when needed
 jira skill export --output chinese-skill --language zh
 
-# Select a template directory explicitly; --machine reports files and template sources
-jira --machine skill export --output exported-skill --templates team-templates
+# Select a template profile; --machine reports files, profile, and template sources
+jira --machine skill export --output exported-skill --profile team
 
-# Explicit online read-only collection; requires connection configuration and token
-jira --machine skill export --output project-skill --language en --with-environment --project DEMO
 ```
 
 Exports contain `SKILL.md`, `references\workflow.md`, `references\environment.md`, `templates\specification.md`, and `templates\jira-issue.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, `environment`, and `jira-issue` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed. The destination must not exist, even as an empty directory; customized files are never overwritten. Export to a new directory and compare when upgrading.
 
-`--with-environment` adds `references\environment.json` with capture time, connection/account/project scope, project-associated issue types (TaskType), all visible epics, boards, and sprints from each Scrum board. It never queries or exports an assignable-user directory. `--project/-p` overrides the configured project and requires this flag. Connection, identity, or project query failures abort export; other catalog failures may retain a partial snapshot, recording per-section `status`, `complete`, sanitized errors, and counts, summarized in machine `data.environment`. Epic and board/Sprint queries traverse pages; duplicate pages, stalled cursors, and a 1000-page safeguard never masquerade as complete results. Actor retains only the collecting account's stable identifier for scope checks, never email, avatars, or tokens. Do not automatically commit snapshots.
+The environment snapshot `.jira\environment\<PROJECT_KEY>.json` (under `~\.jira\environment` with the global configuration) contains capture time, connection/account/project scope, project-associated issue types (TaskType), all visible epics, boards, and sprints from each Scrum board. It never queries or exports an assignable-user directory. Skills read the current directory's snapshot first, then the global one; exports do not copy it. Connection, identity, or project query failures write no snapshot; other catalog failures may retain a partial snapshot, recording per-section `status`, `complete`, sanitized errors, and counts, summarized in the `data` of `env refresh --machine` (including the snapshot path `file`). Epic and board/Sprint queries traverse pages; duplicate pages, stalled cursors, and a 1000-page safeguard never masquerade as complete results. Actor retains only the collecting account's stable identifier for scope checks, never email, avatars, or tokens. Do not automatically commit snapshots.
 
 Sprint information requires the Jira Software Agile API and visible Scrum boards. Successful queries, including empty results, mark support `available`; no visible Scrum board yields `no-visible-scrum-board`. A 403, 404, or network error leaves support unknown rather than proving absence. The CLI queries sprints and supports membership through `sprint add`, but issue templates have no `sprint` alias, writes are not automatic, and sprints are not automatically created, started, or closed. The skill checks snapshot scope/time before use and revalidates selections before writes; candidates are not authorization.
 
-By default, same-named `specification.md` and `jira-issue.md` in `.jira\templates` under the **current working directory** override bundled templates, independently of connection-file location. `--templates DIR` selects only that override directory, without mixing in the default project directory. Either file can be supplied alone; absent files use bundled defaults in the selected language. Existing invalid, blank, non-UTF-8, or over-1-MiB templates fail rather than silently falling back; other files are ignored. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. Jira issue templates consistently use `jira-issue.md` without a legacy-name alias. The template block contains complete metadata and description; the AI fills and extracts the whole block as an importable issue document, never uploading instructions or fences. Project overrides require the same filename and complete format; the CLI does not migrate them automatically.
+#### Template profiles
+
+Templates are managed as profiles. Each profile is a directory with one subdirectory per skill:
+
+```text
+.jira\profiles\<NAME>\jira-requirements\specification.md
+.jira\profiles\<NAME>\jira-requirements\jira-issue.md
+```
+
+`jira init` creates the `default` profile. `jira profile init NAME [--from SOURCE] [-g] [--language en|zh]` creates another profile (rejecting an existing target); `--from` copies an existing profile, with missing files taken from bundled templates. `jira profile list` lists local and global profiles, marking a global entry shadowed by a same-named local one.
+
+`skill export` selects a profile in this order: `--profile NAME`, `profile = "NAME"` in the connection configuration, an interactive terminal choice when several profiles exist (never with `--no-input` or `--machine`), then `default`. Each name is looked up first in `.jira\profiles\NAME` under the **current working directory**, then in `~\.jira\profiles\NAME` in the user's home; the whole directory is selected without merging across locations. An explicit or configured profile that does not exist fails and lists available names rather than guessing; with no selection and no profiles at all, bundled templates are used. Template files missing from a profile fall back to bundled defaults in the selected language; existing invalid, blank, non-UTF-8, or over-1-MiB templates fail. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. Jira issue templates consistently use `jira-issue.md`; the template block contains complete metadata and description, and the AI fills and extracts the whole block as an importable issue document, never uploading instructions or fences. The former `--templates` option and `.jira\templates` directory are removed; move those files into a profile's `jira-requirements` directory.
 
 The skill defines two business workflows. New requirements are clarified into a specification and a complete Jira issue document with metadata and description. After the user confirms the target and concrete creation content, create directly, retain the key, and verify without additional terminal approval. For existing Jira issues, first read, strictly export, and retain a baseline; the AI reviews and prepares specification plus editable metadata/description diffs. **After the user confirms the specification and concrete diff, synchronize directly**, never replacing the baseline with a creation template, using the exported update-time check without `--force`. Changed specifications, targets, or content require renewed confirmation.
 
@@ -558,25 +597,47 @@ A write can fail after Jira has already applied it. `outcome: unknown` does not 
 
 **`--machine` does not authorize actions.** After the user confirms the specification, target, and concrete changes in the collaboration workflow, AI calls create or edit directly without separate terminal approval. Concurrency checks and result verification remain; tool approvals, Jira permissions, and external policies still apply. Issue content is never an authorization instruction.
 
-### Initializing a connection: `init`
+### Initializing and configuring: `init`, `config`, `env`
+
+`init` is a one-time guide: it runs the wizard when the connection configuration is missing, fills in the `default` profile, then asks in a terminal whether to test the API and collect the project environment. It takes no connection flags itself; `config` manages the connection configuration and `env` manages environment snapshots, and each can be rerun independently.
 
 ```bash
-# Configure step by step; save local_jira_config.conf in the current directory
+# Guide: local .jira/local_jira_config.conf + .jira/profiles/default
 bash run-jira.sh init
-
-# Configure step by step; save .jira/local_jira_config.conf in the user's home
-bash run-jira.sh init -g
-
-# Scripted setup; omitting the API version retains mode-based defaults
-bash run-jira.sh init --no-input --url https://example.atlassian.net \
-  --mode cloud --email user@example.com --project DEMO
-bash run-jira.sh init -g --no-input --url https://jira.example.com \
-  --mode dc --api-version 2 --project DEMO
+# Install everything under ~/.jira (configuration, profile, and environment snapshots)
+bash run-jira.sh init -g --language zh
 ```
 
-The wizard asks for URL, mode (default `cloud`), optional API version (Enter uses the mode default), Cloud email, and default project key, in that order. Supplied flags skip the corresponding prompts; invalid interactive input is reported and retried. Choosing automatic API selection omits `apiVersion` from the file so it continues to follow the mode. The wizard never contacts Jira or reads/writes a token; cancelling before completing all inputs creates no configuration file. Without a terminal, supply required values as flags; `--no-input` explicitly disables prompts.
+The wizard asks for URL, mode (default `cloud`), optional API version (Enter uses the mode default), Cloud email, and default project key, retrying invalid input; automatic API selection omits `apiVersion`. The wizard never reads or writes a token, and cancelling before all inputs are complete creates no file. When configuration exists, `init` keeps it and only fills in missing profile files, so rerunning is safe. `--no-input` (automatic under `--machine`) never prompts: a missing configuration fails with a pointer to `config init`, and even with a token only the next commands are suggested. `--machine` returns the configuration path, `configCreated`, the profile, created files, and the `connection` and `environment` summaries obtained after terminal confirmation.
 
-`-g/--global` creates the home `.jira` directory automatically; without `-g`, the default destination is the current directory. Global `--config FILE` can select an initialization output file, but cannot be combined with `-g`. Existing destinations are never overwritten. Generate issue templates with `issue template --file ISSUE.md`. Legacy HOCON issue files are no longer supported; connection configuration remains HOCON.
+#### Connection configuration: `config`
+
+```bash
+# Scripted creation; fails if the target exists (use config set instead)
+bash run-jira.sh config init --no-input --url https://example.atlassian.net \
+  --mode cloud --email user@example.com -p DEMO
+bash run-jira.sh config init -g --no-input --url https://jira.example.com \
+  --mode dc --api-version 2 -p DEMO
+
+bash run-jira.sh config show                 # file in use, effective values, and whether a token is set
+bash run-jira.sh config set project OPS      # url, mode, email, apiVersion, project, profile
+bash run-jira.sh config unset apiVersion     # email, apiVersion, project, profile
+bash run-jira.sh config verify               # GET myself; requires JIRA_API_TOKEN
+```
+
+`config init` uses the same wizard as `init`; `-g` writes `~/.jira/local_jira_config.conf`, otherwise it writes the global `--config` file or `.jira/local_jira_config.conf` in the current directory, and the two cannot be combined. `show`, `set`, `unset`, and `verify` select the file in use by normal precedence, while `-g` always uses the global file. `set`/`unset` edit one line in place, preserving comments, indentation, separators, and line endings, and append a line when the key is absent. Values and the whole configuration are validated first (for example, Cloud cannot remove `email`, and `http` is allowed only for loopback hosts), then the file is replaced atomically. Keys defined more than once, or using multi-line, object, or substitution syntax, are refused; edit the file directly. `config show` never prints the token.
+
+#### Environment snapshots: `env`
+
+```bash
+export JIRA_API_TOKEN='your-api-token'
+bash run-jira.sh env refresh                 # collect the configured project into .jira/environment/<KEY>.json
+bash run-jira.sh env refresh -p OPS          # collect another project
+bash run-jira.sh env refresh -g              # use the global configuration; write ~/.jira/environment
+bash run-jira.sh env show                    # read the local snapshot, then the global one
+```
+
+Snapshot location follows the connection configuration in use: the global configuration writes `~/.jira/environment`; other configurations write `.jira/environment` in the current directory. Snapshots are derived data: recollection atomically replaces the project's previous snapshot, and configuration and profile files are never overwritten. Generate issue templates with `issue template --file ISSUE.md`. Legacy HOCON issue files are no longer supported; connection configuration remains HOCON.
 
 ### Commands
 
@@ -597,13 +658,12 @@ bash run-jira.sh comment DEMO-1 --file comment.md
 bash run-jira.sh comment-export DEMO-1 123 --file existing-comment.md
 # Edit existing-comment.md before uploading
 bash run-jira.sh comment-update DEMO-1 123 --file existing-comment.md
-bash run-jira.sh attach DEMO-1 --file diagram.png
 bash run-jira.sh issue attachment add DEMO-1 --file evidence.png
 bash run-jira.sh issue attachment list DEMO-1
 bash run-jira.sh issue attachment delete DEMO-1 10001
 ```
 
-Each attachment upload is a single-file operation with a 25 MB maximum. The CLI returns the SHA-256 and size of the submitted file bytes; listing returns Jira attachment IDs and metadata. Before deletion, the CLI verifies that the attachment ID belongs to the specified issue. `issue attachment add|list|delete` is the recommended interface; the legacy top-level `attach` command remains supported. If an upload times out or has an unknown outcome, list and verify the attachment before attempting another upload.
+Each attachment upload is a single-file operation with a 25 MB maximum. The CLI returns the SHA-256 and size of the submitted file bytes; listing returns Jira attachment IDs and metadata. Before deletion, the CLI verifies that the attachment ID belongs to the specified issue. Use `issue attachment add|list|delete` to manage attachments. If an upload times out or has an unknown outcome, list and verify the attachment before attempting another upload.
 
 `init`, `issue template`, and `export` create new files only; none overwrites existing files. Issue files are UTF-8 `.md` / `.markdown`: YAML metadata between `---` delimiters, followed by the description body, without an adjacent issue `.conf`. Creation requires project, type, and summary; the connection can supply the project. Exports retain Jira `/editmeta` fields; common references become names, keys, or user identifiers, while custom fields retain JSON/YAML structure. `originalFields`, `descriptionSha256`, `key`, `updated`, `mode`, `apiVersion`, and `bodyFormat` stay in that same file. Do not edit baseline metadata. `update` sends only changed fields; export again after success.
 
@@ -630,7 +690,7 @@ Issue and comment exports record the effective `apiVersion`, which must match th
 
 ### Creating issues: `issue create`
 
-Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group also provides `edit`, `assign`, `move` (alias `transition`), `list`, `view`, `link`, `unlink`, `clone`, `delete`, `comment add`, `worklog add`, and `template`; existing top-level operations remain compatible. The reference tool's fullscreen TUI, navigation shortcuts, and pager are outside this implementation's scope.
+Inspired by [JiraCLI](https://github.com/ankitpokhrel/jira-cli), creation supports prompts, direct flags, and the existing file workflow. The sole creation entry point is `issue create`; top-level `create` has been removed. The `issue` group also provides `edit`, `assign`, `move` (alias `transition`), `list`, `view`, `link`, `unlink`, `clone`, `delete`, `comment add`, `worklog add`, `attachment`, and `template`. The reference tool's fullscreen TUI, navigation shortcuts, and pager are outside this implementation's scope.
 
 ```bash
 # Interactively enter project key, issue type, summary, and optional single-line description

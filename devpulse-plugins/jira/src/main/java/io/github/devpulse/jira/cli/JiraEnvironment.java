@@ -7,19 +7,69 @@ import static io.github.devpulse.jira.cli.JiraCommand.object;
 import static io.github.devpulse.jira.cli.JiraCommand.string;
 import static io.github.devpulse.jira.cli.JiraCommand.wrong;
 
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.devpulse.jira.JiraConfiguration;
 import io.github.devpulse.jira.JiraRequestException;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 
-final class JiraSkillEnvironment {
+final class JiraEnvironment {
     private static final int PAGE_SIZE = 100;
     private static final int PAGE_LIMIT = 1000;
+    static final List<String> SECTIONS = List.of("issueTypes", "epics", "boards", "sprints");
+
+    /** Snapshot location: .jira/environment/KEY.json locally, or under ~/.jira with global. */
+    static Path file(boolean global, String project) {
+        return JiraProfiles.root(global).resolveSibling("environment").resolve(project + ".json");
+    }
+
+    /** Replace the snapshot atomically; snapshots are derived data, not user-edited files. */
+    static Path save(boolean global, JsonObject snapshot) throws IOException {
+        var key = string(snapshot.getAsJsonObject("project"), "key");
+        if (!key.matches("[A-Za-z][A-Za-z0-9_]*")) {
+            throw wrong("Jira returned an invalid project key.");
+        }
+        var target = file(global, key);
+        Files.createDirectories(target.toAbsolutePath().getParent());
+        var staging = Files.createTempFile(
+                target.toAbsolutePath().getParent(), ".environment-", ".json");
+        try {
+            Files.writeString(staging, new GsonBuilder()
+                    .setPrettyPrinting().create().toJson(snapshot) + "\n",
+                    StandardCharsets.UTF_8);
+            Files.move(staging, target,
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+            Files.deleteIfExists(staging);
+        }
+        return target;
+    }
+
+    static JsonObject summary(JsonObject snapshot) {
+        var result = select(snapshot, "capturedAt", "finishedAt", "project");
+        for (var section : SECTIONS) {
+            var values = snapshot.getAsJsonObject(section);
+            var status = select(values, "status", "complete", "reason", "support", "error");
+            status.addProperty("count", values.getAsJsonArray("items").size());
+            result.add(section, status);
+        }
+        return result;
+    }
+
+    static List<String> incomplete(JsonObject snapshot) {
+        return SECTIONS.stream().filter(section -> !snapshot.getAsJsonObject(section)
+                .get("complete").getAsBoolean()).toList();
+    }
 
     @FunctionalInterface
     interface Request {
@@ -30,7 +80,7 @@ final class JiraSkillEnvironment {
     private final Request api;
     private final Request agile;
 
-    JiraSkillEnvironment(JiraConfiguration configuration, Request api, Request agile) {
+    JiraEnvironment(JiraConfiguration configuration, Request api, Request agile) {
         this.configuration = configuration;
         this.api = api;
         this.agile = agile;

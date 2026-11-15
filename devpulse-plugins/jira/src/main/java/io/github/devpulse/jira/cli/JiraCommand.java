@@ -43,18 +43,18 @@ import picocli.CommandLine.Spec;
         versionProvider = JiraCommand.VersionProvider.class,
         description = "Manage Jira issues using HOCON and Markdown.",
         subcommands = {JiraCommand.Issue.class,
-                JiraInitCommand.class,
+                JiraInitCommand.class, JiraConfigCommands.class,
+                JiraEnvironmentCommands.class,
                 JiraCommand.Export.class,
                 JiraCommand.Update.class, JiraCommand.Transitions.class,
-                JiraSkillCommands.class,
+                JiraSkillCommands.class, JiraProfiles.class,
                 JiraCommand.Transition.class, JiraCommand.Comment.class,
                 JiraCommand.CommentExport.class,
                 JiraCommand.CommentUpdate.class,
                 JiraIssueExtras.Me.class, JiraIssueExtras.Completion.class,
                 JiraAgileCommands.Epic.class, JiraAgileCommands.Sprint.class,
                 JiraCatalogCommands.Project.class, JiraCatalogCommands.Board.class,
-                JiraCatalogCommands.Release.class, JiraCatalogCommands.Open.class,
-                JiraCommand.Attach.class})
+                JiraCatalogCommands.Release.class, JiraCatalogCommands.Open.class})
 public final class JiraCommand implements Runnable {
     @Spec
     private CommandSpec spec;
@@ -62,7 +62,7 @@ public final class JiraCommand implements Runnable {
     @Option(names = {"-c", "--config"},
             scope = ScopeType.INHERIT, paramLabel = "FILE",
             description = "Jira connection HOCON file; otherwise read "
-                    + "local_jira_config.conf in the current directory, "
+                    + ".jira/local_jira_config.conf in the current directory, "
                     + "then ~/.jira/local_jira_config.conf. "
                     + "Token comes from "
                     + "JIRA_API_TOKEN only.")
@@ -620,6 +620,11 @@ public final class JiraCommand implements Runnable {
             var content = text(file);
             if (!bodyFormat.changesFormat(data)
                     && hash(content).equals(data.getString("descriptionSha256"))) {
+                var result = new JsonObject();
+                result.addProperty("key", key);
+                result.addProperty("commentId", id);
+                result.addProperty("changed", false);
+                machineData = result;
                 print("No changes to upload.");
                 return;
             }
@@ -632,22 +637,6 @@ public final class JiraCommand implements Runnable {
             machineData = result;
             print("Updated comment " + id + ". "
                     + "Re-export before the next update.");
-        }
-    }
-
-    @Command(name = "attach", description = "Upload a file as an "
-            + "issue attachment.")
-    static final class Attach extends Action {
-        @Parameters(index = "0")
-        String key;
-        @Option(names = "--file", required = true, paramLabel = "PATH")
-        Path file;
-
-        @Override
-        protected void execute() throws IOException {
-            machineData = JiraIssueExtras.attachmentUploadData(
-                    key, client().attach(key, file));
-            print("Attached " + file.getFileName() + " to " + key + ".");
         }
     }
 

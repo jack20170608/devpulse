@@ -98,8 +98,7 @@ public final class JiraClient {
         if (!result.isJsonArray()) {
             throw new IOException("Expected a JSON array from Jira.");
         }
-        return new AttachmentUpload(result.getAsJsonArray(),
-                sha256(content), content.length, contentType, name);
+        return result.getAsJsonArray();
     }
 
     public void assign(String key, String user) throws IOException {
@@ -312,7 +311,8 @@ public final class JiraClient {
                     "Jira returned an invalid attachment response.",
                     "INVALID_RESPONSE", null, true, false, null);
         }
-        return result.getAsJsonArray();
+        return new AttachmentUpload(result.getAsJsonArray(),
+                sha256(content), content.length, contentType, name);
     }
 
     public void deleteAttachment(String id) throws IOException {

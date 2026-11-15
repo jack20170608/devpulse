@@ -24,18 +24,23 @@ import java.nio.file.Path;
 import java.util.Set;
 
 public record JiraConfiguration(String url, String mode, String email,
-        int apiVersion, String project) {
+        int apiVersion, String project, String profile) {
     public static final String FILE_NAME = "local_jira_config.conf";
+    public static final String PROFILE_NAME = "[A-Za-z0-9][A-Za-z0-9_-]{0,63}";
 
     public static Path globalFile() {
         return Path.of(System.getProperty("user.home"), ".jira", FILE_NAME);
+    }
+
+    public static Path localFile() {
+        return Path.of(".jira", FILE_NAME);
     }
 
     public static Path find(Path explicit) {
         if (explicit != null) {
             return explicit;
         }
-        var local = Path.of(FILE_NAME);
+        var local = localFile();
         if (Files.exists(local, LinkOption.NOFOLLOW_LINKS)) {
             return local;
         }
@@ -46,7 +51,7 @@ public record JiraConfiguration(String url, String mode, String email,
     public static JiraConfiguration load(Path file) throws IOException {
         if (!Files.isRegularFile(file)) {
             throw new IOException("Jira configuration not found: " + file
-                    + ". Run jira init (or jira init -g), "
+                    + ". Run jira config init (or jira config init -g), "
                     + "or specify --config FILE.");
         }
         try {
@@ -55,10 +60,11 @@ public record JiraConfiguration(String url, String mode, String email,
                     ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
                             .setIncluder(new NoIncludes()))
                     .resolve(ConfigResolveOptions.noSystem());
-            if (!Set.of("url", "mode", "email", "apiVersion", "project")
+            if (!Set.of("url", "mode", "email", "apiVersion", "project",
+                    "profile")
                     .containsAll(config.root().keySet())) {
                 throw new IOException("Jira configuration supports only "
-                        + "url, mode, email, apiVersion, and project; "
+                        + "url, mode, email, apiVersion, project, and profile; "
                         + "use JIRA_API_TOKEN "
                         + "for authentication.");
             }
@@ -69,17 +75,24 @@ public record JiraConfiguration(String url, String mode, String email,
             }
             var url = required(config, "url");
             validateUrl(url);
+            var profile = config.hasPathOrNull("profile")
+                    ? required(config, "profile") : null;
+            if (profile != null && !profile.matches(PROFILE_NAME)) {
+                throw new IOException("Jira configuration profile must use "
+                        + "letters, digits, '-' or '_'.");
+            }
             return new JiraConfiguration(url, mode,
                     mode.equals("cloud") || config.hasPathOrNull("email")
                             ? required(config, "email") : null,
                     apiVersion(config, mode),
                     config.hasPathOrNull("project")
-                            ? required(config, "project") : null);
+                            ? required(config, "project") : null,
+                    profile);
         } catch (ConfigException exception) {
             // Parser messages may echo file contents or substituted values.
             throw new IOException("Invalid Jira connection configuration; "
                     + "check HOCON syntax and "
-                    + "url/mode/email/apiVersion/project fields.");
+                    + "url/mode/email/apiVersion/project/profile fields.");
         }
     }
 

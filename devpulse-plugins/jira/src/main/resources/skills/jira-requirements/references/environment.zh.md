@@ -2,13 +2,14 @@
 
 ### 读取与有效性
 
-导出时指定 `--with-environment`，本目录才会包含 `environment.json`。未指定时导出完全离线；没有快照不代表没有 Epic、Issue Type 或 Sprint。需要时请用户使用新的目录重新导出，不擅自初始化配置或扩大查询范围。
+环境快照由 `jira env refresh` 统一维护（`jira init` 也会提示采集），不随 Skill 导出。读取顺序：当前工作目录的 `.jira\environment\<项目KEY>.json`，再到用户 home 的 `~\.jira\environment\<项目KEY>.json`；与所用连接配置位于同一范围（本地或全局）。没有快照不代表没有 Epic、Issue Type 或 Sprint。快照缺失或过期时请用户刷新；仅在用户明确要求时才代为运行下列命令，它会替换同一项目的旧快照，不擅自扩大查询范围：
 
 ```powershell
-jira --machine skill export --output refreshed-skill --language zh --with-environment --project DEMO
+jira --machine env refresh        # 当前使用的配置；全局加 -g，其他项目加 -p KEY
+jira --machine env show           # 查看已保存快照摘要
 ```
 
-使用前检查 schemaVersion、capturedAt/finishedAt、serverUrl、mode、apiVersion、project 和 actor。快照属于采集时的连接、账号和目标项目，不是整个 Jira 实例的全量数据。连接、账号或项目改变时不得复用；没有固定有效期保证，提交前重新核验选择的 Epic、类型和 Sprint。导出使用新目录，不覆盖旧快照。
+使用前检查 schemaVersion、capturedAt/finishedAt、serverUrl、mode、apiVersion、project 和 actor。快照属于采集时的连接、账号和目标项目，不是整个 Jira 实例的全量数据。连接、账号或项目改变时不得复用；没有固定有效期保证，提交前重新核验选择的 Epic、类型和 Sprint。
 
 每类数据都有 `status`、`complete` 和 `items`；失败可能带 reason、error.code 和 httpStatus。`partial` 或 `unavailable` 不等于空列表，更不代表功能不支持。没有权限的内容不可见；多页查询不是事务，采集期间的变化可能导致失败。不得把候选项视为用户已经选择或授权。
 

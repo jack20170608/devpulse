@@ -23,6 +23,7 @@
 
 ### Java 实现规范
 
+- 优先保证设计的清晰性和可维护性，不为向后兼容保留不必要的旧接口、命令或实现；确需破坏兼容时同步更新相关使用说明。
 - 优先使用 Java 25 中已正式发布的语言特性，在适合的场景使用 `record` 表达不可变配置和环境事实。
 - 当能够简化封闭状态集合的处理时，使用 sealed 类型、模式匹配和 switch 表达式。
 - 使用文本块维护多行 AI 提示词模板。
@@ -78,6 +79,7 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 ### Java implementation conventions
 
+- Prioritize clear, maintainable design over backward compatibility; do not retain unnecessary legacy interfaces, commands, or implementations. Update relevant usage documentation when making breaking changes.
 - Prefer finalized language features available in Java 25. Use `record` for immutable configuration and environment facts where appropriate.
 - Use sealed types, pattern matching, and switch expressions where they simplify handling closed sets of states.
 - Use text blocks for multiline AI prompt templates.
