@@ -6,7 +6,7 @@ Identify the actual Jira CLI entry point (`jira` or the user's `java -jar` invoc
 
 Establish whether this is a new requirement or an existing key, plus project, supported issue type, language, and artifact directory. Existing keys never enter creation. The connection's default project can be reused; do not guess a required type. Read project conventions and templates. Project overrides require re-exporting the skill first or an explicitly supplied replacement template for this task.
 
-Read the optional project snapshot `.jira\environment\<PROJECT_KEY>.json` using the [environment guide](environment.md), first checking connection, account, project, capture time, and per-section completeness. Present verified epic, issue-type, and board/Sprint candidates for user selection instead of filling fields automatically. Missing or failed snapshots remain unknown, never invented complete catalogs. Revalidate chosen entries before writing. Run separate Sprint membership operations only when additionally requested; never put sprint in the issue template.
+Ask the user for the epic, issue type, and other Jira values when needed instead of filling fields automatically or inventing catalogs. Run separate Sprint membership operations only when additionally requested; never put sprint in the issue template.
 
 Store requirement documents under `.jira\requirements\` in the current working directory, one folder per requirement:
 

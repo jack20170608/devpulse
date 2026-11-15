@@ -26,7 +26,6 @@ final class JiraSkillCommands implements Runnable {
     private static final List<Path> FILES = List.of(
             Path.of("SKILL.md"),
             Path.of("references", "workflow.md"),
-            Path.of("references", "environment.md"),
             Path.of("templates", "jira-issue.md"));
 
     @Spec
@@ -38,8 +37,7 @@ final class JiraSkillCommands implements Runnable {
     }
 
     @Command(name = "export", mixinStandardHelpOptions = true,
-            description = "Export the requirements-to-Jira skill offline; the skill reads the "
-                    + "environment snapshot saved by jira env refresh.")
+            description = "Export the requirements-to-Jira skill offline.")
     static final class Export extends JiraCommand.Action {
         @Option(names = "--output", paramLabel = "DIRECTORY",
                 description = "Parent directory for the skill (default: .claude/skills); "
