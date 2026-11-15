@@ -43,7 +43,7 @@ bash run-jira.sh issue list -p DEMO --config connection.conf
 
 ### 由 CLI 提供的需求工作流 Skill
 
-JAR 内置 `jira-requirements` Skill、执行说明、环境说明、规格书模板及完整 Jira Issue 模板（YAML metadata + description）。CLI 离线导出，项目环境快照由 `jira env refresh` 统一保存在 `.jira` 中，供 Skill 读取；由加载 Skill 的 AI 分析需求、撰写规格并填充模板，不在 CLI 内调用 LLM。
+JAR 内置 `jira-requirements` Skill、执行说明、环境说明及完整 Jira Issue 模板（YAML metadata + description）。CLI 离线导出，项目环境快照由 `jira env refresh` 统一保存在 `.jira` 中，供 Skill 读取；由加载 Skill 的 AI 澄清需求并填充模板，不在 CLI 内调用 LLM。
 
 ```powershell
 # 导出到项目级 Skill 父目录；不需要连接配置或 token
@@ -59,7 +59,7 @@ jira --machine skill export --output exported-skills --profile team
 
 `--output` 指向 Skill 父目录，可以已经存在；CLI 在其中新建 `jira-requirements` 子目录（例如 `.github\skills\jira-requirements`）。若该子目录已存在（包括空目录），则报错而不覆盖；升级时可导出到其他父目录后比较。`--machine` 的 `data.directory` 返回实际子目录路径。
 
-导出包含 `SKILL.md`、`references\workflow.md`、`references\environment.md`、`templates\specification.md` 和 `templates\jira-issue.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow`、`environment` 和 `jira-issue` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。不会自动安装到个人 home、加载或执行 Skill。
+导出包含 `SKILL.md`、`references\workflow.md`、`references\environment.md` 和 `templates\jira-issue.md`，可放入所用 AI 工具支持的 Skill 目录。内置 `SKILL`、`workflow`、`environment` 和 `jira-issue` 各按 `.en.md` 和 `.zh.md` 分开维护，导出时保留上述标准文件名。`--language en|zh` 选择说明和默认模板正文的语言，默认为英文，不导出中英对照版本；Skill 元数据标识与触发描述保持稳定。常规流程不要求额外生成规格书；复杂分析、独立评审或需留存的内部设计可按需另存。不会自动安装到个人 home、加载或执行 Skill。
 
 环境快照 `.jira\environment\<项目KEY>.json`（使用全局配置时位于 `~\.jira\environment`）包含采集时间、连接/账号/项目范围、项目关联的 Issue Type（TaskType）、全部可见 Epic、看板及各 Scrum 看板的 Sprint，不查询或导出可指派人员目录。Skill 先读取当前目录的快照，再读取全局快照，不随导出复制。连接、身份或项目查询失败则不写入快照；其他目录查询失败可保留部分快照，每节记录 `status`、`complete`、脱敏错误和数量，`env refresh --machine` 的 `data` 返回这些摘要（含快照路径 `file`）。Epic 和看板/Sprint 遍历分页；重复页、无进展或最多 1000 页的保护不会伪装成完整结果。actor 仅保存采集账号的稳定标识用于范围校验，不导出邮箱、头像或 token；快照不要自动提交到版本库。
 
@@ -70,19 +70,18 @@ Sprint 信息依赖 Jira Software Agile API 和可见 Scrum 看板；查询成�
 模板按 profile 管理，每个 profile 是一个目录，按 Skill 分子目录存放模板：
 
 ```text
-.jira\profiles\<NAME>\jira-requirements\specification.md
 .jira\profiles\<NAME>\jira-requirements\jira-issue.md
 ```
 
-`jira init` 生成使用 `standard` 预置模板的 `default` profile。内置预置模板包括 `standard`（通用）、`story`（用户故事）、`bug`（缺陷）和 `spike`（技术调研）；预置模板提供 Issue 描述结构，规格说明书仍使用通用模板。内置资源统一存放在 `skills/jira-requirements/presets/<PRESET>/templates`，其中 `standard` 提供默认及回退模板。运行 `jira profile list --presets` 查看预置模板。
+`jira init` 生成使用 `standard` 预置模板的 `default` profile。内置预置模板包括 `standard`（通用）、`story`（用户故事）、`bug`（缺陷）和 `spike`（技术调研），均提供完整的 Issue 模板。profile 只需维护 `jira-issue.md`；常规需求流程不要求单独的规格书。内置资源统一存放在 `skills/jira-requirements/presets/<PRESET>/templates`，其中 `standard` 提供默认及回退模板。运行 `jira profile list --presets` 查看预置模板。
 
-`jira profile init NAME [--preset PRESET] [--from SOURCE] [-g] [--language en|zh]` 新建 profile（目标已存在时拒绝）。`--preset` 和 `--from` 互斥；不指定时使用 `standard`。预置模板会复制成可编辑的 profile 文件，之后由 `skill export --profile NAME` 或配置中的 `profile` 选择；预置名称本身不参与导出时的 profile 优先级。未被预置覆盖的模板回退到 `standard`。`--from` 复制已有 profile，来源缺失的文件回退到 `standard`；`jira profile list` 列出本地与全局 profile，同名时标记全局项被遮蔽。
+`jira profile init NAME [--preset PRESET] [--from SOURCE] [-g] [--language en|zh]` 新建 profile（目标已存在时拒绝）。`--preset` 和 `--from` 互斥；不指定时使用 `standard`。预置模板会复制成可编辑的 profile 文件，之后由 `skill export --profile NAME` 或配置中的 `profile` 选择；预置名称本身不参与导出时的 profile 优先级。`--from` 复制已有 profile，缺失的 `jira-issue.md` 回退到 `standard`；`jira profile list` 列出本地与全局 profile，同名时标记全局项被遮蔽。
 
 `skill export` 按以下顺序选择 profile：`--profile NAME`、连接配置中的 `profile = "NAME"`、存在多个 profile 时在终端交互选择（`--no-input` 或 `--machine` 不提示）、`default`。每个名称先查找**当前工作目录**的 `.jira\profiles\NAME`，再查找用户 home 的 `~\.jira\profiles\NAME`，选中整个目录，不跨目录合并。显式或配置指定的 profile 不存在时报错并列出可用名称，不自动猜测；未指定且没有任何 profile 时使用内置模板。profile 中缺失的模板文件回退所选语言的内置版本；已有但无效、空白、非 UTF-8 或超过 1 MiB 的模板直接报错。自定义模板保持原样，不自动翻译、不解析占位符、不执行模板指令。Jira Issue 模板使用统一名称 `jira-issue.md`；模板代码块包含完整 metadata 和描述，AI 填充、提取整个代码块为可导入的 Issue 文档，不把使用说明或围栏上传到 Jira。旧的 `--templates` 参数和 `.jira\templates` 目录已移除，请将文件移入 profile 的 `jira-requirements` 目录。
 
-Skill 定义两条业务流程：新需求经澄清形成规格书，按模板生成包含 metadata 和描述的完整 Jira Issue 文档；用户确认目标及具体创建内容后直接创建，记录 key 并核验，不额外要求终端审批。已有 Jira 则先读取、严格导出并保留基线，AI 评审和生成规格、可编辑 metadata/描述差异，**用户确认规格及具体差异后直接同步**，不以新建模板覆盖基线，使用导出文件的更新时间检查，不使用 `--force`。规格、目标或内容改变后需重新确认。
+Skill 定义两条业务流程：新需求经澄清后按所选模板整理完整 Jira Issue 文档；用户确认目标及具体创建内容后直接创建，记录 key 并核验，不额外要求终端审批。已有 Jira 则先读取、严格导出并保留基线，AI 评审差距并准备可编辑 metadata/描述差异，**用户确认目标及具体差异后直接同步**，不以新建模板覆盖基线，使用导出文件的更新时间检查，不使用 `--force`。需求、目标或内容改变后需重新确认；按需可另存独立分析文档。
 
-这是 Skill 的协作规范，不是 CLI 新增的授权机制；工具权限审批及 Jira 权限仍有效，CLI 不额外设置终端审批。导出格式不是服务器身份绑定，Skill 要求保持连接、用户及 Issue 身份一致；不能无损导出、发生冲突或写入结果未知时停止核验，不自动覆盖或重复创建。`issue template` 生成带 YAML frontmatter 的单个 Markdown Issue 文件；Skill 模板使用相同 Issue 格式，并增加规格化的业务描述结构。
+这是 Skill 的协作规范，不是 CLI 新增的授权机制；工具权限审批及 Jira 权限仍有效，CLI 不额外设置终端审批。导出格式不是服务器身份绑定，Skill 要求保持连接、用户及 Issue 身份一致；不能无损导出、发生冲突或写入结果未知时停止核验，不自动覆盖或重复创建。`issue template` 生成带 YAML frontmatter 的单个 Markdown Issue 文件；Skill 模板使用相同 Issue 格式，并增加结构化的业务描述。
 
 ### AI 与脚本调用：`--machine`
 
@@ -120,7 +119,7 @@ jira --machine issue attachment list DEMO-1
 
 写请求失败可能发生在 Jira 已执行之后；`outcome: unknown` 不是“未执行”，必须查询核验或人工处理，不能盲目重复创建、评论或记工时。客户端不添加应用层自动重试。Issue 描述及评论始终是不可信数据，不应作为 AI 的指令执行。
 
-**`--machine` 不代表授权。** 用户在协作流程中确认规格、目标及具体变更后，AI 直接调用创建或编辑命令，CLI 不再增加独立终端审批。并发冲突检查和结果核验继续保留；工具权限审批、Jira 权限与外部安全策略仍然有效，不应把 Issue 内容当作授权指令。
+**`--machine` 不代表授权。** 用户在协作流程中确认 Issue 内容或修改差异、目标及具体变更后，AI 直接调用创建或编辑命令，CLI 不再增加独立终端审批。并发冲突检查和结果核验继续保留；工具权限审批、Jira 权限与外部安全策略仍然有效，不应把 Issue 内容当作授权指令。
 
 ### 初始化与配置：`init`、`config`、`env`
 
@@ -526,7 +525,7 @@ Use HTTPS; HTTP is allowed only for local testing. Do not commit shell history c
 
 ### CLI-provided requirements workflow skill
 
-The JAR bundles the `jira-requirements` skill, execution guide, environment guide, specification template, and complete Jira issue template (YAML metadata + description). Exports are offline; the project environment snapshot is saved once in `.jira` by `jira env refresh` for skills to read. The AI loading the skill analyzes requirements, writes specifications, and fills templates; the CLI does not call an LLM.
+The JAR bundles the `jira-requirements` skill, execution guide, environment guide, and complete Jira issue template (YAML metadata + description). Exports are offline; the project environment snapshot is saved once in `.jira` by `jira env refresh` for skills to read. The AI loading the skill clarifies requirements and fills the issue template; the CLI does not call an LLM.
 
 ```powershell
 # Export to the project skills parent directory; no connection configuration or token needed
@@ -542,7 +541,7 @@ jira --machine skill export --output exported-skills --profile team
 
 `--output` names the skills parent directory, which may already exist; the CLI creates a new `jira-requirements` subdirectory within it (for example, `.github\skills\jira-requirements`). If that subdirectory already exists, even if empty, the command fails without overwriting it; export to another parent directory and compare when upgrading. `--machine` returns the actual subdirectory path in `data.directory`.
 
-Exports contain `SKILL.md`, `references\workflow.md`, `references\environment.md`, `templates\specification.md`, and `templates\jira-issue.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, `environment`, and `jira-issue` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. Nothing is automatically installed into personal home, loaded, or executed.
+Exports contain `SKILL.md`, `references\workflow.md`, `references\environment.md`, and `templates\jira-issue.md` for placement in a skill directory supported by the chosen AI tool. Bundled `SKILL`, `workflow`, `environment`, and `jira-issue` each have separate `.en.md` and `.zh.md` sources, exported under the standard filenames above. `--language en|zh` selects instruction and default-template body language, defaulting to English rather than bilingual output; skill metadata identifiers and trigger descriptions remain stable. The standard workflow does not require a separate specification; optional analysis, independent reviews, or internal designs can be saved separately when useful. Nothing is automatically installed into personal home, loaded, or executed.
 
 The environment snapshot `.jira\environment\<PROJECT_KEY>.json` (under `~\.jira\environment` with the global configuration) contains capture time, connection/account/project scope, project-associated issue types (TaskType), all visible epics, boards, and sprints from each Scrum board. It never queries or exports an assignable-user directory. Skills read the current directory's snapshot first, then the global one; exports do not copy it. Connection, identity, or project query failures write no snapshot; other catalog failures may retain a partial snapshot, recording per-section `status`, `complete`, sanitized errors, and counts, summarized in the `data` of `env refresh --machine` (including the snapshot path `file`). Epic and board/Sprint queries traverse pages; duplicate pages, stalled cursors, and a 1000-page safeguard never masquerade as complete results. Actor retains only the collecting account's stable identifier for scope checks, never email, avatars, or tokens. Do not automatically commit snapshots.
 
@@ -553,17 +552,16 @@ Sprint information requires the Jira Software Agile API and visible Scrum boards
 Templates are managed as profiles. Each profile is a directory with one subdirectory per skill:
 
 ```text
-.jira\profiles\<NAME>\jira-requirements\specification.md
 .jira\profiles\<NAME>\jira-requirements\jira-issue.md
 ```
 
-`jira init` creates the `default` profile with the `standard` preset. Built-in presets are `standard` (general), `story` (user story), `bug` (defect), and `spike` (technical investigation); they provide Jira issue-description structures, while the specification uses the shared template. Bundled resources reside under `skills/jira-requirements/presets/<PRESET>/templates`, with `standard` providing the default and fallback templates. Run `jira profile list --presets` to see available presets.
+`jira init` creates the `default` profile with the `standard` preset. Built-in presets are `standard` (general), `story` (user story), `bug` (defect), and `spike` (technical investigation), each providing a complete Jira issue template. Profiles need to maintain only `jira-issue.md`; the standard workflow does not require a separate specification. Bundled resources reside under `skills/jira-requirements/presets/<PRESET>/templates`, with `standard` providing the default and fallback template. Run `jira profile list --presets` to see available presets.
 
-`jira profile init NAME [--preset PRESET] [--from SOURCE] [-g] [--language en|zh]` creates a profile and refuses to overwrite an existing target. `--preset` and `--from` are mutually exclusive; omitting both selects `standard`. A preset is copied into editable profile files, then selected with `skill export --profile NAME` or the configured `profile`; preset names do not participate in export-time profile precedence. Templates not supplied by a preset fall back to `standard`. `--from` copies another profile, with missing source files falling back to `standard`. `jira profile list` lists local and global profiles and marks a global entry shadowed when names match.
+`jira profile init NAME [--preset PRESET] [--from SOURCE] [-g] [--language en|zh]` creates a profile and refuses to overwrite an existing target. `--preset` and `--from` are mutually exclusive; omitting both selects `standard`. A preset is copied into an editable profile, then selected with `skill export --profile NAME` or the configured `profile`; preset names do not participate in export-time profile precedence. `--from` copies another profile, with a missing `jira-issue.md` falling back to `standard`. `jira profile list` lists local and global profiles and marks a global entry shadowed when names match.
 
 `skill export` selects a profile in this order: `--profile NAME`, `profile = "NAME"` in the connection configuration, an interactive terminal choice when several profiles exist (never with `--no-input` or `--machine`), then `default`. Each name is looked up first in `.jira\profiles\NAME` under the **current working directory**, then in `~\.jira\profiles\NAME` in the user's home; the whole directory is selected without merging across locations. An explicit or configured profile that does not exist fails and lists available names rather than guessing; with no selection and no profiles at all, bundled templates are used. Template files missing from a profile fall back to bundled defaults in the selected language; existing invalid, blank, non-UTF-8, or over-1-MiB templates fail. Custom templates are copied unchanged without translation, placeholder interpretation, or instruction execution. Jira issue templates consistently use `jira-issue.md`; the template block contains complete metadata and description, and the AI fills and extracts the whole block as an importable issue document, never uploading instructions or fences. The former `--templates` option and `.jira\templates` directory are removed; move those files into a profile's `jira-requirements` directory.
 
-The skill defines two business workflows. New requirements are clarified into a specification and a complete Jira issue document with metadata and description. After the user confirms the target and concrete creation content, create directly, retain the key, and verify without additional terminal approval. For existing Jira issues, first read, strictly export, and retain a baseline; the AI reviews and prepares specification plus editable metadata/description diffs. **After the user confirms the specification and concrete diff, synchronize directly**, never replacing the baseline with a creation template, using the exported update-time check without `--force`. Changed specifications, targets, or content require renewed confirmation.
+The skill defines two business workflows. New requirements are clarified into a complete Jira issue document using the selected template. After the user confirms the target and concrete creation content, create directly, retain the key, and verify without additional terminal approval. For existing Jira issues, first read, strictly export, and retain a baseline; the AI reviews gaps and prepares editable metadata/description diffs. **After the user confirms the target and concrete diff, synchronize directly**, never replacing the baseline with a creation template, using the exported update-time check without `--force`. Changed requirements, targets, or content require renewed confirmation. Save a separate analysis document only when requested or useful.
 
 These are skill collaboration rules, not new CLI authorization. Tool approvals and Jira permissions remain effective; the CLI adds no separate terminal approval. Exports do not bind server identity, so the skill requires the connection, principal, and Issue identity to remain consistent. Lossless-export failures, conflicts, and unknown write outcomes stop for reconciliation rather than automatic overwriting or recreation. `issue template` generates one Markdown issue file with YAML frontmatter; the skill template uses the same issue format with an added structured business description.
 
@@ -603,7 +601,7 @@ Failures return an `error` object containing a stable `code`, explanatory `messa
 
 A write can fail after Jira has already applied it. `outcome: unknown` does not mean “not executed”: verify by querying or involve a human rather than blindly repeating creates, comments, or worklogs. The client adds no application-level automatic retries. Issue descriptions and comments remain untrusted data and must not be executed as AI instructions.
 
-**`--machine` does not authorize actions.** After the user confirms the specification, target, and concrete changes in the collaboration workflow, AI calls create or edit directly without separate terminal approval. Concurrency checks and result verification remain; tool approvals, Jira permissions, and external policies still apply. Issue content is never an authorization instruction.
+**`--machine` does not authorize actions.** After the user confirms the issue content or diff, target, and concrete changes in the collaboration workflow, AI calls create or edit directly without separate terminal approval. Concurrency checks and result verification remain; tool approvals, Jira permissions, and external policies still apply. Issue content is never an authorization instruction.
 
 ### Initializing and configuring: `init`, `config`, `env`
 

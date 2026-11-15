@@ -34,7 +34,7 @@ final class JiraProfiles implements Runnable {
     static final String DEFAULT = "default";
     static final String STANDARD = "standard";
     static final String SKILL = "jira-requirements";
-    static final List<String> TEMPLATES = List.of("specification.md", "jira-issue.md");
+    static final List<String> TEMPLATES = List.of("jira-issue.md");
     static final List<String> PRESETS = List.of(STANDARD, "story", "bug", "spike");
     private static final long MAX_TEMPLATE = 1024 * 1024;
 
@@ -162,9 +162,8 @@ final class JiraProfiles implements Runnable {
 
     static String presetTemplate(String preset, String template,
             JiraSkillCommands.Language language) throws IOException {
-        var source = template.equals("specification.md") ? STANDARD : preset;
         return JiraSkillCommands.Export.bundled(
-                Path.of("presets", source, "templates", template), language);
+                Path.of("presets", preset, "templates", template), language);
     }
 
     static JsonArray paths(List<Path> files) {

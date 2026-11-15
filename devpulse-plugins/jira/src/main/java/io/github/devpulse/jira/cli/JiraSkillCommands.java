@@ -27,7 +27,6 @@ final class JiraSkillCommands implements Runnable {
             Path.of("SKILL.md"),
             Path.of("references", "workflow.md"),
             Path.of("references", "environment.md"),
-            Path.of("templates", "specification.md"),
             Path.of("templates", "jira-issue.md"));
 
     @Spec
@@ -190,8 +189,7 @@ final class JiraSkillCommands implements Runnable {
         }
 
         static String bundled(Path file, Language language) throws IOException {
-            boolean bilingual = file.getFileName().toString().equals("specification.md");
-            var source = bilingual ? file : file.resolveSibling(
+            var source = file.resolveSibling(
                     file.getFileName().toString().replace(".md", "." + language.name() + ".md"));
             var resource = "/skills/" + NAME + "/" + source.toString().replace('\\', '/');
             try (var stream = JiraSkillCommands.class.getResourceAsStream(resource)) {
@@ -200,24 +198,7 @@ final class JiraSkillCommands implements Runnable {
                 }
                 var content = new String(stream.readAllBytes(), StandardCharsets.UTF_8)
                         .replace("\r\n", "\n");
-                if (!bilingual) {
-                    return content;
-                }
-                var chinese = "\n## 中文\n";
-                var english = "\n## English\n";
-                int startChinese = content.indexOf(chinese);
-                int startEnglish = content.indexOf(english);
-                var heading = content.lines().filter(line -> line.startsWith("# "))
-                        .findFirst().orElse("");
-                var titles = heading.split(" / ", 2);
-                if (startChinese < 0 || startEnglish <= startChinese || titles.length != 2) {
-                    throw JiraCommand.wrong("Bundled Jira skill language sections are invalid.");
-                }
-                var title = language == Language.en ? "# " + titles[1] : titles[0];
-                var body = language == Language.en
-                        ? content.substring(startEnglish + english.length())
-                        : content.substring(startChinese + chinese.length(), startEnglish);
-                return title + "\n\n" + body.strip() + "\n";
+                return content;
             }
         }
     }

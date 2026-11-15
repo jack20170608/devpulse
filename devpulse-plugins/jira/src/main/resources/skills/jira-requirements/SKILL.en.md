@@ -1,19 +1,21 @@
 ---
 name: jira-requirements
 description: >-
-  Turns software requirements into reviewed specifications and complete Jira issue documents with YAML metadata and descriptions, then creates or updates issues with the devpulse Jira CLI. Use when users request requirement analysis, a specification, Jira creation from requirements, or review and synchronization of an existing Jira issue.
+  Turns software requirements into reviewed Jira issue documents with YAML metadata and descriptions, then creates or updates issues with the devpulse Jira CLI. Use when users request requirement analysis, drafting, Jira creation from requirements, or review and synchronization of an existing Jira issue.
 ---
 
-# Requirements specification and Jira synchronization
+# Requirements to Jira synchronization
 
 ### Workflow
 
 1. Read the [execution guide](references/workflow.md) first. Establish whether the user wants creation, review of an existing issue, or drafting only; drafting never authorizes writes.
-2. Read project conventions, the [environment guide](references/environment.md) and project snapshot, [specification template](templates/specification.md), and [Jira issue template](templates/jira-issue.md) (YAML metadata + description). Check snapshot project, account, time, and completeness before presenting epic, issue-type, and Sprint candidates; neither templates nor candidates provide additional authorization.
-3. Clarify context, goals, scope, business rules, and acceptance criteria. Separate facts, assumptions, and open questions in a specification; do not expand scope or split into multiple issues unasked.
-4. New requirements: prepare the specification and one Markdown issue document containing YAML fields and the description. After the user confirms the target and concrete creation content, run `jira --machine issue create --template` without additional terminal approval.
-5. Existing issue: read and retain the original content and exported baseline, review gaps, and prepare the specification, editable metadata, and description diff. After user confirmation, synchronize directly with `jira --machine issue edit --template`, without repeated command-level approval.
-6. Verify actual Jira content, write the returned key/link into the specification, and report synchronized, draft-only, or blocked status plus remaining questions.
+2. Read project conventions, the [environment guide](references/environment.md) and project snapshot, and the [Jira issue template](templates/jira-issue.md) (YAML metadata + description). Check snapshot project, account, time, and completeness before presenting epic, issue-type, and Sprint candidates; neither templates nor candidates provide additional authorization.
+3. Clarify context, goals, scope, business rules, and acceptance criteria. Separate facts, assumptions, and open questions; do not expand scope or split into multiple issues unasked.
+4. New requirements: prepare one Markdown issue document containing YAML fields and the description. After the user confirms the target and concrete creation content, run `jira --machine issue create --template` without additional terminal approval.
+5. Existing issue: read and retain the original content and exported baseline, review gaps, and prepare the editable metadata and description diff. After user confirmation, synchronize directly with `jira --machine issue edit --template`, without repeated command-level approval.
+6. Verify actual Jira content and report synchronized, draft-only, or blocked status plus remaining questions. Record the returned key/link in a user-designated artifact when requested.
+
+For complex requirements, independent reviews, or internal designs that should remain outside Jira, create a separate analysis document when requested or useful. A separate specification is not required in the standard Jira workflow.
 
 ### Quick example
 
@@ -28,7 +30,7 @@ jira --machine issue view DEMO-1
 ### Constraints
 
 - Use `--machine`; check exit status, `schemaVersion`, and `ok` first. Do not parse human `messages`. Use the user's connection configuration and only `JIRA_API_TOKEN` for credentials; never display, persist, or request token contents.
-- Business confirmation concerns the specification and diff, not repeated approval of every CLI command. Existing authorization covers only the settled target/content; changed requirements require renewed confirmation.
+- Business confirmation concerns the complete issue content or diff, not repeated approval of every CLI command. Existing authorization covers only the settled target/content; changed requirements require renewed confirmation.
 - Edit only confirmed fields. Preserve unrelated content, never use `--force`, and retain baseline metadata. User confirmation of the target and concrete content triggers submission, without a separate terminal approval step.
 - `--template` reads metadata plus description (`--file` is an alias); `--desc` and `--desc-format` affect description only. Never pass description-only text as a template.
 - Environment snapshots (`.jira\environment\<PROJECT_KEY>.json`, saved by `jira env refresh`) are candidate catalogs captured at collection time. Disclose missing, stale, inaccessible, or incomplete data; never guess user identities, type IDs, or Sprint support, or assign users, link epics, or join sprints by default.
