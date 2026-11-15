@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -132,6 +133,12 @@ final class JiraProfiles implements Runnable {
     /** Write missing profile templates from source or preset; never overwrite. */
     static List<Path> materialize(Path profile, Path source, String preset,
             JiraSkillCommands.Language language) throws IOException {
+        return materialize(profile, source, preset, language, false);
+    }
+
+    /** Write profile templates; replace existing template files when requested. */
+    static List<Path> materialize(Path profile, Path source, String preset,
+            JiraSkillCommands.Language language, boolean replace) throws IOException {
         var selectedPreset = preset(preset);
         var contents = new LinkedHashMap<Path, String>();
         for (var template : TEMPLATES) {
@@ -142,6 +149,20 @@ final class JiraProfiles implements Runnable {
         var created = new ArrayList<Path>();
         for (Map.Entry<Path, String> entry : contents.entrySet()) {
             if (Files.exists(entry.getKey(), LinkOption.NOFOLLOW_LINKS)) {
+                if (!replace) {
+                    continue;
+                }
+                if (!Files.isRegularFile(entry.getKey(), LinkOption.NOFOLLOW_LINKS)) {
+                    throw wrong("Profile template is not a regular file: " + entry.getKey());
+                }
+                var staging = Files.createTempFile(entry.getKey().getParent(), ".jira-profile-", ".md");
+                try {
+                    Files.writeString(staging, entry.getValue(), StandardCharsets.UTF_8);
+                    Files.move(staging, entry.getKey(), StandardCopyOption.REPLACE_EXISTING);
+                } finally {
+                    Files.deleteIfExists(staging);
+                }
+                created.add(entry.getKey());
                 continue;
             }
             Files.createDirectories(entry.getKey().getParent());
@@ -212,9 +233,9 @@ final class JiraProfiles implements Runnable {
     }
 
     @Command(name = "init", mixinStandardHelpOptions = true,
-            description = "Create a new profile from a bundled preset or another profile.")
+            description = "Create a profile from a bundled preset or another profile.")
     static final class Init extends JiraCommand.Action {
-        @Parameters(index = "0", paramLabel = "NAME", description = "New profile name.")
+        @Parameters(index = "0", paramLabel = "NAME", description = "Profile name.")
         String profile;
         @Option(names = "--from", paramLabel = "NAME",
                 description = "Copy another profile; missing files use the standard preset.")
@@ -229,6 +250,13 @@ final class JiraProfiles implements Runnable {
         @Option(names = "--language", defaultValue = "en", paramLabel = "en|zh",
                 description = "Language of bundled templates: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}).")
         JiraSkillCommands.Language language;
+        @Option(names = "--overwrite",
+                description = "Replace the templates of an existing profile without asking. "
+                        + "Otherwise an interactive terminal asks for confirmation.")
+        boolean overwrite;
+        @Option(names = "--no-input",
+                description = "Never prompt for overwrite confirmation.")
+        boolean noInput;
 
         @Override
         protected void execute() throws IOException {
@@ -237,9 +265,15 @@ final class JiraProfiles implements Runnable {
             }
             var selectedPreset = preset(preset == null ? STANDARD : preset);
             var target = root(global).resolve(name(profile));
-            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                throw wrong("Profile already exists: " + target.toAbsolutePath().normalize()
-                        + "; existing files are never overwritten.");
+            boolean replace = Files.exists(target, LinkOption.NOFOLLOW_LINKS);
+            if (replace) {
+                var shown = target.toAbsolutePath().normalize();
+                if (!Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+                    throw wrong("Profile path exists and is not a directory: " + shown);
+                }
+                if (!overwrite && !confirmOverwrite(shown)) {
+                    throw wrong("Profile was not overwritten: " + shown);
+                }
             }
             Path source = null;
             if (from != null) {
@@ -249,7 +283,7 @@ final class JiraProfiles implements Runnable {
                 }
                 source = found.get().directory();
             }
-            var created = materialize(target, source, selectedPreset, language);
+            var created = materialize(target, source, selectedPreset, language, replace);
             var result = new Location(profile, global ? "global" : "local", target).json();
             if (from != null) {
                 result.addProperty("from", from);
@@ -257,8 +291,28 @@ final class JiraProfiles implements Runnable {
                 result.addProperty("preset", selectedPreset);
             }
             result.add("createdFiles", paths(created));
+            result.addProperty("overwritten", replace);
             machineData = result;
-            print("Created profile " + profile + " at " + target.toAbsolutePath().normalize() + ".");
+            print((replace ? "Replaced templates of profile " : "Created profile ") + profile
+                    + " at " + target.toAbsolutePath().normalize() + ".");
+        }
+
+        private boolean confirmOverwrite(Path target) throws IOException {
+            var console = System.console();
+            if (noInput || machine() || console == null) {
+                throw wrong("Profile already exists: " + target
+                        + "; rerun with --overwrite to replace its templates.");
+            }
+            var err = spec.commandLine().getErr();
+            err.print("Profile already exists: " + target
+                    + "\nOverwrite its templates? [y/N]: ");
+            err.flush();
+            var answer = console.readLine();
+            if (answer == null) {
+                throw wrong("Input ended; profile was not overwritten.");
+            }
+            answer = answer.strip().toLowerCase(java.util.Locale.ROOT);
+            return answer.equals("y") || answer.equals("yes");
         }
     }
 }
