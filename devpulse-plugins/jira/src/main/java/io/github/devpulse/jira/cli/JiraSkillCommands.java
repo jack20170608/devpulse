@@ -43,7 +43,8 @@ final class JiraSkillCommands implements Runnable {
                     + "environment snapshot saved by jira env refresh.")
     static final class Export extends JiraCommand.Action {
         @Option(names = "--output", required = true, paramLabel = "DIRECTORY",
-                description = "New skill directory; existing paths are never overwritten.")
+                description = "Parent directory for the skill; creates a new jira-requirements "
+                        + "subdirectory without overwriting existing files.")
         Path output;
         @Option(names = "--profile", paramLabel = "NAME",
                 description = "Template profile (.jira/profiles/NAME, then ~/.jira/profiles/NAME). "
@@ -61,10 +62,14 @@ final class JiraSkillCommands implements Runnable {
 
         @Override
         protected void execute() throws IOException {
-            var destination = output.toAbsolutePath().normalize();
-            if (destination.getParent() == null
-                    || Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
-                throw JiraCommand.wrong("Skill output must be a new directory; choose another path.");
+            var parent = output.toAbsolutePath().normalize();
+            if (Files.exists(parent, LinkOption.NOFOLLOW_LINKS) && !Files.isDirectory(parent)) {
+                throw JiraCommand.wrong("Skill output must be a directory: " + parent);
+            }
+            var destination = parent.resolve(NAME);
+            if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
+                throw JiraCommand.wrong("Skill already exists: " + destination
+                        + "; choose another output directory to avoid overwriting it.");
             }
             var selected = selectProfile();
             var contents = new LinkedHashMap<Path, String>();
@@ -76,7 +81,9 @@ final class JiraSkillCommands implements Runnable {
                         ? JiraProfiles.read(selected.directory(), name) : null;
                 boolean overridden = content != null;
                 if (!overridden) {
-                    content = bundled(file, language);
+                    content = template
+                            ? JiraProfiles.presetTemplate(JiraProfiles.STANDARD, name, language)
+                            : bundled(file, language);
                 }
                 contents.put(file, content);
                 if (template) {
@@ -86,8 +93,8 @@ final class JiraSkillCommands implements Runnable {
                             : "bundled");
                 }
             }
-            Files.createDirectories(destination.getParent());
-            var staging = Files.createTempDirectory(destination.getParent(), ".jira-skill-");
+            Files.createDirectories(parent);
+            var staging = Files.createTempDirectory(parent, ".jira-skill-");
             try {
                 for (var entry : contents.entrySet()) {
                     var target = staging.resolve(entry.getKey());
@@ -183,7 +190,7 @@ final class JiraSkillCommands implements Runnable {
         }
 
         static String bundled(Path file, Language language) throws IOException {
-            boolean bilingual = file.equals(Path.of("templates", "specification.md"));
+            boolean bilingual = file.getFileName().toString().equals("specification.md");
             var source = bilingual ? file : file.resolveSibling(
                     file.getFileName().toString().replace(".md", "." + language.name() + ".md"));
             var resource = "/skills/" + NAME + "/" + source.toString().replace('\\', '/');

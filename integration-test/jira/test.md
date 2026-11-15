@@ -61,11 +61,14 @@ jira issue list -q "project = $PROJECT AND created >= -7d ORDER BY created DESC"
 
 ```bash
 jira profile list
-jira profile init team-a --from default --language zh
+jira profile list --presets
+jira profile init team-a --preset story --language zh
+jira profile init bug-team --preset bug --language zh
 jira profile list
+mkdir -p skill-default
 jira skill export --output skill-default --language zh --profile default --no-input
 jira skill export --output skill-team-a --language zh --profile team-a --no-input
-ls skill-default skill-default/references skill-default/templates
+ls skill-default/jira-requirements skill-default/jira-requirements/references skill-default/jira-requirements/templates
 ```
 
 ### 4. 创建 Epic 与 Issue
@@ -260,11 +263,14 @@ jira issue list -q "project = $PROJECT AND created >= -7d ORDER BY created DESC"
 
 ```bash
 jira profile list
-jira profile init team-a --from default --language en
+jira profile list --presets
+jira profile init team-a --preset story --language en
+jira profile init bug-team --preset bug --language en
 jira profile list
+mkdir -p skill-default
 jira skill export --output skill-default --language en --profile default --no-input
 jira skill export --output skill-team-a --language en --profile team-a --no-input
-ls skill-default skill-default/references skill-default/templates
+ls skill-default/jira-requirements skill-default/jira-requirements/references skill-default/jira-requirements/templates
 ```
 
 ### 4. Create an epic and issues

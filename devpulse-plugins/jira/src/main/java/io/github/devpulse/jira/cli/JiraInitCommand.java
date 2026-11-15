@@ -42,7 +42,7 @@ public final class JiraInitCommand extends JiraCommand.Action {
                     new JiraConfigCommands.Draft(null, null, null, null, null), prompt);
         }
         var profile = JiraProfiles.root(global).resolve(JiraProfiles.DEFAULT);
-        var created = JiraProfiles.materialize(profile, null, language);
+        var created = JiraProfiles.materialize(profile, null, JiraProfiles.STANDARD, language);
         var result = new JsonObject();
         result.addProperty("config", JiraConfigCommands.absolute(file));
         result.addProperty("configCreated", !configExists);

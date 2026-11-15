@@ -32,8 +32,10 @@ import picocli.CommandLine.Spec;
         subcommands = {JiraProfiles.ListProfiles.class, JiraProfiles.Init.class})
 final class JiraProfiles implements Runnable {
     static final String DEFAULT = "default";
+    static final String STANDARD = "standard";
     static final String SKILL = "jira-requirements";
     static final List<String> TEMPLATES = List.of("specification.md", "jira-issue.md");
+    static final List<String> PRESETS = List.of(STANDARD, "story", "bug", "spike");
     private static final long MAX_TEMPLATE = 1024 * 1024;
 
     record Location(String name, String scope, Path directory) {
@@ -127,14 +129,15 @@ final class JiraProfiles implements Runnable {
         return profile.resolve(SKILL).resolve(template);
     }
 
-    /** Write missing profile templates from source (or bundled defaults); never overwrite. */
-    static List<Path> materialize(Path profile, Path source, JiraSkillCommands.Language language)
-            throws IOException {
+    /** Write missing profile templates from source or preset; never overwrite. */
+    static List<Path> materialize(Path profile, Path source, String preset,
+            JiraSkillCommands.Language language) throws IOException {
+        var selectedPreset = preset(preset);
         var contents = new LinkedHashMap<Path, String>();
         for (var template : TEMPLATES) {
             var content = source == null ? null : read(source, template);
             contents.put(file(profile, template), content != null ? content
-                    : JiraSkillCommands.Export.bundled(Path.of("templates", template), language));
+                    : presetTemplate(selectedPreset, template, language));
         }
         var created = new ArrayList<Path>();
         for (Map.Entry<Path, String> entry : contents.entrySet()) {
@@ -149,6 +152,21 @@ final class JiraProfiles implements Runnable {
         return created;
     }
 
+    static String preset(String name) throws IOException {
+        if (name == null || !PRESETS.contains(name)) {
+            throw wrong("Unknown template preset: " + name + ". Available: "
+                    + String.join(", ", PRESETS) + ".");
+        }
+        return name;
+    }
+
+    static String presetTemplate(String preset, String template,
+            JiraSkillCommands.Language language) throws IOException {
+        var source = template.equals("specification.md") ? STANDARD : preset;
+        return JiraSkillCommands.Export.bundled(
+                Path.of("presets", source, "templates", template), language);
+    }
+
     static JsonArray paths(List<Path> files) {
         var result = new JsonArray();
         files.forEach(file -> result.add(file.toAbsolutePath().normalize().toString()));
@@ -156,8 +174,12 @@ final class JiraProfiles implements Runnable {
     }
 
     @Command(name = "list", mixinStandardHelpOptions = true,
-            description = "List local (.jira/profiles) and global (~/.jira/profiles) profiles.")
+            description = "List local and global profiles; optionally include bundled presets.")
     static final class ListProfiles extends JiraCommand.Action {
+        @Option(names = "--presets",
+                description = "Also list built-in template presets.")
+        boolean includePresets;
+
         @Override
         protected void execute() throws IOException {
             var profiles = new JsonArray();
@@ -173,22 +195,35 @@ final class JiraProfiles implements Runnable {
                         + location.directory().toAbsolutePath().normalize());
             }
             if (profiles.isEmpty()) {
-                print("No profiles. Run jira init or jira profile init NAME.");
+                print(includePresets ? "No profiles."
+                        : "No profiles. Run jira init or jira profile init NAME.");
             }
             var result = new JsonObject();
             result.add("profiles", profiles);
+            if (includePresets) {
+                var presets = new JsonArray();
+                for (var preset : PRESETS) {
+                    presets.add(preset);
+                    print("Preset\t" + preset);
+                }
+                result.add("presets", presets);
+            }
             machineData = result;
         }
     }
 
     @Command(name = "init", mixinStandardHelpOptions = true,
-            description = "Create a new profile from bundled templates or another profile.")
+            description = "Create a new profile from a bundled preset or another profile.")
     static final class Init extends JiraCommand.Action {
         @Parameters(index = "0", paramLabel = "NAME", description = "New profile name.")
         String profile;
         @Option(names = "--from", paramLabel = "NAME",
-                description = "Copy templates from this existing profile; missing files use bundled defaults.")
+                description = "Copy another profile; missing files use the standard preset.")
         String from;
+        @Option(names = "--preset", paramLabel = "NAME",
+                description = "Seed from a built-in preset (standard, story, bug, spike; "
+                        + "default: standard).")
+        String preset;
         @Option(names = {"-g", "--global"},
                 description = "Create under ~/.jira/profiles instead of .jira/profiles.")
         boolean global;
@@ -198,6 +233,10 @@ final class JiraProfiles implements Runnable {
 
         @Override
         protected void execute() throws IOException {
+            if (from != null && preset != null) {
+                throw wrong("Use either --from or --preset, not both.");
+            }
+            var selectedPreset = preset(preset == null ? STANDARD : preset);
             var target = root(global).resolve(name(profile));
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 throw wrong("Profile already exists: " + target.toAbsolutePath().normalize()
@@ -211,10 +250,12 @@ final class JiraProfiles implements Runnable {
                 }
                 source = found.get().directory();
             }
-            var created = materialize(target, source, language);
+            var created = materialize(target, source, selectedPreset, language);
             var result = new Location(profile, global ? "global" : "local", target).json();
             if (from != null) {
                 result.addProperty("from", from);
+            } else {
+                result.addProperty("preset", selectedPreset);
             }
             result.add("createdFiles", paths(created));
             machineData = result;
