@@ -41,17 +41,26 @@ final class JiraSkillCommands implements Runnable {
             description = "Export the requirements-to-Jira skill offline; the skill reads the "
                     + "environment snapshot saved by jira env refresh.")
     static final class Export extends JiraCommand.Action {
-        @Option(names = "--output", required = true, paramLabel = "DIRECTORY",
-                description = "Parent directory for the skill; creates a new jira-requirements "
-                        + "subdirectory without overwriting existing files.")
+        @Option(names = "--output", paramLabel = "DIRECTORY",
+                description = "Parent directory for the skill (default: .claude/skills); "
+                        + "writes its jira-requirements subdirectory. "
+                        + "Cannot be combined with --global.")
         Path output;
+        @Option(names = {"-g", "--global"},
+                description = "Export to ~/.claude/skills instead of the current directory's "
+                        + ".claude/skills. Cannot be combined with --output.")
+        boolean global;
         @Option(names = "--profile", paramLabel = "NAME",
                 description = "Template profile (.jira/profiles/NAME, then ~/.jira/profiles/NAME). "
                         + "Otherwise use the configuration's profile, an interactive choice when "
                         + "several profiles exist, or default. Missing files use bundled templates.")
         String profile;
+        @Option(names = "--overwrite",
+                description = "Replace an existing jira-requirements directory without asking. "
+                        + "Otherwise an interactive terminal asks for confirmation.")
+        boolean overwrite;
         @Option(names = "--no-input",
-                description = "Never prompt for a profile.")
+                description = "Never prompt for a profile or overwrite confirmation.")
         boolean noInput;
         @Option(names = "--language", defaultValue = "en", paramLabel = "en|zh",
                 description = "Language of bundled skill instructions and templates: "
@@ -61,14 +70,25 @@ final class JiraSkillCommands implements Runnable {
 
         @Override
         protected void execute() throws IOException {
-            var parent = output.toAbsolutePath().normalize();
+            if (global && output != null) {
+                throw JiraCommand.wrong("Choose either --global or --output, not both.");
+            }
+            var parent = (output != null ? output : global
+                    ? Path.of(System.getProperty("user.home"), ".claude", "skills")
+                    : Path.of(".claude", "skills")).toAbsolutePath().normalize();
             if (Files.exists(parent, LinkOption.NOFOLLOW_LINKS) && !Files.isDirectory(parent)) {
                 throw JiraCommand.wrong("Skill output must be a directory: " + parent);
             }
             var destination = parent.resolve(NAME);
-            if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
-                throw JiraCommand.wrong("Skill already exists: " + destination
-                        + "; choose another output directory to avoid overwriting it.");
+            boolean replace = Files.exists(destination, LinkOption.NOFOLLOW_LINKS);
+            if (replace) {
+                if (!Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) {
+                    throw JiraCommand.wrong("Skill path exists and is not a directory: "
+                            + destination);
+                }
+                if (!overwrite && !confirmOverwrite(destination)) {
+                    throw JiraCommand.wrong("Skill was not overwritten: " + destination);
+                }
             }
             var selected = selectProfile();
             var contents = new LinkedHashMap<Path, String>();
@@ -101,7 +121,19 @@ final class JiraSkillCommands implements Runnable {
                     Files.writeString(target, entry.getValue(), StandardCharsets.UTF_8,
                             StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
                 }
-                Files.move(staging, destination);
+                if (replace) {
+                    var previous = parent.resolve(".jira-skill-old-" + System.nanoTime());
+                    Files.move(destination, previous);
+                    try {
+                        Files.move(staging, destination);
+                    } catch (IOException failure) {
+                        Files.move(previous, destination);
+                        throw failure;
+                    }
+                    deleteTree(previous);
+                } else {
+                    Files.move(staging, destination);
+                }
             } finally {
                 for (var file : new java.util.ArrayList<>(contents.keySet()).reversed()) {
                     Files.deleteIfExists(staging.resolve(file));
@@ -114,6 +146,7 @@ final class JiraSkillCommands implements Runnable {
             result.addProperty("skill", NAME);
             result.addProperty("language", language.name());
             result.addProperty("directory", destination.toString());
+            result.addProperty("overwritten", replace);
             var files = new JsonArray();
             contents.keySet().forEach(file -> files.add(file.toString()));
             result.add("files", files);
@@ -124,9 +157,36 @@ final class JiraSkillCommands implements Runnable {
             }
             result.add("templateSources", sources);
             machineData = result;
-            print("Exported " + NAME + " (" + language + ") to " + destination
+            print((replace ? "Replaced " : "Exported ") + NAME + " (" + language + ") to "
+                    + destination
                     + (selected == null ? " using bundled templates."
                     : " using profile " + selected.name() + " (" + selected.scope() + ")."));
+        }
+
+        private boolean confirmOverwrite(Path destination) throws IOException {
+            var console = System.console();
+            if (noInput || machine() || console == null) {
+                throw JiraCommand.wrong("Skill already exists: " + destination
+                        + "; rerun with --overwrite to replace it.");
+            }
+            var err = spec.commandLine().getErr();
+            err.print("Skill already exists: " + destination
+                    + "\nOverwrite it and remove all files in it? [y/N]: ");
+            err.flush();
+            var answer = console.readLine();
+            if (answer == null) {
+                throw JiraCommand.wrong("Input ended; skill was not overwritten.");
+            }
+            answer = answer.strip().toLowerCase(java.util.Locale.ROOT);
+            return answer.equals("y") || answer.equals("yes");
+        }
+
+        private static void deleteTree(Path root) throws IOException {
+            try (var paths = Files.walk(root)) {
+                for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                    Files.delete(path);
+                }
+            }
         }
 
         private JiraProfiles.Location selectProfile() throws IOException {

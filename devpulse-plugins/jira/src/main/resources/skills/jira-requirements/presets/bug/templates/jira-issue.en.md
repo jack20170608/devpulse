@@ -1,6 +1,6 @@
 # Bug issue template
 
-Use the complete block below as `work\issue.md`. Select an issue type supported by the project and replace all `{{...}}` values before submission.
+Use the complete block below as `issue.md` in the requirement folder (such as `.jira\requirements\draft-<yyyyMMdd-HHmmss>\issue.md`). Select an issue type supported by the project and replace all `{{...}}` values before submission.
 
 ```markdown
 ---

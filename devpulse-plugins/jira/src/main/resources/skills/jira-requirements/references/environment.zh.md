@@ -4,7 +4,7 @@
 
 环境快照由 `jira env refresh` 统一维护（`jira init` 也会提示采集），不随 Skill 导出。读取顺序：当前工作目录的 `.jira\environment\<项目KEY>.json`，再到用户 home 的 `~\.jira\environment\<项目KEY>.json`；与所用连接配置位于同一范围（本地或全局）。没有快照不代表没有 Epic、Issue Type 或 Sprint。快照缺失或过期时请用户刷新；仅在用户明确要求时才代为运行下列命令，它会替换同一项目的旧快照，不擅自扩大查询范围：
 
-```powershell
+```shell
 jira --machine env refresh        # 当前使用的配置；全局加 -g，其他项目加 -p KEY
 jira --machine env show           # 查看已保存快照摘要
 ```
@@ -28,7 +28,7 @@ jira --machine env show           # 查看已保存快照摘要
 
 CLI 已支持 `board list`、`sprint list`、`sprint list SPRINT_ID` 和 `sprint add`。Sprint 来自 Jira Software Agile API；Scrum 看板支持 Sprint，不能把 Kanban 看板当成 Scrum 看板探测。查询成功（包括空列表）时 `sprints.support` 为 `available`；没有可见 Scrum 看板时为 `no-visible-scrum-board`；查询失败、权限不足、404 或网络异常时仍为 `unknown`，不能断言实例不支持 Sprint。
 
-```powershell
+```shell
 jira --machine board list --project DEMO --type scrum
 jira --machine sprint list --board-id 12 --state future,active --limit 100
 jira --machine sprint list 34 --project DEMO

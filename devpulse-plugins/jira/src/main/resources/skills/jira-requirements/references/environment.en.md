@@ -4,7 +4,7 @@
 
 Environment snapshots are maintained by `jira env refresh` (also offered by `jira init`), not shipped with skill exports. Read `.jira\environment\<PROJECT_KEY>.json` in the current working directory first, then `~\.jira\environment\<PROJECT_KEY>.json` in the user's home, matching the scope (local or global) of the connection configuration in use. A missing snapshot does not mean there are no epics, issue types, or sprints. When it is missing or stale, ask the user to refresh it; run the following command on their behalf only when explicitly asked. It replaces the project's previous snapshot and never broadens the query scope:
 
-```powershell
+```shell
 jira --machine env refresh        # configuration in use; add -g for global, -p KEY for another project
 jira --machine env show           # summarize the saved snapshot
 ```
@@ -28,7 +28,7 @@ Snapshots never query or export an assignable-user directory. Actor records only
 
 The CLI supports `board list`, `sprint list`, `sprint list SPRINT_ID`, and `sprint add`. Sprints use the Jira Software Agile API; Scrum boards support sprints, and Kanban boards must not be probed as Scrum boards. Successful queries, including empty results, set `sprints.support` to `available`; no visible Scrum board yields `no-visible-scrum-board`. Query failures, insufficient permissions, 404s, or network errors remain `unknown`, never proof that the instance lacks Sprint support.
 
-```powershell
+```shell
 jira --machine board list --project DEMO --type scrum
 jira --machine sprint list --board-id 12 --state future,active --limit 100
 jira --machine sprint list 34 --project DEMO

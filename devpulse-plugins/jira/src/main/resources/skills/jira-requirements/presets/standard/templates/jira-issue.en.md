@@ -2,7 +2,7 @@
 
 ### Usage
 
-`jira-issue.md` provides a complete issue document with metadata and description. Fill the YAML metadata and description in the fenced block below, then save the entire block contents without fences as `work\issue.md` for `--template`. Never upload this document's title, instructions, fences, local absolute paths, or unresolved `{{...}}`.
+`jira-issue.md` provides a complete issue document with metadata and description. Fill the YAML metadata and description in the fenced block below, then save the entire block contents without fences as `issue.md` in the requirement folder (such as `.jira\requirements\draft-<yyyyMMdd-HHmmss>\issue.md`) for `--template`. Never upload this document's title, instructions, fences, local absolute paths, or unresolved `{{...}}`.
 
 Use the confirmed project, an actually supported issue type, and summary for project, issuetype, and summary, quoting and escaping YAML strings correctly. Empty priority, epic, and story-point mean omit; populate only when confirmed and supported, using an unquoted number for story-point. Add other editable fields such as labels, components, parent, or assignee only as needed; never guess user identifiers or custom-field IDs. bodyFormat selects description format only, never metadata parsing.
 

@@ -2,7 +2,7 @@
 
 ### 使用
 
-`jira-issue.md` 提供包含 metadata 和 description 的完整 Issue 文档。填充下方代码块中的 YAML metadata 和描述正文，将整个代码块内容（不含围栏）保存为 `work\issue.md`，交给 `--template`。不上传本文的标题、使用说明、围栏、本地绝对路径或未替换的 `{{...}}`。
+`jira-issue.md` 提供包含 metadata 和 description 的完整 Issue 文档。填充下方代码块中的 YAML metadata 和描述正文，将整个代码块内容（不含围栏）保存为 ??????? `issue.md`?? `.jira\requirements\draft-<yyyyMMdd-HHmmss>\issue.md`?，交给 `--template`。不上传本文的标题、使用说明、围栏、本地绝对路径或未替换的 `{{...}}`。
 
 project、issuetype 和 summary 使用确认过的项目、实际支持的类型及标题，并正确引用、转义 YAML 字符串。priority、epic 和 story-point 留空表示省略；仅在用户确认且环境支持时填值，story-point 使用不带引号的数字。其他可编辑字段如 labels、components、parent、assignee 按需添加，不猜测经办人标识或自定义字段编号。bodyFormat 只标记描述格式，不影响 metadata。
 

@@ -1,6 +1,6 @@
 # 缺陷 Issue 模板
 
-将下方完整代码块内容保存为 `work\issue.md`。选择项目实际支持的 Issue 类型，并在提交前替换所有 `{{...}}`。
+将下方完整代码块内容保存为 ??????? `issue.md`?? `.jira\requirements\draft-<yyyyMMdd-HHmmss>\issue.md`?。选择项目实际支持的 Issue 类型，并在提交前替换所有 `{{...}}`。
 
 ```markdown
 ---

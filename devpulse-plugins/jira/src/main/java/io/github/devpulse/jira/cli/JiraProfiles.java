@@ -35,7 +35,7 @@ final class JiraProfiles implements Runnable {
     static final String STANDARD = "standard";
     static final String SKILL = "jira-requirements";
     static final List<String> TEMPLATES = List.of("jira-issue.md");
-    static final List<String> PRESETS = List.of(STANDARD, "story", "bug", "spike");
+    static final List<String> PRESETS = List.of(STANDARD, "story", "bug", "spike", "agile");
     private static final long MAX_TEMPLATE = 1024 * 1024;
 
     record Location(String name, String scope, Path directory) {
@@ -220,7 +220,7 @@ final class JiraProfiles implements Runnable {
                 description = "Copy another profile; missing files use the standard preset.")
         String from;
         @Option(names = "--preset", paramLabel = "NAME",
-                description = "Seed from a built-in preset (standard, story, bug, spike; "
+                description = "Seed from a built-in preset (standard, story, bug, spike, agile; "
                         + "default: standard).")
         String preset;
         @Option(names = {"-g", "--global"},
