@@ -2,6 +2,9 @@
 .worktree/
 .claude/
 
+## The jira
+.jira/
+
 target/
 .devpulse/
 .codegraph/
