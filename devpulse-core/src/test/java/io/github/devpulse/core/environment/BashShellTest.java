@@ -33,18 +33,15 @@ public class BashShellTest {
                 """.formatted(String.join(" ", TOOLS));
         var root = Path.of(".").toAbsolutePath().normalize();
         var output = bash.capture(scan, root);
-
-
-
+        System.out.println(output);
     }
 
-//    @Test
-//    @Disabled
-//    void testSleep() throws Exception {
-//        var bash = BashShell.discover(null);
-//        var root = Path.of(".").toAbsolutePath().normalize();
-//        var output = bash.capture("sleep 6 && echo 'done'", root);
-//        System.out.println(output);
-//    }
+    @Test
+    void testSleep() throws Exception {
+        var bash = BashShell.discover(null);
+        var root = Path.of(".").toAbsolutePath().normalize();
+        var output = bash.capture("sleep 6 && echo 'done'", root);
+        System.out.println(output);
+    }
 
 }

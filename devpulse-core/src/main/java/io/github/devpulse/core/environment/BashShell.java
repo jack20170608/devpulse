@@ -1,7 +1,9 @@
 package io.github.devpulse.core.environment;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -91,17 +93,38 @@ public record BashShell(Path executable) {
         return builder;
     }
 
-    public String capture(String command, Path directory)
-            throws IOException, InterruptedException {
-        var process = script(directory)
-                .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+    /**
+     * Executes a command in the Bash shell and captures its output.
+     * @param command the command to execute
+     * @param directory the working directory
+     * @return the output of the command
+     * @throws IOException if an I/O error occurs
+     * @throws InterruptedException if the process is interrupted
+
+     */
+    public String capture(String command, Path directory) throws IOException, InterruptedException {
+        // 设定最大保留字节数，例如：标准输出最多保留 1MB，错误输出最多保留 64KB
+        int maxStdoutBytes = 1024 * 1024;
+        int maxStderrBytes = 64 * 1024;
+
+        var process = script(directory).start();
+
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            // 读取标准输出 (stdout) 并限制大小
             var output = executor.submit(() -> {
                 try (var stream = process.getInputStream()) {
-                    return new String(stream.readAllBytes(),
-                            StandardCharsets.UTF_8);
+                    return readWithLimit(stream, maxStdoutBytes);
                 }
             });
+
+            // 读取标准错误 (stderr) 并限制大小
+            var error = executor.submit(() -> {
+                try (var stream = process.getErrorStream()) {
+                    return readWithLimit(stream, maxStderrBytes);
+                }
+            });
+
+            // 写入命令 (stdin)
             var input = executor.submit(() -> {
                 try (var stream = process.getOutputStream()) {
                     stream.write(command.getBytes(StandardCharsets.UTF_8));
@@ -109,29 +132,73 @@ public record BashShell(Path executable) {
                 }
                 return null;
             });
+
             try {
                 if (!process.waitFor(5, TimeUnit.SECONDS)) {
                     throw new IOException("Bash environment scan timed out.");
                 }
+
                 if (process.exitValue() != 0) {
-                    throw new IOException("Bash environment scan failed with "
-                            + "exit code " + process.exitValue() + ".");
+                    String errorMessage = "";
+                    try {
+                        errorMessage = error.get(1, TimeUnit.SECONDS).trim();
+                    } catch (Exception ignored) {
+                    }
+                    throw new IOException("Bash environment scan failed with exit code "
+                        + process.exitValue() + ". Error output: " + errorMessage);
                 }
+
                 input.get(1, TimeUnit.SECONDS);
                 return output.get(1, TimeUnit.SECONDS);
+
             } catch (ExecutionException exception) {
-                throw new IOException("Could not exchange data with Bash.",
-                        exception.getCause());
+                throw new IOException("Could not exchange data with Bash.", exception.getCause());
             } catch (TimeoutException exception) {
-                throw new IOException("Bash output capture timed out.",
-                        exception);
+                throw new IOException("Bash output capture timed out.", exception);
             } finally {
                 process.descendants().toList().reversed()
-                        .forEach(ProcessHandle::destroyForcibly);
+                    .forEach(ProcessHandle::destroyForcibly);
                 process.destroyForcibly();
                 process.getInputStream().close();
+                process.getErrorStream().close();
             }
         }
+    }
+
+
+    /**
+     * 安全读取流：最多保留 maxBytes 字节的数据，超出的部分继续读取并丢弃（防止管道阻塞）
+     */
+    private String readWithLimit(InputStream stream, int maxBytes) throws IOException {
+        var buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192]; // 8KB 每次读取的缓冲块
+        int totalRead = 0;
+        boolean truncated = false;
+        int bytesRead;
+
+        while ((bytesRead = stream.read(chunk)) != -1) {
+            if (totalRead < maxBytes) {
+                // 计算当前块还能往内存里放多少字节
+                int bytesToWrite = Math.min(bytesRead, maxBytes - totalRead);
+                buffer.write(chunk, 0, bytesToWrite);
+                totalRead += bytesToWrite;
+
+                // 如果当前块没写完，说明已经达到上限
+                if (bytesToWrite < bytesRead) {
+                    truncated = true;
+                }
+            } else {
+                // 超过上限后，不再写入 ByteArrayOutputStream，但依然保持 while 循环读取
+                // 这样可以把操作系统的管道排空，防止子进程死锁
+                truncated = true;
+            }
+        }
+
+        String result = buffer.toString(StandardCharsets.UTF_8);
+        if (truncated) {
+            result += "\n... [Output truncated, exceeded " + maxBytes + " bytes limit]";
+        }
+        return result;
     }
 
     private static void addGitCandidates(LinkedHashSet<Path> candidates,
