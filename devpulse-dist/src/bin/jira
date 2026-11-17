@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# devpulse-managed-wrapper: jira
 set -euo pipefail
 
 if [[ -n "${JAVA_HOME:-}" ]]; then
