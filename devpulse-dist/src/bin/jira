@@ -1,21 +1,51 @@
 #!/usr/bin/env bash
-# devpulse-managed-wrapper: jira
 set -euo pipefail
 
+if [[ -n "${JAVA_HOME:-}" ]]; then
+    java_cmd="$JAVA_HOME/bin/java"
+    if [[ ! -x "$java_cmd" ]]; then
+        echo "jira: JAVA_HOME is set to '$JAVA_HOME', but '$java_cmd' is not executable" >&2
+        exit 1
+    fi
+else
+    java_cmd="$(command -v java || true)"
+    if [[ -z "$java_cmd" ]]; then
+        echo "jira: Java not found. Please install JDK 25+ or set JAVA_HOME" >&2
+        exit 1
+    fi
+fi
+
+# 2. 检查 Java 版本（最低要求 JDK 25）
+java_version_output=$("$java_cmd" -version 2>&1 | head -n 1)
+if [[ "$java_version_output" =~ \"([0-9]+) ]]; then
+    major_version="${BASH_REMATCH[1]}"
+    if (( major_version < 25 )); then
+        echo "jira: JDK 25 or higher is required (found version $major_version via $java_cmd)" >&2
+        exit 1
+    fi
+else
+    echo "jira: failed to determine Java version from '$java_cmd'" >&2
+    exit 1
+fi
+
+# 3. 定位并启动目标 JAR 包
 bin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 prefix="$(cd -- "$bin_dir/.." && pwd -P)"
+
 if [[ -f "$prefix/devpulse-jira.jar" ]]; then
-    exec java -jar "$prefix/devpulse-jira.jar" "$@"
+    exec "$java_cmd" -jar "$prefix/devpulse-jira.jar" "$@"
 fi
+
 tool_home="$prefix/lib/devpulse/jira"
 if [[ ! -f "$tool_home/current" ]]; then
     echo "jira: no installed version found; run the installer first" >&2
     exit 1
 fi
+
 IFS= read -r version < "$tool_home/current"
-if [[ ! "$version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ || "$version" == *..* ||
-      ! -f "$tool_home/$version/devpulse-jira.jar" ]]; then
+if [[ ! "$version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ || "$version" == *..* || ! -f "$tool_home/$version/devpulse-jira.jar" ]]; then
     echo "jira: invalid or missing installation" >&2
     exit 1
 fi
-exec java -jar "$tool_home/$version/devpulse-jira.jar" "$@"
+
+exec "$java_cmd" -jar "$tool_home/$version/devpulse-jira.jar" "$@"
