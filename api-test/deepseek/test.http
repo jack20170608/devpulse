@@ -1,0 +1,16 @@
+### Test.
+POST {{DS_OPEN_AI_BASE_URL}}/chat/completions
+Content-Type: application/json
+Authorization: Bearer {{DS_API_KEY}}
+
+{
+  "model": "deepseek-flash",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Hello!"}
+  ],
+  "thinking": {"type": "enabled"},
+  "reasoning_effort": "high",
+  "stream": false
+}
+

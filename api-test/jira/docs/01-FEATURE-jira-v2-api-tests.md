@@ -12,7 +12,7 @@ API v2 不等于 Jira 产品版本，也不能据此确定是 Cloud 还是自建
 
 | 文件 | 内容 |
 | --- | --- |
-| [测试环境配置](../http-client.env.json) | 地址、项目、工单、分页参数和写入开关 |
+| [测试环境配置](../../http-client.env.json) | 地址、项目、工单、分页参数和写入开关 |
 | [认证与版本测试](../01-verify/01_auth-and-server.http) | 当前账号及服务器信息 |
 | [项目与字段测试](../02-project-info/02_projects-and-fields.http) | 项目、字段、创建元数据 |
 | [创建工单测试](../03-issue-management/0301_create-issue.http) | 创建一个测试工单 |
