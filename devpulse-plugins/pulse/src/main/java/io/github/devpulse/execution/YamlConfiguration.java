@@ -35,13 +35,14 @@ import org.snakeyaml.engine.v2.schema.CoreSchema;
 
 final class YamlConfiguration {
     private static final int SIZE_LIMIT = 1024 * 1024;
-    private static final CoreSchema SCHEMA = new CoreSchema() {
-        @Override
-        public ScalarResolver getScalarResolver() {
-            // Keep merge keys visible for validation instead of composing them away.
-            return new CoreScalarResolver(false);
-        }
-    };
+    private static final CoreSchema SCHEMA =
+            new CoreSchema() {
+                @Override
+                public ScalarResolver getScalarResolver() {
+                    // Keep merge keys visible for validation instead of composing them away.
+                    return new CoreScalarResolver(false);
+                }
+            };
 
     private YamlConfiguration() {}
 
@@ -50,9 +51,13 @@ final class YamlConfiguration {
             throw new IOException(file + ": YAML must not exceed 1 MiB.");
         }
         var source = Files.readString(file, StandardCharsets.UTF_8);
-        var settings = LoadSettings.builder().setLabel(file.toString())
-                .setSchema(SCHEMA).setCodePointLimit(SIZE_LIMIT)
-                .setMaxAliasesForCollections(0).build();
+        var settings =
+                LoadSettings.builder()
+                        .setLabel(file.toString())
+                        .setSchema(SCHEMA)
+                        .setCodePointLimit(SIZE_LIMIT)
+                        .setMaxAliasesForCollections(0)
+                        .build();
         try {
             var depth = 0;
             for (var event : new Parse(settings).parseString(source)) {
@@ -63,25 +68,26 @@ final class YamlConfiguration {
                 if (event instanceof AliasEvent) {
                     throw new IOException(file + ": YAML aliases are not supported.");
                 }
-                if (event instanceof MappingStartEvent
-                        || event instanceof SequenceStartEvent) {
+                if (event instanceof MappingStartEvent || event instanceof SequenceStartEvent) {
                     if (++depth > 64) {
                         throw new IOException(file + ": YAML nesting exceeds 64 levels.");
                     }
-                } else if (event instanceof MappingEndEvent
-                        || event instanceof SequenceEndEvent) {
+                } else if (event instanceof MappingEndEvent || event instanceof SequenceEndEvent) {
                     depth--;
                 }
             }
-            var node = new Compose(settings).composeString(source)
-                    .orElseThrow(() -> new IOException(file + ": Empty YAML configuration."));
+            var node =
+                    new Compose(settings)
+                            .composeString(source)
+                            .orElseThrow(
+                                    () -> new IOException(file + ": Empty YAML configuration."));
             if (!(convert(node, file) instanceof ConfigObject object)) {
                 throw invalid(node, file, "The YAML document must be a mapping.");
             }
             return object.toConfig();
         } catch (YamlEngineException exception) {
-            throw new IOException("Invalid YAML in " + file + ": "
-                    + exception.getMessage(), exception);
+            throw new IOException(
+                    "Invalid YAML in " + file + ": " + exception.getMessage(), exception);
         }
     }
 
@@ -94,8 +100,7 @@ final class YamlConfiguration {
             var values = new LinkedHashMap<String, ConfigValue>();
             for (var tuple : mapping.getValue()) {
                 var key = tuple.getKeyNode();
-                if (!(key instanceof ScalarNode scalar)
-                        || !key.getTag().equals(Tag.STR)) {
+                if (!(key instanceof ScalarNode scalar) || !key.getTag().equals(Tag.STR)) {
                     throw invalid(key, file, "Mapping keys must be strings.");
                 }
                 if (key.getAnchor().isPresent() || scalar.getValue().equals("<<")) {
@@ -122,8 +127,8 @@ final class YamlConfiguration {
             }
             if (List.of(Tag.NULL, Tag.BOOL, Tag.INT, Tag.FLOAT).contains(node.getTag())) {
                 try {
-                    var value = SCHEMA.getSchemaTagConstructors().get(node.getTag())
-                            .construct(node);
+                    var value =
+                            SCHEMA.getSchemaTagConstructors().get(node.getTag()).construct(node);
                     if (value instanceof Double number && !Double.isFinite(number)) {
                         throw invalid(node, file, "Numbers must be finite.");
                     }
@@ -137,12 +142,11 @@ final class YamlConfiguration {
     }
 
     private static ConfigOrigin origin(Node node, Path file) {
-        return ConfigOriginFactory.newFile(file.toString()).withLineNumber(
-                node.getStartMark().map(mark -> mark.getLine() + 1).orElse(1));
+        return ConfigOriginFactory.newFile(file.toString())
+                .withLineNumber(node.getStartMark().map(mark -> mark.getLine() + 1).orElse(1));
     }
 
-    private static ConfigException.BadValue invalid(Node node, Path file,
-            String message) {
+    private static ConfigException.BadValue invalid(Node node, Path file, String message) {
         return new ConfigException.BadValue(origin(node, file), "YAML", message);
     }
 }

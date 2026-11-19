@@ -5,8 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
-public record BashTaskDefinition(String name, String command, List<String> needs,
-        Daemon daemon) {
+public record BashTaskDefinition(String name, String command, List<String> needs, Daemon daemon) {
     public BashTaskDefinition {
         Objects.requireNonNull(name, "name");
         command = Objects.requireNonNull(command, "command").replace("\r\n", "\n");

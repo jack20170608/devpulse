@@ -1,20 +1,19 @@
 package io.github.devpulse.core.bash;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.github.devpulse.core.dag.DagRun;
 import io.github.devpulse.core.dag.DagWorkflow;
 import io.github.devpulse.core.dag.TaskKey;
 import io.github.devpulse.core.dag.TaskOptions;
 import io.github.devpulse.core.environment.BashShell;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class BashTaskAdapterTest {
 
@@ -28,16 +27,21 @@ public class BashTaskAdapterTest {
 
         try (var out = new PrintWriter(output)) {
             var adapter = new BashTaskAdapter(bash, directory, out);
-            var workflow = DagWorkflow.builder()
-                    .task(key, adapter.task("""
-                            set -euo pipefail
-                            IFS= read -r message < input.txt
-                            printf '%s\\n' "$message"
-                            printf 'stderr message\\n' >&2
-                            printf '%s' "$message" > result.txt
-                            printf 'last line without newline'
-                            """), options)
-                    .build();
+            var workflow =
+                    DagWorkflow.builder()
+                            .task(
+                                    key,
+                                    adapter.task(
+                                            """
+                                            set -euo pipefail
+                                            IFS= read -r message < input.txt
+                                            printf '%s\\n' "$message"
+                                            printf 'stderr message\\n' >&2
+                                            printf '%s' "$message" > result.txt
+                                            printf 'last line without newline'
+                                            """),
+                                    options)
+                            .build();
 
             var result = workflow.newRun(1).execute();
 
@@ -48,11 +52,12 @@ public class BashTaskAdapterTest {
         }
 
         assertThat(Files.readString(directory.resolve("result.txt"))).isEqualTo("hello bash");
-        assertThat(output.toString()).contains(
-                "[execute] Started.",
-                "[execute] hello bash",
-                "[execute] stderr message",
-                "[execute] last line without newline",
-                "[execute] Finished with exit code 0.");
+        assertThat(output.toString())
+                .contains(
+                        "[execute] Started.",
+                        "[execute] hello bash",
+                        "[execute] stderr message",
+                        "[execute] last line without newline",
+                        "[execute] Finished with exit code 0.");
     }
 }

@@ -14,24 +14,21 @@ import picocli.CommandLine.Spec;
         versionProvider = DevPulseCLI.VersionProvider.class,
         description = "A local DevOps orchestration toolbox.",
         subcommands = {
-                GatherCommand.class,
-                InitCommand.class,
-                PulseCommand.class,
-                ReviewCommand.class,
-                StatusCommand.class,
-                StopCommand.class
-        }
-)
+            GatherCommand.class,
+            InitCommand.class,
+            PulseCommand.class,
+            ReviewCommand.class,
+            StatusCommand.class,
+            StopCommand.class
+        })
 public final class DevPulseCLI implements Runnable {
-    @Spec
-    private CommandSpec spec;
+    @Spec private CommandSpec spec;
 
     public static void main(String[] args) {
-        var cli = new CommandLine(new DevPulseCLI())
-                .setOut(new PrintWriter(System.out, true,
-                        StandardCharsets.UTF_8))
-                .setErr(new PrintWriter(System.err, true,
-                        StandardCharsets.UTF_8));
+        var cli =
+                new CommandLine(new DevPulseCLI())
+                        .setOut(new PrintWriter(System.out, true, StandardCharsets.UTF_8))
+                        .setErr(new PrintWriter(System.err, true, StandardCharsets.UTF_8));
         System.exit(cli.execute(args));
     }
 
@@ -43,11 +40,8 @@ public final class DevPulseCLI implements Runnable {
     public static final class VersionProvider implements IVersionProvider {
         @Override
         public String[] getVersion() {
-            var version = DevPulseCLI.class.getPackage()
-                    .getImplementationVersion();
-            return new String[]{
-                    "devpulse " + (version == null ? "development" : version)
-            };
+            var version = DevPulseCLI.class.getPackage().getImplementationVersion();
+            return new String[] {"devpulse " + (version == null ? "development" : version)};
         }
     }
 }

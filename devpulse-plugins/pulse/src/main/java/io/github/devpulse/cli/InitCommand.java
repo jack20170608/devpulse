@@ -17,10 +17,10 @@ import picocli.CommandLine.Spec;
         name = "init",
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
-        description = "Initialize a local .devpulse.yaml task configuration."
-)
+        description = "Initialize a local .devpulse.yaml task configuration.")
 public final class InitCommand implements Callable<Integer> {
-    private static final String DEFAULT_CONFIGURATION = """
+    private static final String DEFAULT_CONFIGURATION =
+            """
             # 示例任务仅打印消息，请替换为实际项目命令。
             # Example tasks only print messages; replace with project commands.
             version: 1
@@ -39,16 +39,15 @@ public final class InitCommand implements Callable<Integer> {
                 tasks: [check, build]
             """;
 
-    @Spec
-    private CommandSpec spec;
+    @Spec private CommandSpec spec;
 
-    @Option(names = "--directory", defaultValue = ".",
-            description = "Project directory to initialize "
-                    + "(default: ${DEFAULT-VALUE}).")
+    @Option(
+            names = "--directory",
+            defaultValue = ".",
+            description = "Project directory to initialize " + "(default: ${DEFAULT-VALUE}).")
     private Path directory;
 
-    @Option(names = "--force",
-            description = "Overwrite an existing .devpulse.yaml file.")
+    @Option(names = "--force", description = "Overwrite an existing .devpulse.yaml file.")
     private boolean force;
 
     @Override
@@ -61,30 +60,35 @@ public final class InitCommand implements Callable<Integer> {
             return 1;
         }
         try {
-            if (force && Files.exists(target, LinkOption.NOFOLLOW_LINKS)
-                    && !Files.isRegularFile(target,
-                    LinkOption.NOFOLLOW_LINKS)) {
-                err.println("init: configuration is not a regular file: "
-                        + target);
+            if (force
+                    && Files.exists(target, LinkOption.NOFOLLOW_LINKS)
+                    && !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
+                err.println("init: configuration is not a regular file: " + target);
                 return 1;
             }
-            Files.writeString(target, DEFAULT_CONFIGURATION,
+            Files.writeString(
+                    target,
+                    DEFAULT_CONFIGURATION,
                     StandardCharsets.UTF_8,
-                    force ? StandardOpenOption.CREATE
-                            : StandardOpenOption.CREATE_NEW,
+                    force ? StandardOpenOption.CREATE : StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING,
                     LinkOption.NOFOLLOW_LINKS);
-            spec.commandLine().getOut().println("Initialized " + target
-                    + ". Review the example commands before running tasks.");
+            spec.commandLine()
+                    .getOut()
+                    .println(
+                            "Initialized "
+                                    + target
+                                    + ". Review the example commands before running tasks.");
             return 0;
         } catch (FileAlreadyExistsException exception) {
-            err.println("init: configuration already exists: " + target
-                    + ". Use --force to overwrite.");
+            err.println(
+                    "init: configuration already exists: "
+                            + target
+                            + ". Use --force to overwrite.");
             return 1;
         } catch (IOException exception) {
-            err.println("init: could not write " + target + ": "
-                    + exception.getMessage());
+            err.println("init: could not write " + target + ": " + exception.getMessage());
             return 1;
         }
     }

@@ -21,8 +21,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class MarkdownConversionRegressionTest {
-    private static final Parser MARKDOWN = Parser.builder()
-            .extensions(List.of(TablesExtension.create())).build();
+    private static final Parser MARKDOWN =
+            Parser.builder().extensions(List.of(TablesExtension.create())).build();
     private static final HtmlRenderer HTML = HtmlRenderer.builder().build();
 
     @ParameterizedTest(name = "{0}")
@@ -35,7 +35,9 @@ class MarkdownConversionRegressionTest {
     static Stream<Arguments> wikiCases() {
         return Stream.of(
                 Arguments.of("service name", "sb-test-1", "sb-test-1"),
-                Arguments.of("long service name", "Need to restart the sb-pi-good-main-service",
+                Arguments.of(
+                        "long service name",
+                        "Need to restart the sb-pi-good-main-service",
                         "Need to restart the sb-pi-good-main-service"),
                 Arguments.of("identifier", "config_test_prod", "config\\_test\\_prod"),
                 Arguments.of("expression", "x+y+z", "x+y+z"),
@@ -46,9 +48,18 @@ class MarkdownConversionRegressionTest {
                 Arguments.of("nested emphasis", "*bold _italic_*", "**bold *italic***"),
                 Arguments.of("escaped closing delimiter", "*a\\*b*", "**a\\*b**"),
                 Arguments.of("escaped opening delimiter", "\\-removed\\-", "-removed-"),
-                Arguments.of("pipe in link", "[a\\|b|https://example.com]", "[a|b](https://example.com)"),
-                Arguments.of("bracket in link", "[a\\]b|https://example.com]", "[a\\]b](https://example.com)"),
-                Arguments.of("code in link", "[{{a|b}}|https://example.com]", "[`a|b`](https://example.com)"),
+                Arguments.of(
+                        "pipe in link",
+                        "[a\\|b|https://example.com]",
+                        "[a|b](https://example.com)"),
+                Arguments.of(
+                        "bracket in link",
+                        "[a\\]b|https://example.com]",
+                        "[a\\]b](https://example.com)"),
+                Arguments.of(
+                        "code in link",
+                        "[{{a|b}}|https://example.com]",
+                        "[`a|b`](https://example.com)"),
                 Arguments.of("literal heading", "\\# Not a heading", "\\# Not a heading"),
                 Arguments.of("literal list", "\\- Not a list", "\\- Not a list"),
                 Arguments.of("literal number", "1. ordinary text", "1\\. ordinary text"),
@@ -61,11 +72,18 @@ class MarkdownConversionRegressionTest {
                 Arguments.of("list", "* First\n* Second", "- First\n- Second"),
                 Arguments.of("quote", "{quote}\nquoted\n{quote}", ">\n> quoted\n"),
                 Arguments.of("fenced code", "{code:java}\na-b-c\n{code}", "```java\na-b-c\n```"),
-                Arguments.of("service in table", "||Name||Value||\n|service|sb-test-1|",
+                Arguments.of(
+                        "service in table",
+                        "||Name||Value||\n|service|sb-test-1|",
                         "| Name | Value |\n| --- | --- |\n| service | sb-test-1 |"),
                 Arguments.of("pipe in table", "||Name||\n|a\\|b|", "| Name |\n| --- |\n| a\\|b |"),
-                Arguments.of("code pipe in table", "||Name||\n|{{a\\|b}}|", "| Name |\n| --- |\n| `a\\|b` |"),
-                Arguments.of("backslash in table", "||Path||Value||\n|C:{{\\}}tools|ok|",
+                Arguments.of(
+                        "code pipe in table",
+                        "||Name||\n|{{a\\|b}}|",
+                        "| Name |\n| --- |\n| `a\\|b` |"),
+                Arguments.of(
+                        "backslash in table",
+                        "||Path||Value||\n|C:{{\\}}tools|ok|",
                         "| Path | Value |\n| --- | --- |\n| C:`\\`tools | ok |"));
     }
 
@@ -80,16 +98,27 @@ class MarkdownConversionRegressionTest {
 
     static Stream<String> roundTripCases() {
         return Stream.of(
-                "sb-test-1", "**a*b**", "[a|b](https://example.com)",
-                "[a\\]b](https://example.com)", "[`a|b`](https://example.com)",
-                "\\# Not a heading", "\\- Not a list", "1\\. ordinary text",
-                "`  a  `", "`   `", "**bold** and *italic*", "- First\n- Second",
-                "## Heading", "first  \nsecond", "`` `a` ``",
+                "sb-test-1",
+                "**a*b**",
+                "[a|b](https://example.com)",
+                "[a\\]b](https://example.com)",
+                "[`a|b`](https://example.com)",
+                "\\# Not a heading",
+                "\\- Not a list",
+                "1\\. ordinary text",
+                "`  a  `",
+                "`   `",
+                "**bold** and *italic*",
+                "- First\n- Second",
+                "## Heading",
+                "first  \nsecond",
+                "`` `a` ``",
                 "| Name | Value |\n| --- | --- |\n| service | sb-test-1 |",
                 "| Name |\n| --- |\n| a\\|b |",
                 "| Name |\n| --- |\n| `a\\|b` |",
                 "**[a|b](https://example.com/a*b*c)**",
-                "**`a*b`**", "literal \\! punctuation",
+                "**`a*b`**",
+                "literal \\! punctuation",
                 "**![alt](https://example.com/a*b*c.png)**");
     }
 

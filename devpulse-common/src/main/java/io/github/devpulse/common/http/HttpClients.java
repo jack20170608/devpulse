@@ -12,14 +12,13 @@ public class HttpClients {
     }
 
     public static HttpClient safeClient() {
-        return HttpClients.safeClient(() -> HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5)));
+        return HttpClients.safeClient(
+                () -> HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)));
     }
 
     public static HttpClient unsafeClient() {
-        return HttpClients.unsafeClientFrom(() -> HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5)))
-            ;
+        return HttpClients.unsafeClientFrom(
+                () -> HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)));
     }
 
     public static HttpClient unsafeClientFrom(final Supplier<HttpClient.Builder> supplier) {
@@ -36,11 +35,10 @@ public class HttpClients {
                 System.setProperty(HOSTNAME_VERIFICATION_KEY, disableHostnameVerification);
             }
         }
-
     }
 
-    private static final String HOSTNAME_VERIFICATION_KEY = "jdk.internal.httpclient.disableHostnameVerification";
+    private static final String HOSTNAME_VERIFICATION_KEY =
+            "jdk.internal.httpclient.disableHostnameVerification";
 
-    private HttpClients() {
-    }
+    private HttpClients() {}
 }

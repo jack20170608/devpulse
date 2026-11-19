@@ -1,0 +1,32 @@
+h3. What
+
+Render steps with attachments
+
+h3. Why
+
+Show screenshots alongside reproduction steps
+
+h3. Impact
+
+Affects UAT instructions
+
+h3. Description
+
+Render object properties and image links.
+
+h3. SIT
+
+Please provide the steps to reproduce the issue in SIT environment.
+
+Step1. Open the issue
+Step2. Check the description
+
+h3. UAT
+
+Please provide the steps to reproduce the issue in UAT environment.
+Step1. Open the *issue* and see the bird one
+!./bird1.png|alt=nice1!
+Step2. Check the description
+!./bird2.png|alt=nice2!
+Step3. Check the bird again
+!./bird3.png|alt=nice3!

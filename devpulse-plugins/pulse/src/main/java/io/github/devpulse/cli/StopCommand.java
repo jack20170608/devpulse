@@ -16,26 +16,34 @@ import picocli.CommandLine.Spec;
         name = "stop",
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
-        description = "Stop recorded local daemon processes."
-)
+        description = "Stop recorded local daemon processes.")
 public final class StopCommand implements Callable<Integer> {
-    @Spec
-    private CommandSpec spec;
+    @Spec private CommandSpec spec;
 
-    @Parameters(index = "0", arity = "0..1", paramLabel = "TASK",
-            description = "Daemon whose recorded instances to stop; defaults to all daemons "
-                    + "in the selected run, in reverse dependency order.")
+    @Parameters(
+            index = "0",
+            arity = "0..1",
+            paramLabel = "TASK",
+            description =
+                    "Daemon whose recorded instances to stop; defaults to all daemons "
+                            + "in the selected run, in reverse dependency order.")
     private String task;
 
-    @Option(names = "--directory", defaultValue = ".",
+    @Option(
+            names = "--directory",
+            defaultValue = ".",
             description = "Project directory (default: ${DEFAULT-VALUE}).")
     private Path directory;
 
-    @Option(names = "--run", paramLabel = "ID",
+    @Option(
+            names = "--run",
+            paramLabel = "ID",
             description = "Select a recorded run instead of the latest.")
     private String run;
 
-    @Option(names = "--instance", paramLabel = "ID",
+    @Option(
+            names = "--instance",
+            paramLabel = "ID",
             description = "Stop one instance of TASK instead of all its instances.")
     private String instance;
 
@@ -62,14 +70,14 @@ public final class StopCommand implements Callable<Integer> {
             var path = history.runDirectory(snapshot);
             var selected = new ArrayList<RunHistory.TaskState>();
             for (var value : snapshot.tasks().reversed()) {
-                if ((task == null || task.equals(value.name())) && DaemonManager.recorded(path, value.id())) {
+                if ((task == null || task.equals(value.name()))
+                        && DaemonManager.recorded(path, value.id())) {
                     selected.add(value);
                 }
             }
             if (selected.isEmpty()) {
                 if (task != null) {
-                    throw new IOException(
-                            "No daemon process recorded for task: " + task);
+                    throw new IOException("No daemon process recorded for task: " + task);
                 }
                 out.println("No daemon processes recorded in this run.");
                 return 0;
@@ -82,13 +90,15 @@ public final class StopCommand implements Callable<Integer> {
                     } else {
                         DaemonManager.stop(path, daemon.id(), instance);
                     }
-                    out.println("[" + daemon.name()
-                            + "] " + (instance == null ? "All instances" : "Instance " + instance)
-                            + " stopped (or already exited).");
+                    out.println(
+                            "["
+                                    + daemon.name()
+                                    + "] "
+                                    + (instance == null ? "All instances" : "Instance " + instance)
+                                    + " stopped (or already exited).");
                 } catch (IOException exception) {
                     failed = true;
-                    err.println("[" + daemon.name() + "] "
-                            + exception.getMessage());
+                    err.println("[" + daemon.name() + "] " + exception.getMessage());
                     for (var suppressed : exception.getSuppressed()) {
                         err.println("[" + daemon.name() + "] " + suppressed.getMessage());
                     }

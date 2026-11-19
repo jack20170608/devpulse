@@ -4,7 +4,13 @@ package io.github.devpulse.core.dag;
 public interface DagDaemon<T> {
     Handle<T> start(TaskContext context) throws Exception;
 
-    enum Health { STARTING, READY, UNAVAILABLE, EXITED, UNKNOWN }
+    enum Health {
+        STARTING,
+        READY,
+        UNAVAILABLE,
+        EXITED,
+        UNKNOWN
+    }
 
     interface Handle<T> {
         T value();

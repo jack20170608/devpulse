@@ -8,8 +8,11 @@ import java.util.Objects;
 
 public final class DagWorkflow {
     sealed interface Action<T> permits Batch, Daemon {}
+
     record Batch<T>(DagTask<T> task) implements Action<T> {}
+
     record Daemon<T>(DagDaemon<T> task, DaemonOptions options) implements Action<T> {}
+
     record Node<T>(TaskKey<T> key, Action<T> action, TaskOptions options) {}
 
     private final Map<String, Node<?>> nodes;
@@ -78,13 +81,15 @@ public final class DagWorkflow {
             return task(key, needs(key), task, options);
         }
 
-        public <T> Builder task(TaskKey<T> key, List<? extends TaskKey<?>> needs,
-                DagTask<T> task) {
+        public <T> Builder task(TaskKey<T> key, List<? extends TaskKey<?>> needs, DagTask<T> task) {
             return task(key, needs, task, TaskOptions.DEFAULT);
         }
 
-        public <T> Builder task(TaskKey<T> key, List<? extends TaskKey<?>> needs,
-                DagTask<T> task, TaskOptions options) {
+        public <T> Builder task(
+                TaskKey<T> key,
+                List<? extends TaskKey<?>> needs,
+                DagTask<T> task,
+                TaskOptions options) {
             Objects.requireNonNull(task, "task");
             return add(key, needs, new Batch<>(task), options);
         }
@@ -97,32 +102,43 @@ public final class DagWorkflow {
             return daemon(key, needs(key), daemon, options, TaskOptions.DEFAULT);
         }
 
-        public <T> Builder daemon(TaskKey<T> key, DagDaemon<T> daemon,
-                DaemonOptions options, TaskOptions attempts) {
+        public <T> Builder daemon(
+                TaskKey<T> key, DagDaemon<T> daemon, DaemonOptions options, TaskOptions attempts) {
             return daemon(key, needs(key), daemon, options, attempts);
         }
 
-        public <T> Builder daemon(TaskKey<T> key, List<? extends TaskKey<?>> needs,
-                DagDaemon<T> daemon, DaemonOptions options) {
+        public <T> Builder daemon(
+                TaskKey<T> key,
+                List<? extends TaskKey<?>> needs,
+                DagDaemon<T> daemon,
+                DaemonOptions options) {
             return daemon(key, needs, daemon, options, TaskOptions.DEFAULT);
         }
 
-        public <T> Builder daemon(TaskKey<T> key, List<? extends TaskKey<?>> needs,
-                DagDaemon<T> daemon, DaemonOptions options, TaskOptions attempts) {
+        public <T> Builder daemon(
+                TaskKey<T> key,
+                List<? extends TaskKey<?>> needs,
+                DagDaemon<T> daemon,
+                DaemonOptions options,
+                TaskOptions attempts) {
             Objects.requireNonNull(daemon, "daemon");
             Objects.requireNonNull(options, "options");
             return add(key, needs, new Daemon<>(daemon, options), attempts);
         }
 
-        private <T> Builder add(TaskKey<T> key, List<? extends TaskKey<?>> needs,
-                Action<T> action, TaskOptions options) {
+        private <T> Builder add(
+                TaskKey<T> key,
+                List<? extends TaskKey<?>> needs,
+                Action<T> action,
+                TaskOptions options) {
             Objects.requireNonNull(key, "key");
             Objects.requireNonNull(options, "options");
             List<TaskKey<?>> dependencies = List.copyOf(needs);
             if (planning != null) {
                 planning.node(key, dependencies);
             } else if (!graph.node(key).needs().equals(dependencies)) {
-                throw new IllegalArgumentException("Dependencies differ from the planned graph: " + key);
+                throw new IllegalArgumentException(
+                        "Dependencies differ from the planned graph: " + key);
             }
             if (nodes.putIfAbsent(key.id(), new Node<>(key, action, options)) != null) {
                 throw new IllegalArgumentException("Duplicate task ID: " + key.id());
@@ -133,7 +149,8 @@ public final class DagWorkflow {
         public DagWorkflow build() {
             var planned = graph == null ? planning.build() : graph;
             if (nodes.size() != planned.topologicalOrder().size()) {
-                throw new IllegalArgumentException("Every planned task must have an execution action.");
+                throw new IllegalArgumentException(
+                        "Every planned task must have an execution action.");
             }
             return new DagWorkflow(nodes, planned);
         }

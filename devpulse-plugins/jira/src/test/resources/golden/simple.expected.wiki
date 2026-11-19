@@ -1,0 +1,27 @@
+h3. What
+
+Fix issue details rendering
+
+h3. Why
+
+Keep issue descriptions readable
+
+h3. Impact
+
+Affects issue description display
+
+h3. Description
+
+Render *Markdown* and Jira wiki from one template.
+
+h3. SIT
+
+Please provide the steps to reproduce the issue in SIT environment.
+Step1: Open the issue
+Step2: Check the description
+
+h3. UAT
+
+Please provide the steps to reproduce the issue in UAT environment.
+Step1: Open the issue
+Step2: Check the description

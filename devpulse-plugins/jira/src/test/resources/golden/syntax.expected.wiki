@@ -1,0 +1,85 @@
+h3. What
+
+Render common Markdown features
+
+h3. Why
+
+Verify combined formatting
+
+h3. Impact
+
+Affects issue descriptions
+
+h3. Description
+
+h1. Level one
+
+h2. Level two
+
+h3. Level three
+
+h4. Level four
+
+h5. Level five
+
+h6. Level six
+
+h1. Setext one
+
+h2. Setext two
+
+*Bold*, _italic_, and {{inline_code}}.
+
+* First item
+** Nested bullet
+** Another bullet
+* Second item
+*# Nested ordered
+*# Another ordered
+
+# Ordered parent
+#* Nested child
+# Ordered sibling
+
+{quote}
+Important *note*.
+
+Another paragraph.
+{quote}
+
+----
+
+First soft line
+Second soft line
+
+First hard line\\
+Second hard line\\
+Third hard line
+
+[Reference|https://example.com/docs], [docs|https://example.com/docs], and [https://example.com/help|https://example.com/help].
+
+!https://example.com/screen.png|alt=Screenshot!
+
+{code}
+echo "$HOME"
+{code}
+
+{code}
+if (ready) {
+    run();
+}
+{code}
+
+Literal \*stars\*, \[brackets\], and \{code\}.
+
+h3. SIT
+
+Please provide the steps to reproduce the issue in SIT environment.
+Step1: Open the issue
+Step2: Check formatting
+
+h3. UAT
+
+Please provide the steps to reproduce the issue in UAT environment.
+Step1: Open the issue
+Step2: Check formatting

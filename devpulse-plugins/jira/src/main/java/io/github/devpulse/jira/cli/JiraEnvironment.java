@@ -40,13 +40,16 @@ final class JiraEnvironment {
         }
         var target = file(global, key);
         Files.createDirectories(target.toAbsolutePath().getParent());
-        var staging = Files.createTempFile(
-                target.toAbsolutePath().getParent(), ".environment-", ".json");
+        var staging =
+                Files.createTempFile(target.toAbsolutePath().getParent(), ".environment-", ".json");
         try {
-            Files.writeString(staging, new GsonBuilder()
-                    .setPrettyPrinting().create().toJson(snapshot) + "\n",
+            Files.writeString(
+                    staging,
+                    new GsonBuilder().setPrettyPrinting().create().toJson(snapshot) + "\n",
                     StandardCharsets.UTF_8);
-            Files.move(staging, target,
+            Files.move(
+                    staging,
+                    target,
                     StandardCopyOption.REPLACE_EXISTING,
                     StandardCopyOption.ATOMIC_MOVE);
         } finally {
@@ -67,8 +70,10 @@ final class JiraEnvironment {
     }
 
     static List<String> incomplete(JsonObject snapshot) {
-        return SECTIONS.stream().filter(section -> !snapshot.getAsJsonObject(section)
-                .get("complete").getAsBoolean()).toList();
+        return SECTIONS.stream()
+                .filter(section ->
+                        !snapshot.getAsJsonObject(section).get("complete").getAsBoolean())
+                .toList();
     }
 
     @FunctionalInterface
@@ -87,8 +92,12 @@ final class JiraEnvironment {
     }
 
     JsonObject collect(String selectedProject) throws IOException {
-        var project = object(api.send("GET",
-                "project/" + encode(selectedProject) + "?expand=issueTypes", null));
+        var project =
+                object(
+                        api.send(
+                                "GET",
+                                "project/" + encode(selectedProject) + "?expand=issueTypes",
+                                null));
         var key = JiraCatalogCommands.project(string(project, "key"), null);
         if (!key.equalsIgnoreCase(selectedProject)
                 && !string(project, "id").equals(selectedProject)) {
@@ -110,14 +119,24 @@ final class JiraEnvironment {
         try {
             var source = project.get("issueTypes");
             if (source == null && cloud()) {
-                source = api.send("GET", "issuetype/project?projectId="
-                        + encode(string(project, "id")), null);
+                source =
+                        api.send(
+                                "GET",
+                                "issuetype/project?projectId=" + encode(string(project, "id")),
+                                null);
             }
             for (var value : array(source)) {
                 var type = object(value);
                 JiraCatalogCommands.numeric(string(type, "id"), "Issue type ID");
-                items(types).add(select(type, "id", "name", "untranslatedName",
-                        "subtask", "hierarchyLevel"));
+                items(types)
+                        .add(
+                                select(
+                                        type,
+                                        "id",
+                                        "name",
+                                        "untranslatedName",
+                                        "subtask",
+                                        "hierarchyLevel"));
             }
         } catch (IOException exception) {
             fail(types, exception);
@@ -134,8 +153,11 @@ final class JiraEnvironment {
                 }
             }
             if (!complete(types) || ids.isEmpty()) {
-                limited(epics, complete(types)
-                        ? "EPIC_TYPE_NOT_IDENTIFIED" : "ISSUE_TYPE_DISCOVERY_INCOMPLETE");
+                limited(
+                        epics,
+                        complete(types)
+                                ? "EPIC_TYPE_NOT_IDENTIFIED"
+                                : "ISSUE_TYPE_DISCOVERY_INCOMPLETE");
                 epics.addProperty("status", "unavailable");
             } else {
                 collectEpics(key, ids, epics);
@@ -147,8 +169,12 @@ final class JiraEnvironment {
 
         var boards = section();
         try {
-            collectPages(agile, "board?projectKeyOrId=" + encode(key),
-                    boards, List.of("id", "name", "type"), null);
+            collectPages(
+                    agile,
+                    "board?projectKeyOrId=" + encode(key),
+                    boards,
+                    List.of("id", "name", "type"),
+                    null);
         } catch (IOException exception) {
             fail(boards, exception);
         }
@@ -162,8 +188,12 @@ final class JiraEnvironment {
             throws IOException {
         var ids = new java.util.ArrayList<String>();
         typeIds.forEach(value -> ids.add(value.getAsString()));
-        var jql = "project = \"" + project + "\" AND issuetype in ("
-                + String.join(",", ids) + ") ORDER BY key ASC";
+        var jql =
+                "project = \""
+                        + project
+                        + "\" AND issuetype in ("
+                        + String.join(",", ids)
+                        + ") ORDER BY key ASC";
         var seen = new HashSet<String>();
         var tokens = new HashSet<String>();
         String token = null;
@@ -192,7 +222,8 @@ final class JiraEnvironment {
                 var issueFields = object(issue.get("fields"));
                 entry.add("summary", issueFields.get("summary"));
                 if (issueFields.has("status") && issueFields.get("status").isJsonObject()) {
-                    entry.add("status", select(issueFields.getAsJsonObject("status"), "id", "name"));
+                    entry.add(
+                            "status", select(issueFields.getAsJsonObject("status"), "id", "name"));
                 }
                 items(section).add(entry);
             }
@@ -243,9 +274,20 @@ final class JiraEnvironment {
             var sprints = section();
             sprints.addProperty("boardId", id);
             try {
-                collectPages(agile, "board/" + id + "/sprint?", sprints,
-                        List.of("id", "name", "state", "startDate", "endDate",
-                                "completeDate", "originBoardId", "goal"), id);
+                collectPages(
+                        agile,
+                        "board/" + id + "/sprint?",
+                        sprints,
+                        List.of(
+                                "id",
+                                "name",
+                                "state",
+                                "startDate",
+                                "endDate",
+                                "completeDate",
+                                "originBoardId",
+                                "goal"),
+                        id);
                 result.addProperty("support", "available");
             } catch (IOException exception) {
                 fail(sprints, exception);
@@ -262,13 +304,23 @@ final class JiraEnvironment {
         return result;
     }
 
-    private static void collectPages(Request request, String path, JsonObject section,
-            List<String> fields, String board) throws IOException {
+    private static void collectPages(
+            Request request, String path, JsonObject section, List<String> fields, String board)
+            throws IOException {
         int offset = 0;
         var seen = new HashSet<String>();
         for (int pageNumber = 0; pageNumber < PAGE_LIMIT; pageNumber++) {
-            var page = object(request.send("GET", path + (path.endsWith("?") ? "" : "&")
-                    + "startAt=" + offset + "&maxResults=" + PAGE_SIZE, null));
+            var page =
+                    object(
+                            request.send(
+                                    "GET",
+                                    path
+                                            + (path.endsWith("?") ? "" : "&")
+                                            + "startAt="
+                                            + offset
+                                            + "&maxResults="
+                                            + PAGE_SIZE,
+                                    null));
             var batch = array(page.get("values"));
             for (var value : batch) {
                 var item = object(value);
@@ -297,15 +349,17 @@ final class JiraEnvironment {
     }
 
     private static boolean epicType(JsonObject type) {
-        if (type.has("hierarchyLevel") && !type.get("hierarchyLevel").isJsonNull()
+        if (type.has("hierarchyLevel")
+                && !type.get("hierarchyLevel").isJsonNull()
                 && type.get("hierarchyLevel").getAsInt() == 1) {
             return true;
         }
         for (var property : List.of("name", "untranslatedName")) {
             var name = type.get(property);
-            if (name != null && name.isJsonPrimitive()
+            if (name != null
+                    && name.isJsonPrimitive()
                     && ("Epic".equalsIgnoreCase(name.getAsString())
-                    || "史诗".equals(name.getAsString()))) {
+                            || "史诗".equals(name.getAsString()))) {
                 return true;
             }
         }
@@ -353,8 +407,11 @@ final class JiraEnvironment {
         section.addProperty("complete", false);
         section.addProperty("reason", "QUERY_FAILED");
         var error = new JsonObject();
-        error.addProperty("code", exception instanceof JiraRequestException request
-                ? request.code() : "INVALID_RESPONSE");
+        error.addProperty(
+                "code",
+                exception instanceof JiraRequestException request
+                        ? request.code()
+                        : "INVALID_RESPONSE");
         if (exception instanceof JiraRequestException request && request.httpStatus() != null) {
             error.addProperty("httpStatus", request.httpStatus());
         }

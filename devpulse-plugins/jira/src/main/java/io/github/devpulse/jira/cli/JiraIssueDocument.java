@@ -10,8 +10,8 @@ import com.google.gson.JsonPrimitive;
 import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,18 +37,43 @@ import org.snakeyaml.engine.v2.schema.JsonSchema;
 record JiraIssueDocument(JsonObject metadata, String body) {
     private static final int SIZE_LIMIT = 1024 * 1024;
     private static final Pattern DELIMITER = Pattern.compile("(?m)^---[ \\t]*(?:\\r?\\n|$)");
-    private static final Set<String> READ_ONLY = Set.of(
-            "version", "key", "updated", "created", "reporter", "status",
-            "mode", "apiVersion", "bodyFormat", "descriptionSha256", "originalFields");
-    private static final Set<String> STANDARD = Set.of(
-            "project", "summary", "issuetype", "priority", "parent", "assignee",
-            "labels", "components", "fixVersions", "versions", "environment",
-            "timetracking", "resolution", "epic", "story-point", "description");
+    private static final Set<String> READ_ONLY =
+            Set.of(
+                    "version",
+                    "key",
+                    "updated",
+                    "created",
+                    "reporter",
+                    "status",
+                    "mode",
+                    "apiVersion",
+                    "bodyFormat",
+                    "descriptionSha256",
+                    "originalFields");
+    private static final Set<String> STANDARD =
+            Set.of(
+                    "project",
+                    "summary",
+                    "issuetype",
+                    "priority",
+                    "parent",
+                    "assignee",
+                    "labels",
+                    "components",
+                    "fixVersions",
+                    "versions",
+                    "environment",
+                    "timetracking",
+                    "resolution",
+                    "epic",
+                    "story-point",
+                    "description");
 
     static void requireMarkdown(Path file) throws IOException {
         var name = file.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
         if (!name.endsWith(".md") && !name.endsWith(".markdown")) {
-            throw wrong("Issue files must be Markdown with YAML frontmatter; HOCON issue files are no longer supported.");
+            throw wrong(
+                    "Issue files must be Markdown with YAML frontmatter; HOCON issue files are no longer supported.");
         }
     }
 
@@ -93,8 +118,12 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         } else if (body.startsWith("\n")) {
             body = body.substring(1);
         }
-        var settings = LoadSettings.builder().setSchema(new JsonSchema())
-                .setCodePointLimit(SIZE_LIMIT).setMaxAliasesForCollections(0).build();
+        var settings =
+                LoadSettings.builder()
+                        .setSchema(new JsonSchema())
+                        .setCodePointLimit(SIZE_LIMIT)
+                        .setMaxAliasesForCollections(0)
+                        .build();
         try {
             int depth = 0;
             for (var event : new Parse(settings).parseString(yaml)) {
@@ -109,8 +138,10 @@ record JiraIssueDocument(JsonObject metadata, String body) {
                     depth--;
                 }
             }
-            var node = new Compose(settings).composeString(yaml)
-                    .orElseThrow(() -> wrong("Issue YAML metadata must be a mapping."));
+            var node =
+                    new Compose(settings)
+                            .composeString(yaml)
+                            .orElseThrow(() -> wrong("Issue YAML metadata must be a mapping."));
             var value = convert(node);
             if (!value.isJsonObject()) {
                 throw wrong("Issue YAML metadata must be a mapping.");
@@ -135,7 +166,8 @@ record JiraIssueDocument(JsonObject metadata, String body) {
             var result = new JsonObject();
             for (var tuple : mapping.getValue()) {
                 if (!(tuple.getKeyNode() instanceof ScalarNode key)
-                        || !key.getTag().equals(Tag.STR) || key.getAnchor().isPresent()
+                        || !key.getTag().equals(Tag.STR)
+                        || key.getAnchor().isPresent()
                         || key.getValue().equals("<<")) {
                     throw wrong("Issue YAML keys must be strings; merge keys are not supported.");
                 }
@@ -177,12 +209,18 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         var output = new StringBuilder("---\n");
         for (var entry : metadata.entrySet()) {
             var key = entry.getKey();
-            output.append(key.matches("[A-Za-z_][A-Za-z0-9_-]*")
-                    ? key : new JsonPrimitive(key).toString());
-            output.append(": ").append(entry.getValue().toString()
-                    .replace("\u0085", "\\u0085")
-                    .replace("\u2028", "\\u2028")
-                    .replace("\u2029", "\\u2029")).append('\n');
+            output.append(
+                    key.matches("[A-Za-z_][A-Za-z0-9_-]*")
+                            ? key
+                            : new JsonPrimitive(key).toString());
+            output.append(": ")
+                    .append(
+                            entry.getValue()
+                                    .toString()
+                                    .replace("\u0085", "\\u0085")
+                                    .replace("\u2028", "\\u2028")
+                                    .replace("\u2029", "\\u2029"))
+                    .append('\n');
         }
         var result = output.append("---\n\n").append(body).toString();
         var roundTrip = parse(result);
@@ -215,8 +253,11 @@ record JiraIssueDocument(JsonObject metadata, String body) {
     }
 
     void requireBaseline() throws IOException {
-        if (originalFields() == null || string("key") == null || string("updated") == null
-                || string("descriptionSha256") == null || string("mode") == null
+        if (originalFields() == null
+                || string("key") == null
+                || string("updated") == null
+                || string("descriptionSha256") == null
+                || string("mode") == null
                 || !metadata.has("apiVersion")) {
             throw wrong("Use jira export to create an update document.");
         }
@@ -225,7 +266,9 @@ record JiraIssueDocument(JsonObject metadata, String body) {
     JiraMarkdown.Format bodyFormat() throws IOException {
         var value = string("bodyFormat");
         try {
-            return value == null ? JiraMarkdown.Format.markdown : JiraMarkdown.Format.valueOf(value);
+            return value == null
+                    ? JiraMarkdown.Format.markdown
+                    : JiraMarkdown.Format.valueOf(value);
         } catch (IllegalArgumentException exception) {
             throw wrong("bodyFormat must be markdown or wiki.");
         }
@@ -237,10 +280,11 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         }
         var format = override == null ? bodyFormat() : override;
         var originalHash = string("descriptionSha256");
-        var unchanged = originalHash != null
-                ? JiraCommand.hash(body).equals(originalHash) && format == bodyFormat()
-                : body.stripTrailing().equals(currentMarkdown.stripTrailing())
-                        && format == JiraMarkdown.Format.markdown;
+        var unchanged =
+                originalHash != null
+                        ? JiraCommand.hash(body).equals(originalHash) && format == bodyFormat()
+                        : body.stripTrailing().equals(currentMarkdown.stripTrailing())
+                                && format == JiraMarkdown.Format.markdown;
         return unchanged ? null : body;
     }
 
@@ -252,9 +296,13 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         if (string("mode") != null && !string("mode").equals(cloud ? "cloud" : "dc")) {
             throw wrong("Exported Jira mode does not match configuration.");
         }
-        if (metadata.has("apiVersion") && (!metadata.get("apiVersion").isJsonPrimitive()
-                || !metadata.getAsJsonPrimitive("apiVersion").isNumber()
-                || metadata.get("apiVersion").getAsBigDecimal().compareTo(BigDecimal.valueOf(apiVersion)) != 0)) {
+        if (metadata.has("apiVersion")
+                && (!metadata.get("apiVersion").isJsonPrimitive()
+                        || !metadata.getAsJsonPrimitive("apiVersion").isNumber()
+                        || metadata.get("apiVersion")
+                                        .getAsBigDecimal()
+                                        .compareTo(BigDecimal.valueOf(apiVersion))
+                                != 0)) {
             throw wrong("Exported Jira API version does not match configuration.");
         }
         if (!force && string("updated") != null && !string("updated").equals(updated)) {
@@ -263,10 +311,13 @@ record JiraIssueDocument(JsonObject metadata, String body) {
     }
 
     boolean needsMetadata(boolean cloud, Set<String> overridden) {
-        return (!overridden.contains("story-point") && metadata.has("story-point")
-                && !emptyString(metadata.get("story-point")))
-                || (!cloud && !overridden.contains("epic") && metadata.has("epic")
-                && !emptyString(metadata.get("epic")));
+        return (!overridden.contains("story-point")
+                        && metadata.has("story-point")
+                        && !emptyString(metadata.get("story-point")))
+                || (!cloud
+                        && !overridden.contains("epic")
+                        && metadata.has("epic")
+                        && !emptyString(metadata.get("epic")));
     }
 
     JsonObject fields(boolean creating, boolean cloud, Set<String> overridden, JsonArray jiraFields)
@@ -277,12 +328,15 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         for (var entry : metadata.entrySet()) {
             var name = entry.getKey();
             var value = entry.getValue();
-            if (READ_ONLY.contains(name) || (!creating && name.equals("project"))
-                    || overridden.contains(name) || emptyString(value)
+            if (READ_ONLY.contains(name)
+                    || (!creating && name.equals("project"))
+                    || overridden.contains(name)
+                    || emptyString(value)
                     || (original != null && value.equals(original.get(name)))) {
                 continue;
             }
-            if (!STANDARD.contains(name) && !name.matches("customfield_[0-9]+")
+            if (!STANDARD.contains(name)
+                    && !name.matches("customfield_[0-9]+")
                     && (baseline == null || !baseline.has(name))) {
                 throw wrong("Unknown issue metadata field: " + name + ".");
             }
@@ -291,23 +345,31 @@ record JiraIssueDocument(JsonObject metadata, String body) {
             }
             if (name.equals("description")) {
                 if (!value.isJsonNull() || !body.isBlank()) {
-                    throw wrong("Description belongs in the Markdown body; use description: null with an empty body to clear.");
+                    throw wrong(
+                            "Description belongs in the Markdown body; use description: null with an empty body to clear.");
                 }
                 result.add("description", JsonNull.INSTANCE);
             } else if (name.equals("epic")) {
-                var field = cloud ? "parent" : JiraAgileCommands.epicField(
-                        jiraFields, "Epic Link", "com.pyxis.greenhopper.jira:gh-epic-link");
+                var field =
+                        cloud
+                                ? "parent"
+                                : JiraAgileCommands.epicField(
+                                        jiraFields,
+                                        "Epic Link",
+                                        "com.pyxis.greenhopper.jira:gh-epic-link");
                 if (field == null) {
                     throw wrong("Jira field metadata does not expose an Epic Link field.");
                 }
                 if (overridden.contains(field)) {
                     continue;
                 }
-                if (!field.equals("parent") && metadata.has(field)
+                if (!field.equals("parent")
+                        && metadata.has(field)
                         && !emptyString(metadata.get(field))) {
                     throw wrong("Use either epic or its customfield_ID, not both.");
                 }
-                if (result.has("parent") || (!empty(metadata.get("parent")) && !overridden.contains("parent"))) {
+                if (result.has("parent")
+                        || (!empty(metadata.get("parent")) && !overridden.contains("parent"))) {
                     throw wrong("Use either epic or parent, not both.");
                 }
                 result.add(field, cloud ? named(value, "key", name) : scalar(value, name));
@@ -322,7 +384,8 @@ record JiraIssueDocument(JsonObject metadata, String body) {
                 if (metadata.has(field) && !emptyString(metadata.get(field))) {
                     throw wrong("Use either story-point or its customfield_ID, not both.");
                 }
-                if (!value.isJsonNull() && (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber())) {
+                if (!value.isJsonNull()
+                        && (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber())) {
                     throw wrong("story-point must be a number or null.");
                 }
                 result.add(field, value);
@@ -374,19 +437,23 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         for (var entry : source.entrySet()) {
             var name = entry.getKey();
             var value = entry.getValue();
-            var member = switch (name) {
-                case "project", "parent" -> "key";
-                case "issuetype", "priority", "resolution" -> "name";
-                case "assignee" -> cloud ? "accountId" : "name";
-                default -> null;
-            };
+            var member =
+                    switch (name) {
+                        case "project", "parent" -> "key";
+                        case "issuetype", "priority", "resolution" -> "name";
+                        case "assignee" -> cloud ? "accountId" : "name";
+                        default -> null;
+                    };
             if (member != null && value.isJsonObject() && value.getAsJsonObject().has(member)) {
                 value = value.getAsJsonObject().get(member);
-            } else if (List.of("components", "fixVersions", "versions").contains(name) && value.isJsonArray()) {
+            } else if (List.of("components", "fixVersions", "versions").contains(name)
+                    && value.isJsonArray()) {
                 var values = new JsonArray();
                 for (var item : value.getAsJsonArray()) {
-                    values.add(item.isJsonObject() && item.getAsJsonObject().has("name")
-                            ? item.getAsJsonObject().get("name") : item);
+                    values.add(
+                            item.isJsonObject() && item.getAsJsonObject().has("name")
+                                    ? item.getAsJsonObject().get("name")
+                                    : item);
                 }
                 value = values;
             }
@@ -395,7 +462,8 @@ record JiraIssueDocument(JsonObject metadata, String body) {
         return result;
     }
 
-    private static JsonElement named(JsonElement value, String member, String name) throws IOException {
+    private static JsonElement named(JsonElement value, String member, String name)
+            throws IOException {
         if (value.isJsonNull()) {
             return value.deepCopy();
         }
@@ -414,16 +482,20 @@ record JiraIssueDocument(JsonObject metadata, String body) {
     }
 
     private static JsonElement scalar(JsonElement value, String name) throws IOException {
-        if (!value.isJsonNull() && (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()
-                || value.getAsString().isBlank())) {
+        if (!value.isJsonNull()
+                && (!value.isJsonPrimitive()
+                        || !value.getAsJsonPrimitive().isString()
+                        || value.getAsString().isBlank())) {
             throw wrong(name + " must be a nonblank string or null.");
         }
         return value;
     }
 
     private static boolean emptyString(JsonElement value) {
-        return value != null && value.isJsonPrimitive()
-                && value.getAsJsonPrimitive().isString() && value.getAsString().isBlank();
+        return value != null
+                && value.isJsonPrimitive()
+                && value.getAsJsonPrimitive().isString()
+                && value.getAsString().isBlank();
     }
 
     private static boolean empty(JsonElement value) {

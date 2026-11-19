@@ -17,14 +17,15 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
 
 /** Project environment snapshots read by bundled AI skills. */
-@Command(name = "env", mixinStandardHelpOptions = true,
-        description = "Collect and inspect project environment snapshots "
-                + "(issue types, epics, boards, sprints) used by AI skills.",
-        subcommands = {JiraEnvironmentCommands.Refresh.class,
-                JiraEnvironmentCommands.Show.class})
+@Command(
+        name = "env",
+        mixinStandardHelpOptions = true,
+        description =
+                "Collect and inspect project environment snapshots "
+                        + "(issue types, epics, boards, sprints) used by AI skills.",
+        subcommands = {JiraEnvironmentCommands.Refresh.class, JiraEnvironmentCommands.Show.class})
 final class JiraEnvironmentCommands implements Runnable {
-    @Spec
-    CommandSpec spec;
+    @Spec CommandSpec spec;
 
     @Override
     public void run() {
@@ -32,22 +33,26 @@ final class JiraEnvironmentCommands implements Runnable {
     }
 
     /**
-     * Collect a snapshot and replace the saved one. Snapshots follow the configuration
-     * scope: global when the configuration is ~/.jira, otherwise local.
+     * Collect a snapshot and replace the saved one. Snapshots follow the configuration scope:
+     * global when the configuration is ~/.jira, otherwise local.
      */
     static JsonObject refresh(Path file, JiraConfiguration connection, String project)
             throws IOException {
         var key = project != null ? project : connection.project();
         if (key == null) {
-            throw wrong("Set project in " + file + " (jira config set project KEY) "
-                    + "or pass --project to collect the environment.");
+            throw wrong(
+                    "Set project in "
+                            + file
+                            + " (jira config set project KEY) "
+                            + "or pass --project to collect the environment.");
         }
         if (!JiraConfigCommands.hasToken()) {
             throw wrong("Set JIRA_API_TOKEN to collect the environment.");
         }
         var jira = new JiraClient(connection, JiraConfigCommands.token());
-        var snapshot = new JiraEnvironment(connection, jira::request, jira::agile)
-                .collect(JiraCatalogCommands.project(key, null));
+        var snapshot =
+                new JiraEnvironment(connection, jira::request, jira::agile)
+                        .collect(JiraCatalogCommands.project(key, null));
         var saved = JiraEnvironment.save(JiraConfigCommands.isGlobal(file), snapshot);
         var summary = JiraEnvironment.summary(snapshot);
         summary.addProperty("file", JiraConfigCommands.absolute(saved));
@@ -56,26 +61,43 @@ final class JiraEnvironmentCommands implements Runnable {
 
     static void report(JiraCommand.Action action, JsonObject summary) {
         var project = summary.getAsJsonObject("project");
-        action.print("Environment " + project.get("key").getAsString() + " captured "
-                + summary.get("capturedAt").getAsString() + " in "
-                + summary.get("file").getAsString() + ".");
+        action.print(
+                "Environment "
+                        + project.get("key").getAsString()
+                        + " captured "
+                        + summary.get("capturedAt").getAsString()
+                        + " in "
+                        + summary.get("file").getAsString()
+                        + ".");
         for (var section : JiraEnvironment.SECTIONS) {
             var status = summary.getAsJsonObject(section);
-            action.print(section + "\t" + status.get("count").getAsInt() + "\t"
-                    + (status.get("complete").getAsBoolean() ? "complete"
-                    : "incomplete (" + status.get("status").getAsString() + ")"));
+            action.print(
+                    section
+                            + "\t"
+                            + status.get("count").getAsInt()
+                            + "\t"
+                            + (status.get("complete").getAsBoolean()
+                                    ? "complete"
+                                    : "incomplete (" + status.get("status").getAsString() + ")"));
         }
     }
 
-    @Command(name = "refresh", mixinStandardHelpOptions = true,
-            description = "Read-only collection of a project's issue types, epics, boards, "
-                    + "and sprints into .jira/environment/KEY.json (~/.jira when the "
-                    + "configuration is global), replacing an older snapshot.")
+    @Command(
+            name = "refresh",
+            mixinStandardHelpOptions = true,
+            description =
+                    "Read-only collection of a project's issue types, epics, boards, "
+                            + "and sprints into .jira/environment/KEY.json (~/.jira when the "
+                            + "configuration is global), replacing an older snapshot.")
     static final class Refresh extends JiraCommand.Action {
-        @Option(names = {"-p", "--project"}, paramLabel = "KEY",
+        @Option(
+                names = {"-p", "--project"},
+                paramLabel = "KEY",
                 description = "Project key; defaults to the configuration's project.")
         String project;
-        @Option(names = {"-g", "--global"},
+
+        @Option(
+                names = {"-g", "--global"},
                 description = "Use ~/.jira configuration and save under ~/.jira/environment.")
         boolean global;
 
@@ -88,14 +110,21 @@ final class JiraEnvironmentCommands implements Runnable {
         }
     }
 
-    @Command(name = "show", mixinStandardHelpOptions = true,
-            description = "Summarize a saved snapshot: local .jira/environment first, "
-                    + "then ~/.jira/environment.")
+    @Command(
+            name = "show",
+            mixinStandardHelpOptions = true,
+            description =
+                    "Summarize a saved snapshot: local .jira/environment first, "
+                            + "then ~/.jira/environment.")
     static final class Show extends JiraCommand.Action {
-        @Option(names = {"-p", "--project"}, paramLabel = "KEY",
+        @Option(
+                names = {"-p", "--project"},
+                paramLabel = "KEY",
                 description = "Project key; defaults to the configuration's project.")
         String project;
-        @Option(names = {"-g", "--global"},
+
+        @Option(
+                names = {"-g", "--global"},
                 description = "Use ~/.jira configuration and read only ~/.jira/environment.")
         boolean global;
 
@@ -119,16 +148,25 @@ final class JiraEnvironmentCommands implements Runnable {
                 }
             }
             if (found == null) {
-                throw wrong("No environment snapshot for " + key
-                        + ". Run jira env refresh" + (global ? " -g" : "") + ".");
+                throw wrong(
+                        "No environment snapshot for "
+                                + key
+                                + ". Run jira env refresh"
+                                + (global ? " -g" : "")
+                                + ".");
             }
             final JsonObject summary;
             try {
-                summary = JiraEnvironment.summary(JsonParser.parseString(
-                        Files.readString(found, StandardCharsets.UTF_8)).getAsJsonObject());
+                summary =
+                        JiraEnvironment.summary(
+                                JsonParser.parseString(
+                                                Files.readString(found, StandardCharsets.UTF_8))
+                                        .getAsJsonObject());
             } catch (RuntimeException exception) {
-                throw wrong("Invalid environment snapshot: " + found
-                        + ". Run jira env refresh to replace it.");
+                throw wrong(
+                        "Invalid environment snapshot: "
+                                + found
+                                + ". Run jira env refresh to replace it.");
             }
             summary.addProperty("file", JiraConfigCommands.absolute(found));
             machineData = summary;

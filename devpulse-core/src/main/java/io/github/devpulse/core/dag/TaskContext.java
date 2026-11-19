@@ -15,8 +15,13 @@ public final class TaskContext {
     private final Consumer<Throwable> failure;
     private final DaemonOptions daemonOptions;
 
-    TaskContext(String taskId, int attempt, Map<TaskKey<?>, Object> dependencies,
-            BooleanSupplier cancellation, Consumer<Throwable> failure, DaemonOptions daemonOptions) {
+    TaskContext(
+            String taskId,
+            int attempt,
+            Map<TaskKey<?>, Object> dependencies,
+            BooleanSupplier cancellation,
+            Consumer<Throwable> failure,
+            DaemonOptions daemonOptions) {
         this.taskId = taskId;
         this.attempt = attempt;
         this.dependencies = Collections.unmodifiableMap(new LinkedHashMap<>(dependencies));

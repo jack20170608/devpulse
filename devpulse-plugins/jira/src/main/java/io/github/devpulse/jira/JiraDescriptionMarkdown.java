@@ -9,12 +9,14 @@ import java.util.regex.Pattern;
 
 /** Read-only Markdown presentation, separate from lossless export conversion. */
 public final class JiraDescriptionMarkdown {
-    private static final Pattern CODE = Pattern.compile(
-            "(?<![\\\\{])\\{(code|noformat)(?::([^}]*))?\\}(?!\\})"
-                    + "(.*?)(?<![\\\\{])\\{\\1\\}(?!\\})",
-            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+    private static final Pattern CODE =
+            Pattern.compile(
+                    "(?<![\\\\{])\\{(code|noformat)(?::([^}]*))?\\}(?!\\})"
+                            + "(.*?)(?<![\\\\{])\\{\\1\\}(?!\\})",
+                    Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
     private static final Pattern HEADING = Pattern.compile("^h([1-6])\\.\\s+(.*)$");
     private static final Pattern LIST = Pattern.compile("^([*#]+)\\s+(.*)$");
+
     private record WikiLines(String text, boolean quote) {}
 
     private JiraDescriptionMarkdown() {}
@@ -24,8 +26,7 @@ public final class JiraDescriptionMarkdown {
             return "";
         }
         if (!adf && value.isJsonPrimitive()) {
-            return wiki(value.getAsString().replace("\r\n", "\n")
-                    .replace('\r', '\n')).strip();
+            return wiki(value.getAsString().replace("\r\n", "\n").replace('\r', '\n')).strip();
         }
         return node(value, 0).strip();
     }
@@ -41,8 +42,10 @@ public final class JiraDescriptionMarkdown {
             quote = preceding.quote();
             var info = blocks.group(2) == null ? "" : blocks.group(2);
             var language = info.split("\\|", 2)[0].replaceFirst("^language=", "");
-            var code = fenced(blocks.group(3).replaceFirst("^\\n", "")
-                    .replaceFirst("\\n$", ""), language);
+            var code =
+                    fenced(
+                            blocks.group(3).replaceFirst("^\\n", "").replaceFirst("\\n$", ""),
+                            language);
             result.append(quote ? "\n>\n" : "\n\n")
                     .append(quote ? quoted(code) : code)
                     .append(quote ? "\n>\n" : "\n\n");
@@ -62,8 +65,7 @@ public final class JiraDescriptionMarkdown {
                     || stripped.matches("(?i)\\{panel(?::[^}]*)?\\}")) {
                 quote = !quote;
                 if (quote) {
-                    var title = Pattern.compile("(?i)(?:[:|])title=([^|}]+)")
-                            .matcher(stripped);
+                    var title = Pattern.compile("(?i)(?:[:|])title=([^|}]+)").matcher(stripped);
                     if (title.find()) {
                         output.add("> **" + escaped(title.group(1)) + "**");
                     }
@@ -87,8 +89,10 @@ public final class JiraDescriptionMarkdown {
             var list = LIST.matcher(stripped);
             String rendered;
             if (heading.matches()) {
-                rendered = "#".repeat(Integer.parseInt(heading.group(1))) + " "
-                        + wikiInline(heading.group(2), 0);
+                rendered =
+                        "#".repeat(Integer.parseInt(heading.group(1)))
+                                + " "
+                                + wikiInline(heading.group(2), 0);
             } else if (list.matches()) {
                 var markers = list.group(1);
                 numbers.keySet().removeIf(key -> key.length() > markers.length());
@@ -101,9 +105,12 @@ public final class JiraDescriptionMarkdown {
                 rendered = " ".repeat(indent) + marker + wikiInline(list.group(2), 0);
             } else {
                 numbers.clear();
-                rendered = stripped.equals("----") ? "---"
-                        : stripped.startsWith("bq. ") ? "> " + wikiInline(stripped.substring(4), 0)
-                        : escapeBlockSyntax(wikiInline(line, 0));
+                rendered =
+                        stripped.equals("----")
+                                ? "---"
+                                : stripped.startsWith("bq. ")
+                                        ? "> " + wikiInline(stripped.substring(4), 0)
+                                        : escapeBlockSyntax(wikiInline(line, 0));
             }
             if (rendered.endsWith("  \n") && i + 1 < lines.length) {
                 rendered = rendered.substring(0, rendered.length() - 1);
@@ -114,7 +121,8 @@ public final class JiraDescriptionMarkdown {
     }
 
     private static boolean wikiTableLine(String line) {
-        return line.startsWith("|") && line.endsWith("|")
+        return line.startsWith("|")
+                && line.endsWith("|")
                 && line.length() >= (line.startsWith("||") ? 4 : 2);
     }
 
@@ -146,8 +154,7 @@ public final class JiraDescriptionMarkdown {
                 braces--;
             } else if (content.charAt(i) == '!') {
                 image = !image;
-            } else if (brackets == 0 && braces == 0 && !image
-                    && content.startsWith(separator, i)) {
+            } else if (brackets == 0 && braces == 0 && !image && content.startsWith(separator, i)) {
                 cells.add(wikiInline(content.substring(start, i).strip(), 0, true));
                 i += width - 1;
                 start = i + 1;
@@ -166,7 +173,7 @@ public final class JiraDescriptionMarkdown {
             return escaped(text);
         }
         var output = new StringBuilder();
-        for (var i = 0; i < text.length();) {
+        for (var i = 0; i < text.length(); ) {
             if (text.startsWith("{{", i)) {
                 var end = text.indexOf("}}", i + 2);
                 if (end >= 0) {
@@ -194,18 +201,29 @@ public final class JiraDescriptionMarkdown {
                     if (character == '!') {
                         var url = separator < 0 ? value : value.substring(0, separator);
                         var alt = Pattern.compile("(?:^|\\|)alt=([^|]*)").matcher(value);
-                        output.append("![").append(alt.find() ? escaped(alt.group(1)) : "")
-                                .append("](").append(destination(url)).append(")");
+                        output.append("![")
+                                .append(alt.find() ? escaped(alt.group(1)) : "")
+                                .append("](")
+                                .append(destination(url))
+                                .append(")");
                     } else if (separator >= 0) {
-                        output.append("[").append(wikiInline(
-                                value.substring(0, separator), depth + 1, tableCell))
-                                .append("](").append(destination(
-                                        unescapeWiki(value.substring(separator + 1)))).append(")");
+                        output.append("[")
+                                .append(
+                                        wikiInline(
+                                                value.substring(0, separator),
+                                                depth + 1,
+                                                tableCell))
+                                .append("](")
+                                .append(destination(unescapeWiki(value.substring(separator + 1))))
+                                .append(")");
                     } else if (value.startsWith("~")) {
                         output.append(escaped("@" + value.substring(1)));
                     } else if (value.matches("(?i)(?:https?://|mailto:).*")) {
-                        output.append("[").append(escaped(value)).append("](")
-                                .append(destination(value)).append(")");
+                        output.append("[")
+                                .append(escaped(value))
+                                .append("](")
+                                .append(destination(value))
+                                .append(")");
                     } else {
                         output.append(escaped("[" + value + "]"));
                     }
@@ -213,20 +231,22 @@ public final class JiraDescriptionMarkdown {
                     continue;
                 }
             }
-            if ("*_+-~^".indexOf(character) >= 0 && i + 1 < text.length()
+            if ("*_+-~^".indexOf(character) >= 0
+                    && i + 1 < text.length()
                     && !Character.isWhitespace(text.charAt(i + 1))
                     && (i == 0 || !wordCharacter(text.charAt(i - 1)))) {
                 var end = formatEnd(text, i + 1, character);
                 if (end > i + 1) {
                     var inner = wikiInline(text.substring(i + 1, end), depth + 1, tableCell);
-                    output.append(switch (character) {
-                        case '*' -> "**" + inner + "**";
-                        case '_' -> "*" + inner + "*";
-                        case '-' -> "~~" + inner + "~~";
-                        case '+' -> "<u>" + inner + "</u>";
-                        case '~' -> "<sub>" + inner + "</sub>";
-                        default -> "<sup>" + inner + "</sup>";
-                    });
+                    output.append(
+                            switch (character) {
+                                case '*' -> "**" + inner + "**";
+                                case '_' -> "*" + inner + "*";
+                                case '-' -> "~~" + inner + "~~";
+                                case '+' -> "<u>" + inner + "</u>";
+                                case '~' -> "<sub>" + inner + "</sub>";
+                                default -> "<sup>" + inner + "</sup>";
+                            });
                     i = end + 1;
                     continue;
                 }
@@ -313,8 +333,10 @@ public final class JiraDescriptionMarkdown {
         }
         var object = value.getAsJsonObject();
         var type = string(object, "type");
-        var attrs = object.has("attrs") && object.get("attrs").isJsonObject()
-                ? object.getAsJsonObject("attrs") : new JsonObject();
+        var attrs =
+                object.has("attrs") && object.get("attrs").isJsonObject()
+                        ? object.getAsJsonObject("attrs")
+                        : new JsonObject();
         return switch (type) {
             case "doc", "blockquote", "expand", "nestedExpand" -> {
                 var blocks = blocks(object, depth);
@@ -323,8 +345,8 @@ public final class JiraDescriptionMarkdown {
             case "paragraph" -> escapeBlockSyntax(children(object, depth));
             case "listItem" -> children(object, depth);
             case "tableCell", "tableHeader" -> blocks(object, depth);
-            case "heading" -> "#".repeat(number(attrs, "level", 1, 6)) + " "
-                    + children(object, depth);
+            case "heading" ->
+                    "#".repeat(number(attrs, "level", 1, 6)) + " " + children(object, depth);
             case "hardBreak" -> "  \n";
             case "rule" -> "---";
             case "codeBlock" -> fenced(rawText(object), string(attrs, "language"));
@@ -334,7 +356,8 @@ public final class JiraDescriptionMarkdown {
                 if (object.has("content") && object.get("content").isJsonArray()) {
                     for (var row : object.getAsJsonArray("content")) {
                         var cells = new ArrayList<String>();
-                        if (row.isJsonObject() && row.getAsJsonObject().has("content")
+                        if (row.isJsonObject()
+                                && row.getAsJsonObject().has("content")
                                 && row.getAsJsonObject().get("content").isJsonArray()) {
                             for (var cell : row.getAsJsonObject().getAsJsonArray("content")) {
                                 cells.add(node(cell, depth + 1));
@@ -346,12 +369,22 @@ public final class JiraDescriptionMarkdown {
                 yield table(rows);
             }
             case "text" -> marked(object);
-            case "mention" -> escaped(string(attrs, "text").isEmpty()
-                    ? "@" + string(attrs, "id") : string(attrs, "text"));
-            case "emoji" -> escaped(string(attrs, "text").isEmpty()
-                    ? string(attrs, "shortName") : string(attrs, "text"));
-            case "inlineCard", "blockCard" -> "[" + escaped(string(attrs, "url"))
-                    + "](" + destination(string(attrs, "url")) + ")";
+            case "mention" ->
+                    escaped(
+                            string(attrs, "text").isEmpty()
+                                    ? "@" + string(attrs, "id")
+                                    : string(attrs, "text"));
+            case "emoji" ->
+                    escaped(
+                            string(attrs, "text").isEmpty()
+                                    ? string(attrs, "shortName")
+                                    : string(attrs, "text"));
+            case "inlineCard", "blockCard" ->
+                    "["
+                            + escaped(string(attrs, "url"))
+                            + "]("
+                            + destination(string(attrs, "url"))
+                            + ")";
             default -> {
                 var content = children(object, depth);
                 if (!content.isEmpty()) {
@@ -370,7 +403,8 @@ public final class JiraDescriptionMarkdown {
         var output = escaped(string(text, "text"));
         if (text.has("marks") && text.get("marks").isJsonArray()) {
             for (var value : text.getAsJsonArray("marks")) {
-                if (value.isJsonObject() && string(value.getAsJsonObject(), "type").equals("code")) {
+                if (value.isJsonObject()
+                        && string(value.getAsJsonObject(), "type").equals("code")) {
                     output = codeSpan(string(text, "text"));
                 }
             }
@@ -379,16 +413,25 @@ public final class JiraDescriptionMarkdown {
                     continue;
                 }
                 var mark = value.getAsJsonObject();
-                output = switch (string(mark, "type")) {
-                    case "strong" -> "**" + output + "**";
-                    case "em" -> "*" + output + "*";
-                    case "strike" -> "~~" + output + "~~";
-                    case "underline" -> "<u>" + output + "</u>";
-                    case "link" -> mark.has("attrs") && mark.get("attrs").isJsonObject()
-                            ? "[" + output + "](" + destination(string(
-                                    mark.getAsJsonObject("attrs"), "href")) + ")" : output;
-                    default -> output;
-                };
+                output =
+                        switch (string(mark, "type")) {
+                            case "strong" -> "**" + output + "**";
+                            case "em" -> "*" + output + "*";
+                            case "strike" -> "~~" + output + "~~";
+                            case "underline" -> "<u>" + output + "</u>";
+                            case "link" ->
+                                    mark.has("attrs") && mark.get("attrs").isJsonObject()
+                                            ? "["
+                                                    + output
+                                                    + "]("
+                                                    + destination(
+                                                            string(
+                                                                    mark.getAsJsonObject("attrs"),
+                                                                    "href"))
+                                                    + ")"
+                                            : output;
+                            default -> output;
+                        };
             }
         }
         return output;
@@ -411,21 +454,29 @@ public final class JiraDescriptionMarkdown {
     private static String list(JsonObject object, int depth) {
         var output = new ArrayList<String>();
         var ordered = string(object, "type").equals("orderedList");
-        var index = object.has("attrs") && object.get("attrs").isJsonObject()
-                ? number(object.getAsJsonObject("attrs"), "order", 1, Integer.MAX_VALUE) : 1;
+        var index =
+                object.has("attrs") && object.get("attrs").isJsonObject()
+                        ? number(object.getAsJsonObject("attrs"), "order", 1, Integer.MAX_VALUE)
+                        : 1;
         if (object.has("content") && object.get("content").isJsonArray()) {
             for (var value : object.getAsJsonArray("content")) {
                 var item = value.isJsonObject() ? value.getAsJsonObject() : new JsonObject();
                 var marker = ordered ? index++ + ". " : "- ";
                 if (string(item, "type").equals("taskItem")) {
-                    var attrs = item.has("attrs") && item.get("attrs").isJsonObject()
-                            ? item.getAsJsonObject("attrs") : new JsonObject();
+                    var attrs =
+                            item.has("attrs") && item.get("attrs").isJsonObject()
+                                    ? item.getAsJsonObject("attrs")
+                                    : new JsonObject();
                     marker += string(attrs, "state").matches("DONE|CHECKED") ? "[x] " : "[ ] ";
                 }
-                var content = string(item, "type").equals("taskItem")
-                        ? children(item, depth) : blocks(item, depth);
-                output.add(marker + content.replace("\n",
-                        "\n" + " ".repeat(ordered ? marker.length() : 2)));
+                var content =
+                        string(item, "type").equals("taskItem")
+                                ? children(item, depth)
+                                : blocks(item, depth);
+                output.add(
+                        marker
+                                + content.replace(
+                                        "\n", "\n" + " ".repeat(ordered ? marker.length() : 2)));
             }
         }
         return String.join("\n", output);
@@ -440,12 +491,15 @@ public final class JiraDescriptionMarkdown {
         for (var row : rows) {
             var cells = new ArrayList<String>();
             for (var i = 0; i < width; i++) {
-                cells.add(i < row.size() ? row.get(i).replace("|", "\\|")
-                        .replace("\n", "<br>") : "");
+                cells.add(
+                        i < row.size() ? row.get(i).replace("|", "\\|").replace("\n", "<br>") : "");
             }
             output.add("| " + String.join(" | ", cells) + " |");
             if (output.size() == 1) {
-                output.add("| " + String.join(" | ", java.util.Collections.nCopies(width, "---")) + " |");
+                output.add(
+                        "| "
+                                + String.join(" | ", java.util.Collections.nCopies(width, "---"))
+                                + " |");
             }
         }
         return String.join("\n", output);
@@ -464,8 +518,8 @@ public final class JiraDescriptionMarkdown {
         }
         if (value.isJsonObject()) {
             var object = value.getAsJsonObject();
-            return string(object, "text") + (object.has("content")
-                    ? rawText(object.get("content")) : "");
+            return string(object, "text")
+                    + (object.has("content") ? rawText(object.get("content")) : "");
         }
         return "";
     }
@@ -488,22 +542,33 @@ public final class JiraDescriptionMarkdown {
     }
 
     private static String destination(String text) {
-        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-                .replace(" ", "%20").replace("\n", "%0A").replace("\r", "%0D")
-                .replace("<", "%3C").replace(">", "%3E");
+        return text.replace("\\", "\\\\")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace(" ", "%20")
+                .replace("\n", "%0A")
+                .replace("\r", "%0D")
+                .replace("<", "%3C")
+                .replace(">", "%3E");
     }
 
     private static String codeSpan(String text) {
         var fence = "`".repeat(longestRun(text, '`') + 1);
-        boolean padding = text.startsWith("`") || text.endsWith("`")
-                || (text.startsWith(" ") && text.endsWith(" ") && !text.isBlank());
+        boolean padding =
+                text.startsWith("`")
+                        || text.endsWith("`")
+                        || (text.startsWith(" ") && text.endsWith(" ") && !text.isBlank());
         return fence + (padding ? " " : "") + text + (padding ? " " : "") + fence;
     }
 
     private static String fenced(String text, String language) {
         var fence = "`".repeat(Math.max(3, longestRun(text, '`') + 1));
-        return fence + (language.matches("[A-Za-z0-9_+#.-]*") ? language : "")
-                + "\n" + text + (text.endsWith("\n") ? "" : "\n") + fence;
+        return fence
+                + (language.matches("[A-Za-z0-9_+#.-]*") ? language : "")
+                + "\n"
+                + text
+                + (text.endsWith("\n") ? "" : "\n")
+                + fence;
     }
 
     private static int longestRun(String text, char delimiter) {

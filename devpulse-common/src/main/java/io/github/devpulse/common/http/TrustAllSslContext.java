@@ -1,12 +1,12 @@
 package io.github.devpulse.common.http;
 
+import java.net.Socket;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
-import java.net.Socket;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 
 public final class TrustAllSslContext {
 
@@ -23,9 +23,10 @@ public final class TrustAllSslContext {
     private static SSLContext createSslContext() {
         try {
             final SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, new javax.net.ssl.TrustManager[]{
-                new ExtendsTrustManager()
-            }, new java.security.SecureRandom());
+            sslContext.init(
+                    null,
+                    new javax.net.ssl.TrustManager[] {new ExtendsTrustManager()},
+                    new java.security.SecureRandom());
             return sslContext;
         } catch (Exception e) {
             throw new RuntimeException("Unable to create accept all SSL contexts", e);
@@ -39,14 +40,12 @@ public final class TrustAllSslContext {
     private static final class TrustManager implements X509TrustManager {
 
         @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-
-        }
+        public void checkClientTrusted(X509Certificate[] chain, String authType)
+                throws CertificateException {}
 
         @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-
-        }
+        public void checkServerTrusted(X509Certificate[] chain, String authType)
+                throws CertificateException {}
 
         @Override
         public X509Certificate[] getAcceptedIssuers() {
@@ -57,33 +56,28 @@ public final class TrustAllSslContext {
     private static class ExtendsTrustManager extends X509ExtendedTrustManager {
 
         @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
-        }
+        public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket)
+                throws CertificateException {}
 
         @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
-
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
-
-        }
+        public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket)
+                throws CertificateException {}
 
         @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
-
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-
-        }
+        public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine)
+                throws CertificateException {}
 
         @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine)
+                throws CertificateException {}
 
-        }
+        @Override
+        public void checkClientTrusted(X509Certificate[] chain, String authType)
+                throws CertificateException {}
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType)
+                throws CertificateException {}
 
         @Override
         public X509Certificate[] getAcceptedIssuers() {

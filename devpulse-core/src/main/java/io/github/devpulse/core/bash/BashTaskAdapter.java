@@ -4,7 +4,6 @@ import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagTask;
 import io.github.devpulse.core.dag.TaskContext;
 import io.github.devpulse.core.environment.BashShell;
-
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,14 +41,17 @@ public final class BashTaskAdapter {
         this(bash, directory, out, null);
     }
 
-    public BashTaskAdapter(BashShell bash, Path directory, PrintWriter out,
-            RunHistory.Writer history) {
+    public BashTaskAdapter(
+            BashShell bash, Path directory, PrintWriter out, RunHistory.Writer history) {
         this.bash = Objects.requireNonNull(bash, "bash");
-        this.directory = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
+        this.directory =
+                Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
         this.out = Objects.requireNonNull(out, "out");
         this.history = history;
-        daemons = history == null ? new DaemonManager(bash, this.directory)
-                : new DaemonManager(history, bash, this.directory);
+        daemons =
+                history == null
+                        ? new DaemonManager(bash, this.directory)
+                        : new DaemonManager(history, bash, this.directory);
     }
 
     public DagTask<Integer> task(String command) {
@@ -57,15 +59,18 @@ public final class BashTaskAdapter {
         return context -> execute(context.taskId(), script, context);
     }
 
-    public DagDaemon<ProcessHandle> daemon(String command, BashTaskDefinition.Daemon configuration) {
+    public DagDaemon<ProcessHandle> daemon(
+            String command, BashTaskDefinition.Daemon configuration) {
         var script = script(command);
         Objects.requireNonNull(configuration, "configuration");
         script(configuration.readyCommand());
         if (configuration.stopCommand() != null) {
             script(configuration.stopCommand());
         }
-        return context -> start(new BashTaskDefinition(context.taskId(), script,
-                List.of(), configuration), context);
+        return context ->
+                start(
+                        new BashTaskDefinition(context.taskId(), script, List.of(), configuration),
+                        context);
     }
 
     private Integer execute(String name, String command, TaskContext context) throws Exception {
@@ -74,8 +79,10 @@ public final class BashTaskAdapter {
             if (history != null) {
                 history.started(name);
             }
-            try (var taskLog = history == null ? new BufferedWriter(Writer.nullWriter())
-                    : history.openLog(name, context.attempt() > 1)) {
+            try (var taskLog =
+                    history == null
+                            ? new BufferedWriter(Writer.nullWriter())
+                            : history.openLog(name, context.attempt() > 1)) {
                 context.checkCancelled();
                 var process = bash.script(directory).redirectErrorStream(true).start();
                 log(name, "Started.");
@@ -93,22 +100,28 @@ public final class BashTaskAdapter {
         }
     }
 
-    private int waitFor(String name, String command, TaskContext context,
-            Process process, BufferedWriter taskLog)
+    private int waitFor(
+            String name,
+            String command,
+            TaskContext context,
+            Process process,
+            BufferedWriter taskLog)
             throws IOException, InterruptedException, ExecutionException, ExitFailure {
         var io = Executors.newVirtualThreadPerTaskExecutor();
         try {
-            var output = io.submit(() -> {
-                readOutput(name, context, process, taskLog);
-                return null;
-            });
-            var input = io.submit(() -> {
-                try (var stream = process.getOutputStream()) {
-                    stream.write(command.getBytes(StandardCharsets.UTF_8));
-                    stream.write('\n');
-                }
-                return null;
-            });
+            var output =
+                    io.submit(() -> {
+                        readOutput(name, context, process, taskLog);
+                        return null;
+                    });
+            var input =
+                    io.submit(() -> {
+                        try (var stream = process.getOutputStream()) {
+                            stream.write(command.getBytes(StandardCharsets.UTF_8));
+                            stream.write('\n');
+                        }
+                        return null;
+                    });
             var code = process.waitFor();
             output.get();
             if (history != null) {
@@ -168,7 +181,8 @@ public final class BashTaskAdapter {
         }
     }
 
-    private void readOutput(String name, TaskContext context, Process process, BufferedWriter taskLog)
+    private void readOutput(
+            String name, TaskContext context, Process process, BufferedWriter taskLog)
             throws IOException, InterruptedException {
         try (var stream = process.getInputStream();
                 var line = new ByteArrayOutputStream()) {

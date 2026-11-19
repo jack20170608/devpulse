@@ -10,8 +10,8 @@ import org.commonmark.ext.gfm.tables.TableBlock;
 import org.commonmark.ext.gfm.tables.TableCell;
 import org.commonmark.ext.gfm.tables.TableHead;
 import org.commonmark.ext.gfm.tables.TablesExtension;
-import org.commonmark.node.BulletList;
 import org.commonmark.node.BlockQuote;
+import org.commonmark.node.BulletList;
 import org.commonmark.node.Code;
 import org.commonmark.node.Emphasis;
 import org.commonmark.node.FencedCodeBlock;
@@ -25,60 +25,61 @@ import org.commonmark.node.ListItem;
 import org.commonmark.node.Node;
 import org.commonmark.node.OrderedList;
 import org.commonmark.node.Paragraph;
-import org.commonmark.node.StrongEmphasis;
 import org.commonmark.node.SoftLineBreak;
+import org.commonmark.node.StrongEmphasis;
 import org.commonmark.node.Text;
 import org.commonmark.node.ThematicBreak;
 import org.commonmark.parser.Parser;
 
 public final class JiraMarkdown {
-    public enum Format { markdown, wiki }
+    public enum Format {
+        markdown,
+        wiki
+    }
 
     private JiraMarkdown() {}
 
-    public static JsonElement toJira(String markdown, boolean adf)
-            throws IOException {
+    public static JsonElement toJira(String markdown, boolean adf) throws IOException {
         return toJira(markdown, adf, Format.markdown);
     }
 
-    public static JsonElement toJira(String markdown, boolean adf,
-            Format format) throws IOException {
+    public static JsonElement toJira(String markdown, boolean adf, Format format)
+            throws IOException {
         if (format == Format.wiki) {
             if (adf) {
-                throw new IOException("Jira wiki input requires REST API v2; "
-                        + "use --body-format markdown for REST API v3.");
+                throw new IOException(
+                        "Jira wiki input requires REST API v2; "
+                                + "use --body-format markdown for REST API v3.");
             }
             return new com.google.gson.JsonPrimitive(markdown);
         }
-        var document = Parser.builder()
-                .extensions(List.of(TablesExtension.create()))
-                .build().parse(markdown);
+        var document =
+                Parser.builder()
+                        .extensions(List.of(TablesExtension.create()))
+                        .build()
+                        .parse(markdown);
         if (!adf) {
-            return new com.google.gson.JsonPrimitive(wikiBlocks(
-                    document));
+            return new com.google.gson.JsonPrimitive(wikiBlocks(document));
         }
         var doc = new JsonObject();
         doc.addProperty("type", "doc");
         doc.addProperty("version", 1);
         var content = new JsonArray();
-        for (var block = document.getFirstChild(); block != null;
-                block = block.getNext()) {
+        for (var block = document.getFirstChild(); block != null; block = block.getNext()) {
             content.add(block(block));
         }
         doc.add("content", content);
         return doc;
     }
 
-    public static String fromJira(JsonElement value, boolean adf)
-            throws IOException {
+    public static String fromJira(JsonElement value, boolean adf) throws IOException {
         if (value == null || value.isJsonNull()) {
             return "";
         }
         if (!adf) {
-            if (!value.isJsonPrimitive()
-                    || !value.getAsJsonPrimitive().isString()) {
-                throw new IOException("REST API v2 description/comment "
-                        + "must be a Jira wiki string.");
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+                throw new IOException(
+                        "REST API v2 description/comment " + "must be a Jira wiki string.");
             }
             return value.getAsString();
         }
@@ -92,8 +93,7 @@ public final class JiraMarkdown {
         for (var node : array(doc, "content")) {
             blocks.add(renderBlock(node));
         }
-        var markdown = String.join("\n\n", blocks)
-                + (blocks.isEmpty() ? "" : "\n");
+        var markdown = String.join("\n\n", blocks) + (blocks.isEmpty() ? "" : "\n");
         if (!toJira(markdown, true).equals(value)) {
             throw unsupported();
         }
@@ -102,8 +102,9 @@ public final class JiraMarkdown {
 
     private static JsonObject block(Node node) throws IOException {
         if (node instanceof TableBlock) {
-            throw new IOException("Markdown tables require REST API v2; "
-                    + "ADF table uploads are not supported for REST API v3.");
+            throw new IOException(
+                    "Markdown tables require REST API v2; "
+                            + "ADF table uploads are not supported for REST API v3.");
         }
         if (node instanceof Paragraph paragraph) {
             return container("paragraph", children(paragraph));
@@ -116,15 +117,16 @@ public final class JiraMarkdown {
             return result;
         }
         if (node instanceof BulletList || node instanceof OrderedList) {
-            var list = container(node instanceof BulletList
-                    ? "bulletList" : "orderedList", new JsonArray());
+            var list =
+                    container(
+                            node instanceof BulletList ? "bulletList" : "orderedList",
+                            new JsonArray());
             if (node instanceof OrderedList ordered) {
                 var attrs = new JsonObject();
                 attrs.addProperty("order", ordered.getStartNumber());
                 list.add("attrs", attrs);
             }
-            for (var item = node.getFirstChild(); item != null;
-                    item = item.getNext()) {
+            for (var item = node.getFirstChild(); item != null; item = item.getNext()) {
                 if (!(item instanceof ListItem)
                         || !(item.getFirstChild() instanceof Paragraph)
                         || item.getFirstChild().getNext() != null) {
@@ -132,15 +134,15 @@ public final class JiraMarkdown {
                 }
                 var content = new JsonArray();
                 content.add(block(item.getFirstChild()));
-                list.getAsJsonArray("content").add(
-                        container("listItem", content));
+                list.getAsJsonArray("content").add(container("listItem", content));
             }
             return list;
         }
         if (node instanceof FencedCodeBlock fenced) {
             if (!fenced.getInfo().isBlank()) {
-                throw new IOException("Language-tagged code fences are "
-                        + "not supported for safe Jira round-trips.");
+                throw new IOException(
+                        "Language-tagged code fences are "
+                                + "not supported for safe Jira round-trips.");
             }
             var text = fenced.getLiteral().replaceFirst("\\n$", "");
             var content = new JsonArray();
@@ -152,8 +154,7 @@ public final class JiraMarkdown {
 
     private static JsonArray children(Node parent) throws IOException {
         var result = new JsonArray();
-        for (var child = parent.getFirstChild(); child != null;
-                child = child.getNext()) {
+        for (var child = parent.getFirstChild(); child != null; child = child.getNext()) {
             if (child instanceof Text text) {
                 result.add(text(text.getLiteral()));
             } else if (child instanceof Code code) {
@@ -179,10 +180,9 @@ public final class JiraMarkdown {
         return result;
     }
 
-    private static void markedChildren(Node parent, String mark,
-            JsonObject attrs, JsonArray result) throws IOException {
-        for (var child = parent.getFirstChild(); child != null;
-                child = child.getNext()) {
+    private static void markedChildren(Node parent, String mark, JsonObject attrs, JsonArray result)
+            throws IOException {
+        for (var child = parent.getFirstChild(); child != null; child = child.getNext()) {
             if (!(child instanceof Text text)) {
                 throw unsupported();
             }
@@ -190,8 +190,7 @@ public final class JiraMarkdown {
         }
     }
 
-    private static JsonObject marked(String value, String type,
-            JsonObject attrs) {
+    private static JsonObject marked(String value, String type, JsonObject attrs) {
         var node = text(value);
         var mark = new JsonObject();
         mark.addProperty("type", type);
@@ -220,8 +219,7 @@ public final class JiraMarkdown {
         return result;
     }
 
-    private static String renderBlock(JsonElement element)
-            throws IOException {
+    private static String renderBlock(JsonElement element) throws IOException {
         var node = object(element, null);
         var type = node.get("type").getAsString();
         return switch (type) {
@@ -237,17 +235,19 @@ public final class JiraMarkdown {
                 if (level < 1 || level > 6) {
                     throw unsupported();
                 }
-                yield "#".repeat(level) + " "
-                        + renderInline(array(node, "content"));
+                yield "#".repeat(level) + " " + renderInline(array(node, "content"));
             }
             case "bulletList", "orderedList" -> {
-                require(node, type.equals("bulletList")
-                        ? new String[]{"type", "content"}
-                        : new String[]{"type", "attrs", "content"});
+                require(
+                        node,
+                        type.equals("bulletList")
+                                ? new String[] {"type", "content"}
+                                : new String[] {"type", "attrs", "content"});
                 var lines = new ArrayList<String>();
-                var index = type.equals("orderedList") && node.has("attrs")
-                        ? attributes(node).get("order")
-                                .getAsInt() : 1;
+                var index =
+                        type.equals("orderedList") && node.has("attrs")
+                                ? attributes(node).get("order").getAsInt()
+                                : 1;
                 for (var item : array(node, "content")) {
                     var listItem = object(item, "listItem");
                     require(listItem, "type", "content");
@@ -256,9 +256,9 @@ public final class JiraMarkdown {
                         throw unsupported();
                     }
                     var paragraph = object(blocks.get(0), "paragraph");
-                    lines.add((type.equals("bulletList")
-                            ? "- " : index++ + ". ")
-                            + renderInline(array(paragraph, "content")));
+                    lines.add(
+                            (type.equals("bulletList") ? "- " : index++ + ". ")
+                                    + renderInline(array(paragraph, "content")));
                 }
                 yield String.join("\n", lines);
             }
@@ -283,8 +283,7 @@ public final class JiraMarkdown {
         return text.get("text").getAsString();
     }
 
-    private static String renderInline(JsonArray nodes)
-            throws IOException {
+    private static String renderInline(JsonArray nodes) throws IOException {
         var result = new StringBuilder();
         for (var element : nodes) {
             var node = object(element, null);
@@ -308,29 +307,32 @@ public final class JiraMarkdown {
                     throw unsupported();
                 }
                 var mark = object(marks.get(0), null);
-                require(mark, mark.get("type").getAsString().equals("link")
-                        ? new String[]{"type", "attrs"}
-                        : new String[]{"type"});
-                value = switch (mark.get("type").getAsString()) {
-                    case "strong" -> "**" + escaped(value) + "**";
-                    case "em" -> "*" + escaped(value) + "*";
-                    case "code" -> {
-                        if (value.contains("`")) {
-                            throw unsupported();
-                        }
-                        yield "`" + value + "`";
-                    }
-                    case "link" -> {
-                        var attrs = attributes(mark);
-                        require(attrs, "href");
-                        var href = attrs.get("href").getAsString();
-                        if (!href.matches("https?://[^\\s)]+")) {
-                            throw unsupported();
-                        }
-                        yield "[" + escaped(value) + "](" + href + ")";
-                    }
-                    default -> throw unsupported();
-                };
+                require(
+                        mark,
+                        mark.get("type").getAsString().equals("link")
+                                ? new String[] {"type", "attrs"}
+                                : new String[] {"type"});
+                value =
+                        switch (mark.get("type").getAsString()) {
+                            case "strong" -> "**" + escaped(value) + "**";
+                            case "em" -> "*" + escaped(value) + "*";
+                            case "code" -> {
+                                if (value.contains("`")) {
+                                    throw unsupported();
+                                }
+                                yield "`" + value + "`";
+                            }
+                            case "link" -> {
+                                var attrs = attributes(mark);
+                                require(attrs, "href");
+                                var href = attrs.get("href").getAsString();
+                                if (!href.matches("https?://[^\\s)]+")) {
+                                    throw unsupported();
+                                }
+                                yield "[" + escaped(value) + "](" + href + ")";
+                            }
+                            default -> throw unsupported();
+                        };
             } else {
                 require(node, "type", "text");
                 value = escaped(value);
@@ -342,31 +344,34 @@ public final class JiraMarkdown {
 
     private static String escaped(String text) {
         return text.replace("\\", "\\\\")
-                .replace("*", "\\*").replace("_", "\\_")
-                .replace("`", "\\`").replace("[", "\\[")
-                .replace("]", "\\]").replace("<", "\\<")
-                .replace("#", "\\#").replace("!", "\\!")
-                .replace("-", "\\-").replace("+", "\\+")
-                .replace(".", "\\.").replace(">", "\\>")
+                .replace("*", "\\*")
+                .replace("_", "\\_")
+                .replace("`", "\\`")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("<", "\\<")
+                .replace("#", "\\#")
+                .replace("!", "\\!")
+                .replace("-", "\\-")
+                .replace("+", "\\+")
+                .replace(".", "\\.")
+                .replace(">", "\\>")
                 .replace("|", "\\|");
     }
 
-    private static void require(JsonObject node, String... names)
-            throws IOException {
+    private static void require(JsonObject node, String... names) throws IOException {
         if (!only(node, names)) {
             throw unsupported();
         }
     }
 
     private static boolean only(JsonObject node, String... names) {
-        return node.keySet().stream().allMatch(
-                name -> java.util.List.of(names).contains(name));
+        return node.keySet().stream().allMatch(name -> java.util.List.of(names).contains(name));
     }
 
     private static String wikiBlocks(Node parent) throws IOException {
         var blocks = new ArrayList<String>();
-        for (var node = parent.getFirstChild(); node != null;
-                node = node.getNext()) {
+        for (var node = parent.getFirstChild(); node != null; node = node.getNext()) {
             if (!(node instanceof LinkReferenceDefinition)) {
                 blocks.add(wikiBlock(node));
             }
@@ -377,8 +382,7 @@ public final class JiraMarkdown {
     private static String wikiBlock(Node node) throws IOException {
         return switch (node) {
             case Paragraph paragraph -> wikiInline(paragraph);
-            case Heading heading -> "h" + heading.getLevel() + ". "
-                    + wikiInline(heading);
+            case Heading heading -> "h" + heading.getLevel() + ". " + wikiInline(heading);
             case BulletList list -> wikiList(list, "");
             case OrderedList list -> wikiList(list, "");
             case TableBlock table -> wikiTable(table);
@@ -388,8 +392,7 @@ public final class JiraMarkdown {
                 }
                 yield "{quote}\n" + wikiBlocks(quote) + "\n{quote}";
             }
-            case FencedCodeBlock code -> wikiCode(
-                    code.getLiteral(), code.getInfo());
+            case FencedCodeBlock code -> wikiCode(code.getLiteral(), code.getInfo());
             case IndentedCodeBlock code -> wikiCode(code.getLiteral(), "");
             case ThematicBreak ignored -> "----";
             default -> throw unsupportedWiki();
@@ -398,14 +401,11 @@ public final class JiraMarkdown {
 
     private static String wikiTable(TableBlock table) throws IOException {
         var rows = new ArrayList<String>();
-        for (var section = table.getFirstChild(); section != null;
-                section = section.getNext()) {
+        for (var section = table.getFirstChild(); section != null; section = section.getNext()) {
             var separator = section instanceof TableHead ? "||" : "|";
-            for (var row = section.getFirstChild(); row != null;
-                    row = row.getNext()) {
+            for (var row = section.getFirstChild(); row != null; row = row.getNext()) {
                 var cells = new ArrayList<String>();
-                for (var cell = row.getFirstChild(); cell != null;
-                        cell = cell.getNext()) {
+                for (var cell = row.getFirstChild(); cell != null; cell = cell.getNext()) {
                     if (!(cell instanceof TableCell)) {
                         throw unsupportedWiki();
                     }
@@ -421,21 +421,18 @@ public final class JiraMarkdown {
         return String.join("\n", rows);
     }
 
-    private static String wikiList(Node list, String prefix)
-            throws IOException {
+    private static String wikiList(Node list, String prefix) throws IOException {
         var marker = prefix + (list instanceof OrderedList ? "#" : "*");
         var lines = new ArrayList<String>();
-        for (var item = list.getFirstChild(); item != null;
-                item = item.getNext()) {
-            if (!(item instanceof ListItem)
-                    || !(item.getFirstChild() instanceof Paragraph)) {
+        for (var item = list.getFirstChild(); item != null; item = item.getNext()) {
+            if (!(item instanceof ListItem) || !(item.getFirstChild() instanceof Paragraph)) {
                 throw unsupportedWiki();
             }
             lines.add(marker + " " + wikiInline(item.getFirstChild()));
-            for (var child = item.getFirstChild().getNext(); child != null;
+            for (var child = item.getFirstChild().getNext();
+                    child != null;
                     child = child.getNext()) {
-                if (!(child instanceof BulletList)
-                        && !(child instanceof OrderedList)) {
+                if (!(child instanceof BulletList) && !(child instanceof OrderedList)) {
                     throw unsupportedWiki();
                 }
                 lines.add(wikiList(child, marker));
@@ -444,75 +441,82 @@ public final class JiraMarkdown {
         return String.join("\n", lines);
     }
 
-    private static String wikiCode(String literal, String info)
-            throws IOException {
+    private static String wikiCode(String literal, String info) throws IOException {
         if ((!info.isBlank() && !info.matches("[A-Za-z0-9_+#.-]+"))
                 || literal.matches("(?is).*\\{code(?::[^}]*)?\\}.*")) {
             throw unsupportedWiki();
         }
-        return "{code" + (info.isBlank() ? "" : ":" + info) + "}\n"
-                + literal.replaceFirst("\\n$", "") + "\n{code}";
+        return "{code"
+                + (info.isBlank() ? "" : ":" + info)
+                + "}\n"
+                + literal.replaceFirst("\\n$", "")
+                + "\n{code}";
     }
 
     private static String wikiInline(Node parent) throws IOException {
         return wikiInline(parent, false);
     }
 
-    private static String wikiInline(Node parent, boolean tableCell)
-            throws IOException {
+    private static String wikiInline(Node parent, boolean tableCell) throws IOException {
         var result = new StringBuilder();
-        for (var node = parent.getFirstChild(); node != null;
-                node = node.getNext()) {
-            result.append(switch (node) {
-                case Text text -> wikiEscaped(text.getLiteral());
-                case StrongEmphasis strong -> "*" + wikiInline(strong, tableCell) + "*";
-                case Emphasis emphasis -> "_" + wikiInline(emphasis, tableCell) + "_";
-                case Code code -> {
-                    if (code.getLiteral().contains("}}")) {
-                        throw unsupportedWiki();
-                    }
-                    yield "{{" + (tableCell
-                            ? code.getLiteral().replace("|", "\\|")
-                            : code.getLiteral()) + "}}";
-                }
-                case Link link -> {
-                    requireWikiDestination(link.getDestination());
-                    if (link.getTitle() != null && !link.getTitle().isEmpty()) {
-                        throw unsupportedWiki();
-                    }
-                    yield "[" + wikiInline(link, tableCell) + "|"
-                            + link.getDestination() + "]";
-                }
-                case Image image -> {
-                    requireWikiDestination(image.getDestination());
-                    if ((image.getTitle() != null && !image.getTitle().isEmpty())
-                            || image.getDestination().contains("!")) {
-                        throw unsupportedWiki();
-                    }
-                    var alt = new StringBuilder();
-                    for (var child = image.getFirstChild(); child != null;
-                            child = child.getNext()) {
-                        if (!(child instanceof Text text)
-                                || text.getLiteral().matches("(?s).*[|!,=\\r\\n].*")) {
-                            throw unsupportedWiki();
+        for (var node = parent.getFirstChild(); node != null; node = node.getNext()) {
+            result.append(
+                    switch (node) {
+                        case Text text -> wikiEscaped(text.getLiteral());
+                        case StrongEmphasis strong -> "*" + wikiInline(strong, tableCell) + "*";
+                        case Emphasis emphasis -> "_" + wikiInline(emphasis, tableCell) + "_";
+                        case Code code -> {
+                            if (code.getLiteral().contains("}}")) {
+                                throw unsupportedWiki();
+                            }
+                            yield "{{"
+                                    + (tableCell
+                                            ? code.getLiteral().replace("|", "\\|")
+                                            : code.getLiteral())
+                                    + "}}";
                         }
-                        alt.append(text.getLiteral());
-                    }
-                    yield "!" + image.getDestination()
-                            + (alt.isEmpty() ? "" : "|alt=" + alt) + "!";
-                }
-                case SoftLineBreak ignored -> "\n";
-                case HardLineBreak ignored -> "\\\\\n";
-                default -> throw unsupportedWiki();
-            });
+                        case Link link -> {
+                            requireWikiDestination(link.getDestination());
+                            if (link.getTitle() != null && !link.getTitle().isEmpty()) {
+                                throw unsupportedWiki();
+                            }
+                            yield "["
+                                    + wikiInline(link, tableCell)
+                                    + "|"
+                                    + link.getDestination()
+                                    + "]";
+                        }
+                        case Image image -> {
+                            requireWikiDestination(image.getDestination());
+                            if ((image.getTitle() != null && !image.getTitle().isEmpty())
+                                    || image.getDestination().contains("!")) {
+                                throw unsupportedWiki();
+                            }
+                            var alt = new StringBuilder();
+                            for (var child = image.getFirstChild();
+                                    child != null;
+                                    child = child.getNext()) {
+                                if (!(child instanceof Text text)
+                                        || text.getLiteral().matches("(?s).*[|!,=\\r\\n].*")) {
+                                    throw unsupportedWiki();
+                                }
+                                alt.append(text.getLiteral());
+                            }
+                            yield "!"
+                                    + image.getDestination()
+                                    + (alt.isEmpty() ? "" : "|alt=" + alt)
+                                    + "!";
+                        }
+                        case SoftLineBreak ignored -> "\n";
+                        case HardLineBreak ignored -> "\\\\\n";
+                        default -> throw unsupportedWiki();
+                    });
         }
         return result.toString();
     }
 
-    private static void requireWikiDestination(String destination)
-            throws IOException {
-        if (destination.isBlank()
-                || destination.matches("(?s).*[\\[\\]|\\s].*")) {
+    private static void requireWikiDestination(String destination) throws IOException {
+        if (destination.isBlank() || destination.matches("(?s).*[\\[\\]|\\s].*")) {
             throw unsupportedWiki();
         }
     }
@@ -534,9 +538,10 @@ public final class JiraMarkdown {
     }
 
     private static IOException unsupportedWiki() {
-        return new IOException("Markdown contains content that cannot be "
-                + "represented safely as Jira wiki; simplify it or use "
-                + "--body-format wiki with native Jira wiki input.");
+        return new IOException(
+                "Markdown contains content that cannot be "
+                        + "represented safely as Jira wiki; simplify it or use "
+                        + "--body-format wiki with native Jira wiki input.");
     }
 
     private static JsonObject attributes(JsonObject node) throws IOException {
@@ -547,21 +552,18 @@ public final class JiraMarkdown {
         return value.getAsJsonObject();
     }
 
-    private static JsonObject object(JsonElement value, String type)
-            throws IOException {
+    private static JsonObject object(JsonElement value, String type) throws IOException {
         if (value == null || !value.isJsonObject()) {
             throw unsupported();
         }
         var node = value.getAsJsonObject();
-        if (!node.has("type") || (type != null
-                && !node.get("type").getAsString().equals(type))) {
+        if (!node.has("type") || (type != null && !node.get("type").getAsString().equals(type))) {
             throw unsupported();
         }
         return node;
     }
 
-    private static JsonArray array(JsonObject node, String key)
-            throws IOException {
+    private static JsonArray array(JsonObject node, String key) throws IOException {
         if (!node.has(key) || !node.get(key).isJsonArray()) {
             throw unsupported();
         }
@@ -569,7 +571,7 @@ public final class JiraMarkdown {
     }
 
     private static IOException unsupported() {
-        return new IOException("Unsupported Jira rich-text node; "
-                + "refusing lossy Markdown conversion.");
+        return new IOException(
+                "Unsupported Jira rich-text node; " + "refusing lossy Markdown conversion.");
     }
 }

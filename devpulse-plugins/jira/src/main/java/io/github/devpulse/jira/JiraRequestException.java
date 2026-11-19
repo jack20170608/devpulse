@@ -8,8 +8,13 @@ public final class JiraRequestException extends IOException {
     private final boolean outcomeUnknown;
     private final boolean retryable;
 
-    public JiraRequestException(String message, String code, Integer httpStatus,
-            boolean outcomeUnknown, boolean retryable, Throwable cause) {
+    public JiraRequestException(
+            String message,
+            String code,
+            Integer httpStatus,
+            boolean outcomeUnknown,
+            boolean retryable,
+            Throwable cause) {
         super(message, cause);
         this.code = code;
         this.httpStatus = httpStatus;
@@ -17,8 +22,19 @@ public final class JiraRequestException extends IOException {
         this.retryable = retryable;
     }
 
-    public String code() { return code; }
-    public Integer httpStatus() { return httpStatus; }
-    public boolean outcomeUnknown() { return outcomeUnknown; }
-    public boolean retryable() { return retryable; }
+    public String code() {
+        return code;
+    }
+
+    public Integer httpStatus() {
+        return httpStatus;
+    }
+
+    public boolean outcomeUnknown() {
+        return outcomeUnknown;
+    }
+
+    public boolean retryable() {
+        return retryable;
+    }
 }

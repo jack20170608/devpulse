@@ -17,14 +17,23 @@ final class ReactorWorkspace implements MavenWorkspaceReader {
 
     ReactorWorkspace(List<MavenProject> projects) {
         for (var project : projects) {
-            this.projects.put(project.getGroupId() + ":" + project.getArtifactId()
-                    + ":" + project.getVersion(), project);
+            this.projects.put(
+                    project.getGroupId()
+                            + ":"
+                            + project.getArtifactId()
+                            + ":"
+                            + project.getVersion(),
+                    project);
         }
     }
 
     private MavenProject project(Artifact artifact) {
-        return projects.get(artifact.getGroupId() + ":" + artifact.getArtifactId()
-                + ":" + artifact.getVersion());
+        return projects.get(
+                artifact.getGroupId()
+                        + ":"
+                        + artifact.getArtifactId()
+                        + ":"
+                        + artifact.getVersion());
     }
 
     @Override
@@ -53,7 +62,8 @@ final class ReactorWorkspace implements MavenWorkspaceReader {
             var converted = RepositoryUtils.toArtifact(candidate);
             if (artifact.getExtension().equals(converted.getExtension())
                     && artifact.getClassifier().equals(converted.getClassifier())
-                    && converted.getFile() != null && converted.getFile().isFile()) {
+                    && converted.getFile() != null
+                    && converted.getFile().isFile()) {
                 return converted.getFile();
             }
         }
@@ -63,8 +73,12 @@ final class ReactorWorkspace implements MavenWorkspaceReader {
     @Override
     public List<String> findVersions(Artifact artifact) {
         return projects.values().stream()
-                .filter(p -> p.getGroupId().equals(artifact.getGroupId())
-                        && p.getArtifactId().equals(artifact.getArtifactId()))
-                .map(MavenProject::getVersion).distinct().sorted().toList();
+                .filter(p ->
+                        p.getGroupId().equals(artifact.getGroupId())
+                                && p.getArtifactId().equals(artifact.getArtifactId()))
+                .map(MavenProject::getVersion)
+                .distinct()
+                .sorted()
+                .toList();
     }
 }

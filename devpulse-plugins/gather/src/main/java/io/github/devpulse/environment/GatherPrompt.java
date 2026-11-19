@@ -1,24 +1,32 @@
 package io.github.devpulse.environment;
 
 import io.github.devpulse.core.environment.EnvironmentGatherer;
-
 import java.util.stream.Collectors;
 
 public final class GatherPrompt {
-    public enum Language { zh, en, both }
+    public enum Language {
+        zh,
+        en,
+        both
+    }
 
     private GatherPrompt() {}
 
-    public static String render(EnvironmentGatherer.Facts facts,
-                                Language language) {
-        var files = facts.projectFiles().isEmpty()
-                ? "(none)" : String.join(", ", facts.projectFiles());
-        var tools = facts.tools().stream()
-                .map(tool -> "- " + tool.name() + ": "
-                        + (tool.location().isEmpty()
-                        ? "(not found)" : tool.location()))
-                .collect(Collectors.joining("\n"));
-        var context = """
+    public static String render(EnvironmentGatherer.Facts facts, Language language) {
+        var files =
+                facts.projectFiles().isEmpty() ? "(none)" : String.join(", ", facts.projectFiles());
+        var tools =
+                facts.tools().stream()
+                        .map(tool ->
+                                "- "
+                                        + tool.name()
+                                        + ": "
+                                        + (tool.location().isEmpty()
+                                                ? "(not found)"
+                                                : tool.location()))
+                        .collect(Collectors.joining("\n"));
+        var context =
+                """
                 ```text
                 Project directory: %s
                 OS: %s
@@ -29,10 +37,17 @@ public final class GatherPrompt {
                 ```
 
                 %s
-                """.formatted(facts.directory(), facts.os(),
-                facts.architecture(), facts.javaVersion(),
-                facts.bash().executable(), files, tools);
-        var example = """
+                """
+                        .formatted(
+                                facts.directory(),
+                                facts.os(),
+                                facts.architecture(),
+                                facts.javaVersion(),
+                                facts.bash().executable(),
+                                files,
+                                tools);
+        var example =
+                """
                 ```yaml
                 version: 1
                 parallelism: 4
@@ -48,7 +63,8 @@ public final class GatherPrompt {
                     tasks: [check, build]
                 ```
                 """;
-        var chinese = """
+        var chinese =
+                """
                 ## 中文
 
                 根据以下本地事实，为 devpulse 生成 `.devpulse.yaml`。
@@ -85,8 +101,10 @@ public final class GatherPrompt {
                 ### 格式示例（占位命令，并非已发现的项目任务）
 
                 %s
-                """.formatted(context, example);
-        var english = """
+                """
+                        .formatted(context, example);
+        var english =
+                """
                 ## English
 
                 Generate `.devpulse.yaml` for devpulse using the local facts
@@ -131,16 +149,20 @@ public final class GatherPrompt {
                 ### Format example (placeholders, not discovered project tasks)
 
                 %s
-                """.formatted(context, example);
+                """
+                        .formatted(context, example);
         return switch (language) {
             case zh -> "# devpulse 配置生成\n\n" + chinese;
             case en -> "# devpulse Configuration generation\n\n" + english;
-            case both -> """
+            case both ->
+                    """
                     # devpulse 配置生成 / Configuration generation
 
                     [中文](#中文) | [English](#english)
 
-                    """ + chinese + english;
+                    """
+                            + chinese
+                            + english;
         };
     }
 }

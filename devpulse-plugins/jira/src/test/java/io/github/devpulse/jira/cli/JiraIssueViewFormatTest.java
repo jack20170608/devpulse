@@ -17,9 +17,19 @@ class JiraIssueViewFormatTest {
     void defaultsToMarkdownWithAllMetadataFields() throws Exception {
         var view = parse();
 
-        assertThat(view.markdownFields()).containsExactly(
-                "summary", "key", "issuetype", "status", "priority",
-                "assignee", "reporter", "created", "updated", "epic", "story-point");
+        assertThat(view.markdownFields())
+                .containsExactly(
+                        "summary",
+                        "key",
+                        "issuetype",
+                        "status",
+                        "priority",
+                        "assignee",
+                        "reporter",
+                        "created",
+                        "updated",
+                        "epic",
+                        "story-point");
         assertThat(view.format).isEqualTo(JiraIssueOperations.View.OutputFormat.markdown);
     }
 
@@ -42,9 +52,13 @@ class JiraIssueViewFormatTest {
 
     static Stream<List<String>> legacyOptions() {
         return Stream.of(
-                List.of("--format", "text"), List.of("--json"), List.of("--raw"),
-                List.of("--plain"), List.of("--description-format", "raw"),
-                List.of("--comments", "5"), List.of("--machine"));
+                List.of("--format", "text"),
+                List.of("--json"),
+                List.of("--raw"),
+                List.of("--plain"),
+                List.of("--description-format", "raw"),
+                List.of("--comments", "5"),
+                List.of("--machine"));
     }
 
     @ParameterizedTest
@@ -54,14 +68,18 @@ class JiraIssueViewFormatTest {
         flags.addAll(options);
         var view = parse(flags.toArray(String[]::new));
 
-        assertThatThrownBy(view::markdownFields).isInstanceOf(IOException.class)
+        assertThatThrownBy(view::markdownFields)
+                .isInstanceOf(IOException.class)
                 .hasMessageContaining("cannot be combined");
     }
 
     static Stream<List<String>> conflictingOptions() {
         return Stream.of(
-                List.of("--json"), List.of("--raw"), List.of("--plain"),
-                List.of("--description-format", "raw"), List.of("--comments", "5"));
+                List.of("--json"),
+                List.of("--raw"),
+                List.of("--plain"),
+                List.of("--description-format", "raw"),
+                List.of("--comments", "5"));
     }
 
     @Test
@@ -85,6 +103,7 @@ class JiraIssueViewFormatTest {
         var arguments = new ArrayList<>(List.of("issue", "view", "DEMO-1"));
         arguments.addAll(List.of(options));
         var parsed = cli.parseArgs(arguments.toArray(String[]::new));
-        return (JiraIssueOperations.View) parsed.subcommand().subcommand().commandSpec().userObject();
+        return (JiraIssueOperations.View)
+                parsed.subcommand().subcommand().commandSpec().userObject();
     }
 }

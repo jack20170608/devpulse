@@ -17,41 +17,58 @@ import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-@Command(name = "move", aliases = "transition",
+@Command(
+        name = "move",
+        aliases = "transition",
         mixinStandardHelpOptions = true,
-        description = "Transition an issue by transition ID, name, or target "
-                + "status; this does not move issues between projects.")
+        description =
+                "Transition an issue by transition ID, name, or target "
+                        + "status; this does not move issues between projects.")
 public final class JiraIssueMoveCommand extends JiraCommand.Action {
-    @Parameters(index = "0", arity = "0..1", paramLabel = "KEY",
+    @Parameters(
+            index = "0",
+            arity = "0..1",
+            paramLabel = "KEY",
             description = "Issue key or ID; prompted when omitted.")
     String key;
-    @Parameters(index = "1", arity = "0..1", paramLabel = "TARGET",
-            description = "Available transition ID, transition name, "
-                    + "or destination status name.")
+
+    @Parameters(
+            index = "1",
+            arity = "0..1",
+            paramLabel = "TARGET",
+            description =
+                    "Available transition ID, transition name, " + "or destination status name.")
     String target;
-    @Option(names = "--comment", paramLabel = "TEXT",
+
+    @Option(
+            names = "--comment",
+            paramLabel = "TEXT",
             description = "Add a comment in the same transition request.")
     String comment;
-    @Option(names = {"-R", "--resolution"}, paramLabel = "NAME",
+
+    @Option(
+            names = {"-R", "--resolution"},
+            paramLabel = "NAME",
             description = "Set a resolution allowed by the transition.")
     String resolution;
-    @Option(names = {"-a", "--assignee"}, paramLabel = "USER",
-            description = "Cloud accountId or DC username; "
-                    + "me=current user, x=unassigned.")
+
+    @Option(
+            names = {"-a", "--assignee"},
+            paramLabel = "USER",
+            description = "Cloud accountId or DC username; " + "me=current user, x=unassigned.")
     String assignee;
-    @Option(names = "--no-input",
-            description = "Never prompt; KEY and an unambiguous TARGET "
-                    + "are required.")
+
+    @Option(
+            names = "--no-input",
+            description = "Never prompt; KEY and an unambiguous TARGET " + "are required.")
     boolean noInput;
-    @Mixin
-    JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
+
+    @Mixin JiraCommand.BodyFormat bodyFormat = new JiraCommand.BodyFormat();
 
     @Override
     protected void execute() throws IOException {
-        if ((key == null || target == null)
-                && (noInput || System.console() == null)) {
-            throw wrong("Supply KEY and TARGET; interactive transitions "
-                    + "require a terminal.");
+        if ((key == null || target == null) && (noInput || System.console() == null)) {
+            throw wrong("Supply KEY and TARGET; interactive transitions " + "require a terminal.");
         }
         if (key == null) {
             key = prompt("Issue key");
@@ -69,8 +86,9 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
         if (assignee != null) {
             nonblank(assignee, "--assignee");
             if (assignee.equals("default")) {
-                throw wrong("Use an explicit assignee, me, or x; "
-                        + "default assignment is not supported during transitions.");
+                throw wrong(
+                        "Use an explicit assignee, me, or x; "
+                                + "default assignment is not supported during transitions.");
             }
         }
 
@@ -87,12 +105,12 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
             available.add(transition);
         }
         if (available.isEmpty()) {
-            throw wrong("No transitions are currently available; "
-                    + "check issue status and Jira permissions.");
+            throw wrong(
+                    "No transitions are currently available; "
+                            + "check issue status and Jira permissions.");
         }
         var selected = select(available);
-        var metadata = selected.has("fields")
-                ? object(selected.get("fields")) : new JsonObject();
+        var metadata = selected.has("fields") ? object(selected.get("fields")) : new JsonObject();
         var fields = new JsonObject();
         var updates = new JsonObject();
         if (resolution != null) {
@@ -105,8 +123,7 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
                 fields.add("assignee", JsonNull.INSTANCE);
             } else {
                 var identifier = jira.cloud() ? "accountId" : "name";
-                var user = assignee.equals("me")
-                        ? string(jira.myself(), identifier) : assignee;
+                var user = assignee.equals("me") ? string(jira.myself(), identifier) : assignee;
                 var value = new JsonObject();
                 value.addProperty(identifier, nonblank(user, "--assignee"));
                 fields.add("assignee", value);
@@ -136,29 +153,33 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
         if (target == null) {
             return choose(available);
         }
-        var candidates = available.stream()
-                .filter(value -> value.get("id").getAsString().equals(target))
-                .toList();
+        var candidates =
+                available.stream()
+                        .filter(value -> value.get("id").getAsString().equals(target))
+                        .toList();
         if (candidates.isEmpty()) {
-            candidates = available.stream()
-                    .filter(value -> matches(value, "name", target)).toList();
+            candidates =
+                    available.stream().filter(value -> matches(value, "name", target)).toList();
         }
         if (candidates.isEmpty()) {
-            candidates = available.stream().filter(value ->
-                    value.has("to") && value.get("to").isJsonObject()
-                            && matches(value.getAsJsonObject("to"),
-                                    "name", target)).toList();
+            candidates =
+                    available.stream()
+                            .filter(value ->
+                                    value.has("to")
+                                            && value.get("to").isJsonObject()
+                                            && matches(value.getAsJsonObject("to"), "name", target))
+                            .toList();
         }
         if (candidates.isEmpty()) {
-            throw wrong("No available transition matches TARGET; "
-                    + "run jira transitions KEY to find an available ID.");
+            throw wrong(
+                    "No available transition matches TARGET; "
+                            + "run jira transitions KEY to find an available ID.");
         }
         if (candidates.size() == 1) {
             return candidates.getFirst();
         }
         if (noInput || System.console() == null) {
-            throw wrong("Multiple transitions match TARGET; "
-                    + "use an explicit transition ID.");
+            throw wrong("Multiple transitions match TARGET; " + "use an explicit transition ID.");
         }
         return choose(candidates);
     }
@@ -167,11 +188,18 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
         var err = spec.commandLine().getErr();
         for (var index = 0; index < candidates.size(); index++) {
             var value = candidates.get(index);
-            var destination = value.has("to") && value.get("to").isJsonObject()
-                    ? string(value.getAsJsonObject("to"), "name") : "";
-            err.println((index + 1) + ". " + safe(string(value, "name"))
-                    + " (ID " + safe(string(value, "id")) + ")"
-                    + (destination.isEmpty() ? "" : " -> " + safe(destination)));
+            var destination =
+                    value.has("to") && value.get("to").isJsonObject()
+                            ? string(value.getAsJsonObject("to"), "name")
+                            : "";
+            err.println(
+                    (index + 1)
+                            + ". "
+                            + safe(string(value, "name"))
+                            + " (ID "
+                            + safe(string(value, "id"))
+                            + ")"
+                            + (destination.isEmpty() ? "" : " -> " + safe(destination)));
         }
         while (true) {
             var answer = prompt("Select transition (1-" + candidates.size() + ")");
@@ -196,14 +224,13 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
             var candidates = new ArrayList<JsonObject>();
             for (var element : allowed.getAsJsonArray()) {
                 var value = object(element);
-                if (matches(value, "name", resolution)
-                        || matches(value, "id", resolution)) {
+                if (matches(value, "name", resolution) || matches(value, "id", resolution)) {
                     candidates.add(value);
                 }
             }
             if (candidates.size() != 1) {
-                throw wrong("Resolution must uniquely match a value "
-                        + "allowed by this transition.");
+                throw wrong(
+                        "Resolution must uniquely match a value " + "allowed by this transition.");
             }
             var selected = candidates.getFirst();
             var result = new JsonObject();
@@ -216,17 +243,17 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
         return result;
     }
 
-    private static JsonObject requireOperation(JsonObject metadata,
-            String field, String operation) throws IOException {
+    private static JsonObject requireOperation(JsonObject metadata, String field, String operation)
+            throws IOException {
         if (!metadata.has(field) || !metadata.get(field).isJsonObject()) {
             throw wrong("This transition does not expose field " + field + ".");
         }
         var value = metadata.getAsJsonObject(field);
         var allowed = value.get("operations");
-        if (allowed == null || !allowed.isJsonArray()
+        if (allowed == null
+                || !allowed.isJsonArray()
                 || !allowed.getAsJsonArray().contains(new JsonPrimitive(operation))) {
-            throw wrong("This transition does not allow " + operation
-                    + " on field " + field + ".");
+            throw wrong("This transition does not allow " + operation + " on field " + field + ".");
         }
         return value;
     }
@@ -245,9 +272,9 @@ public final class JiraIssueMoveCommand extends JiraCommand.Action {
         return answer.strip();
     }
 
-    private static boolean matches(JsonObject value, String field,
-            String query) {
-        return value.has(field) && !value.get(field).isJsonNull()
+    private static boolean matches(JsonObject value, String field, String query) {
+        return value.has(field)
+                && !value.get(field).isJsonNull()
                 && value.get(field).getAsString().equalsIgnoreCase(query);
     }
 

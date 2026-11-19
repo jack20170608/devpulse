@@ -1,0 +1,135 @@
+[中文|#中文] \| [English|#english]
+
+h2. 中文
+
+h3. 问题说明
+
+*Issue description disappears after saving*
+
+Saving an issue clears the description when {{body}} is null.
+
+{quote}
+Reproduce only in the test project.
+{quote}
+
+h3. 影响范围
+
+* Issue editing
+** Existing descriptions are lost
+** New issues are unaffected
+* Support
+** Manual recovery is required
+
+h3. 复现步骤
+
+h4. SIT
+
+# Open an existing issue
+# Change the title and save
+
+h4. UAT
+
+# Open the *issue*
+!./before.png|alt=Before saving!
+# Save and verify the empty description
+!./after.png|alt=After saving!
+# Record the issue key
+
+h3. 验证结果
+
+||Environment||Expected||Actual||Status||
+|SIT|Description retained|Description empty|FAIL|
+|UAT|Description retained|Description empty|FAIL|
+
+h3. PVT
+
+{code:bash}
+issue="DEV-123"
+printf '%s\n' "$issue"
+{code}
+
+h3. 根因分析
+
+The update overwrites the existing value without a null check.
+
+{code:java}
+if (body == null) {
+    issue.setDescription("");
+}
+{code}
+
+----
+
+h3. 参考资料
+
+[Runbook|https://example.com/runbook]
+
+Request accepted\\
+Description cleared
+
+h2. English
+
+h3. Problem
+
+*Issue description disappears after saving*
+
+Saving an issue clears the description when {{body}} is null.
+
+{quote}
+Reproduce only in the test project.
+{quote}
+
+h3. Impact
+
+* Issue editing
+** Existing descriptions are lost
+** New issues are unaffected
+* Support
+** Manual recovery is required
+
+h3. Reproduction
+
+h4. SIT
+
+# Open an existing issue
+# Change the title and save
+
+h4. UAT
+
+# Open the *issue*
+!./before.png|alt=Before saving!
+# Save and verify the empty description
+!./after.png|alt=After saving!
+# Record the issue key
+
+h3. Verification
+
+||Environment||Expected||Actual||Status||
+|SIT|Description retained|Description empty|FAIL|
+|UAT|Description retained|Description empty|FAIL|
+
+h3. PVT
+
+{code:bash}
+issue="DEV-123"
+printf '%s\n' "$issue"
+{code}
+
+h3. Root cause
+
+The update overwrites the existing value without a null check.
+
+{code:java}
+if (body == null) {
+    issue.setDescription("");
+}
+{code}
+
+----
+
+h3. References
+
+[Runbook|https://example.com/runbook]
+
+Request accepted\\
+Description cleared

@@ -14,8 +14,10 @@ public final class ReportWriter {
         out.println("Depmap - Maven " + report.mavenVersion() + " dependency inventory");
         for (var module : report.modules()) {
             out.println();
-            out.println("Module: " + text(module.artifact().toString())
-                    + (module.complete() ? "" : " [INCOMPLETE]"));
+            out.println(
+                    "Module: "
+                            + text(module.artifact().toString())
+                            + (module.complete() ? "" : " [INCOMPLETE]"));
             out.println("POM: " + text(module.pom()));
             out.println("Project dependencies:");
             printTree(module.projectDependencies(), out, err);
@@ -24,16 +26,22 @@ public final class ReportWriter {
                 out.println("  (none)");
             }
             for (var plugin : module.plugins()) {
-                out.println("  Plugin: " + text(plugin.artifact().toString())
-                        + " [" + String.join(", ", plugin.kinds()) + "]");
+                out.println(
+                        "  Plugin: "
+                                + text(plugin.artifact().toString())
+                                + " ["
+                                + String.join(", ", plugin.kinds())
+                                + "]");
                 printTree(plugin.dependencies(), out, err);
             }
             module.issues().forEach(issue -> printIssue(issue, err));
         }
         report.issues().forEach(issue -> printIssue(issue, err));
         out.println();
-        out.println(report.complete() ? "Inventory complete."
-                : "Inventory incomplete; see errors. Missing trees are not empty dependencies.");
+        out.println(
+                report.complete()
+                        ? "Inventory complete."
+                        : "Inventory incomplete; see errors. Missing trees are not empty dependencies.");
         out.flush();
         err.flush();
     }
@@ -50,23 +58,33 @@ public final class ReportWriter {
         tree.issues().forEach(issue -> printIssue(issue, err));
     }
 
-    private static void printNode(DependencyReport.Node node, String prefix,
-                                  String branch, PrintWriter out) {
-        out.println(prefix + branch + text(node.artifact().toString())
-                + (node.scope().isEmpty() ? "" : ":" + text(node.scope()))
-                + (node.optional() ? " (optional)" : ""));
+    private static void printNode(
+            DependencyReport.Node node, String prefix, String branch, PrintWriter out) {
+        out.println(
+                prefix
+                        + branch
+                        + text(node.artifact().toString())
+                        + (node.scope().isEmpty() ? "" : ":" + text(node.scope()))
+                        + (node.optional() ? " (optional)" : ""));
         var children = node.dependencies();
         for (int index = 0; index < children.size(); index++) {
             var last = index == children.size() - 1;
-            printNode(children.get(index),
+            printNode(
+                    children.get(index),
                     prefix + (branch.isEmpty() ? "" : branch.startsWith("\\") ? "   " : "|  "),
-                    last ? "\\- " : "+- ", out);
+                    last ? "\\- " : "+- ",
+                    out);
         }
     }
 
     private static void printIssue(DependencyReport.Issue issue, PrintWriter err) {
-        err.println("depmap: [" + text(issue.stage()) + "] " + text(issue.target())
-                + ": " + text(issue.message()));
+        err.println(
+                "depmap: ["
+                        + text(issue.stage())
+                        + "] "
+                        + text(issue.target())
+                        + ": "
+                        + text(issue.message()));
     }
 
     public static void writeJson(DependencyReport report, Path output) throws IOException {
@@ -74,7 +92,10 @@ public final class ReportWriter {
         var temporary = Files.createTempFile(absolute.getParent(), ".devpulse-depmap-", ".json");
         try {
             try (var writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
-                new GsonBuilder().setPrettyPrinting().serializeNulls().create()
+                new GsonBuilder()
+                        .setPrettyPrinting()
+                        .serializeNulls()
+                        .create()
                         .toJson(report, writer);
                 writer.write(System.lineSeparator());
             }

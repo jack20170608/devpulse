@@ -23,8 +23,8 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Set;
 
-public record JiraConfiguration(String url, String mode, String email,
-        int apiVersion, String project, String profile) {
+public record JiraConfiguration(
+        String url, String mode, String email, int apiVersion, String project, String profile) {
     public static final String FILE_NAME = "local_jira_config.conf";
     public static final String PROFILE_NAME = "[A-Za-z0-9][A-Za-z0-9_-]{0,63}";
 
@@ -50,49 +50,54 @@ public record JiraConfiguration(String url, String mode, String email,
 
     public static JiraConfiguration load(Path file) throws IOException {
         if (!Files.isRegularFile(file)) {
-            throw new IOException("Jira configuration not found: " + file
-                    + ". Run jira config init (or jira config init -g), "
-                    + "or specify --config FILE.");
+            throw new IOException(
+                    "Jira configuration not found: "
+                            + file
+                            + ". Run jira config init (or jira config init -g), "
+                            + "or specify --config FILE.");
         }
         try {
-            var config = ConfigFactory.parseString(
-                    Files.readString(file, StandardCharsets.UTF_8),
-                    ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF)
-                            .setIncluder(new NoIncludes()))
-                    .resolve(ConfigResolveOptions.noSystem());
-            if (!Set.of("url", "mode", "email", "apiVersion", "project",
-                    "profile")
+            var config =
+                    ConfigFactory.parseString(
+                                    Files.readString(file, StandardCharsets.UTF_8),
+                                    ConfigParseOptions.defaults()
+                                            .setSyntax(ConfigSyntax.CONF)
+                                            .setIncluder(new NoIncludes()))
+                            .resolve(ConfigResolveOptions.noSystem());
+            if (!Set.of("url", "mode", "email", "apiVersion", "project", "profile")
                     .containsAll(config.root().keySet())) {
-                throw new IOException("Jira configuration supports only "
-                        + "url, mode, email, apiVersion, project, and profile; "
-                        + "use JIRA_API_TOKEN "
-                        + "for authentication.");
+                throw new IOException(
+                        "Jira configuration supports only "
+                                + "url, mode, email, apiVersion, project, and profile; "
+                                + "use JIRA_API_TOKEN "
+                                + "for authentication.");
             }
             var mode = required(config, "mode");
             if (!mode.equals("cloud") && !mode.equals("dc")) {
-                throw new IOException("Jira configuration mode "
-                        + "must be cloud or dc.");
+                throw new IOException("Jira configuration mode " + "must be cloud or dc.");
             }
             var url = required(config, "url");
             validateUrl(url);
-            var profile = config.hasPathOrNull("profile")
-                    ? required(config, "profile") : null;
+            var profile = config.hasPathOrNull("profile") ? required(config, "profile") : null;
             if (profile != null && !profile.matches(PROFILE_NAME)) {
-                throw new IOException("Jira configuration profile must use "
-                        + "letters, digits, '-' or '_'.");
+                throw new IOException(
+                        "Jira configuration profile must use " + "letters, digits, '-' or '_'.");
             }
-            return new JiraConfiguration(url, mode,
+            return new JiraConfiguration(
+                    url,
+                    mode,
                     mode.equals("cloud") || config.hasPathOrNull("email")
-                            ? required(config, "email") : null,
+                            ? required(config, "email")
+                            : null,
                     apiVersion(config, mode),
-                    config.hasPathOrNull("project")
-                            ? required(config, "project") : null,
+                    config.hasPathOrNull("project") ? required(config, "project") : null,
                     profile);
         } catch (ConfigException exception) {
             // Parser messages may echo file contents or substituted values.
-            throw new IOException("Invalid Jira connection configuration; "
-                    + "check HOCON syntax and "
-                    + "url/mode/email/apiVersion/project/profile fields.");
+            throw new IOException(
+                    "Invalid Jira connection configuration; "
+                            + "check HOCON syntax and "
+                            + "url/mode/email/apiVersion/project/profile fields.");
         }
     }
 
@@ -106,85 +111,81 @@ public record JiraConfiguration(String url, String mode, String email,
         } catch (IllegalArgumentException exception) {
             throw new IOException("Invalid Jira configuration URL.");
         }
-        if (base.getHost() == null || base.getUserInfo() != null
-                || base.getRawQuery() != null || base.getRawFragment() != null
+        if (base.getHost() == null
+                || base.getUserInfo() != null
+                || base.getRawQuery() != null
+                || base.getRawFragment() != null
                 || !("https".equalsIgnoreCase(base.getScheme())
-                || ("http".equalsIgnoreCase(base.getScheme())
-                && ("localhost".equalsIgnoreCase(base.getHost())
-                || "127.0.0.1".equals(base.getHost()))))) {
-            throw new IOException("Jira URL must use HTTPS "
-                    + "(HTTP is allowed only for loopback testing).");
+                        || ("http".equalsIgnoreCase(base.getScheme())
+                                && ("localhost".equalsIgnoreCase(base.getHost())
+                                        || "127.0.0.1".equals(base.getHost()))))) {
+            throw new IOException(
+                    "Jira URL must use HTTPS " + "(HTTP is allowed only for loopback testing).");
         }
         return base;
     }
 
-    private static int apiVersion(Config config, String mode)
-            throws IOException {
+    private static int apiVersion(Config config, String mode) throws IOException {
         if (!config.hasPathOrNull("apiVersion")) {
             return mode.equals("cloud") ? 3 : 2;
         }
         if (!config.hasPath("apiVersion")
-                || config.getValue("apiVersion").valueType()
-                != ConfigValueType.NUMBER) {
-            throw new IOException("Jira configuration apiVersion "
-                    + "must be the number 2 or 3.");
+                || config.getValue("apiVersion").valueType() != ConfigValueType.NUMBER) {
+            throw new IOException("Jira configuration apiVersion " + "must be the number 2 or 3.");
         }
         var value = config.getNumber("apiVersion").doubleValue();
         if (value != 2 && value != 3) {
-            throw new IOException("Jira configuration apiVersion "
-                    + "must be the number 2 or 3.");
+            throw new IOException("Jira configuration apiVersion " + "must be the number 2 or 3.");
         }
         return (int) value;
     }
 
-    private static String required(Config config, String field)
-            throws IOException {
+    private static String required(Config config, String field) throws IOException {
         if (!config.hasPath(field)
-                || config.getValue(field).valueType()
-                != ConfigValueType.STRING) {
+                || config.getValue(field).valueType() != ConfigValueType.STRING) {
             throw invalid(field);
         }
         var value = config.getString(field);
-        if (value.isBlank()
-                || value.codePoints().anyMatch(Character::isISOControl)) {
+        if (value.isBlank() || value.codePoints().anyMatch(Character::isISOControl)) {
             throw invalid(field);
         }
         return value;
     }
 
     private static IOException invalid(String field) {
-        return new IOException("Jira configuration field " + field
-                + " must be a nonblank string without control characters.");
+        return new IOException(
+                "Jira configuration field "
+                        + field
+                        + " must be a nonblank string without control characters.");
     }
 
-    private static final class NoIncludes implements ConfigIncluder,
-            ConfigIncluderFile, ConfigIncluderURL, ConfigIncluderClasspath {
+    private static final class NoIncludes
+            implements ConfigIncluder,
+                    ConfigIncluderFile,
+                    ConfigIncluderURL,
+                    ConfigIncluderClasspath {
         @Override
         public ConfigIncluder withFallback(ConfigIncluder fallback) {
             return this;
         }
 
         @Override
-        public ConfigObject include(ConfigIncludeContext context,
-                String name) {
+        public ConfigObject include(ConfigIncludeContext context, String name) {
             throw denied();
         }
 
         @Override
-        public ConfigObject includeFile(ConfigIncludeContext context,
-                File file) {
+        public ConfigObject includeFile(ConfigIncludeContext context, File file) {
             throw denied();
         }
 
         @Override
-        public ConfigObject includeURL(ConfigIncludeContext context,
-                URL url) {
+        public ConfigObject includeURL(ConfigIncludeContext context, URL url) {
             throw denied();
         }
 
         @Override
-        public ConfigObject includeResources(ConfigIncludeContext context,
-                String resource) {
+        public ConfigObject includeResources(ConfigIncludeContext context, String resource) {
             throw denied();
         }
 

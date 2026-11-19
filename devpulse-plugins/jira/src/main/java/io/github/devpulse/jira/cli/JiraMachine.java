@@ -19,12 +19,10 @@ final class JiraMachine {
                 return new CommandLine.RunLast().execute(parsed);
             }
             var selected = parsed;
-            boolean help = parsed.isUsageHelpRequested()
-                    || parsed.isVersionHelpRequested();
+            boolean help = parsed.isUsageHelpRequested() || parsed.isVersionHelpRequested();
             while (selected.hasSubcommand()) {
                 selected = selected.subcommand();
-                help |= selected.isUsageHelpRequested()
-                        || selected.isVersionHelpRequested();
+                help |= selected.isUsageHelpRequested() || selected.isVersionHelpRequested();
             }
             var command = selected.commandSpec().commandLine();
             enable(command, "--no-input");
@@ -36,16 +34,15 @@ final class JiraMachine {
             var diagnostics = new StringWriter();
             cli.setOut(new PrintWriter(output, true));
             cli.setErr(new PrintWriter(diagnostics, true));
-            cli.setColorScheme(CommandLine.Help.defaultColorScheme(
-                    CommandLine.Help.Ansi.OFF));
+            cli.setColorScheme(CommandLine.Help.defaultColorScheme(CommandLine.Help.Ansi.OFF));
             try {
                 int status = new CommandLine.RunLast().execute(parsed);
                 if (status != 0) {
                     return failure(out, new IllegalStateException());
                 }
                 var response = envelope(true);
-                var action = command.getCommand() instanceof JiraCommand.Action value
-                        ? value : null;
+                var action =
+                        command.getCommand() instanceof JiraCommand.Action value ? value : null;
                 var data = action == null ? null : action.machineData;
                 var raw = command.getCommandSpec().findOption("--json");
                 if (data == null && raw != null && !help) {
@@ -65,8 +62,8 @@ final class JiraMachine {
                 out.println(response);
                 return 0;
             } catch (CommandLine.ExecutionException exception) {
-                return failure(out, exception.getCause() instanceof Exception cause
-                        ? cause : exception);
+                return failure(
+                        out, exception.getCause() instanceof Exception cause ? cause : exception);
             } finally {
                 cli.setOut(out);
                 cli.setErr(err);
@@ -81,9 +78,14 @@ final class JiraMachine {
         });
         cli.setParameterExceptionHandler((exception, arguments) -> {
             if (root.machine || requested(arguments)) {
-                return error(cli.getOut(), "INVALID_ARGUMENT", 2,
+                return error(
+                        cli.getOut(),
+                        "INVALID_ARGUMENT",
+                        2,
                         "Invalid command arguments; consult command --help.",
-                        null, false, false);
+                        null,
+                        false,
+                        false);
             }
             cli.getErr().println(exception.getMessage());
             exception.getCommandLine().usage(cli.getErr());
@@ -113,24 +115,45 @@ final class JiraMachine {
 
     static int failure(PrintWriter out, Exception exception) {
         if (exception instanceof JiraRequestException request) {
-            int status = request.outcomeUnknown() ? 5
-                    : request.httpStatus() == null ? 4 : 3;
-            return error(out, request.code(), status, request.getMessage(),
-                    request.httpStatus(), request.outcomeUnknown(), request.retryable());
+            int status = request.outcomeUnknown() ? 5 : request.httpStatus() == null ? 4 : 3;
+            return error(
+                    out,
+                    request.code(),
+                    status,
+                    request.getMessage(),
+                    request.httpStatus(),
+                    request.outcomeUnknown(),
+                    request.retryable());
         }
         if (exception instanceof IOException
                 || exception instanceof com.typesafe.config.ConfigException) {
-            return error(out, "COMMAND_FAILED", 1,
+            return error(
+                    out,
+                    "COMMAND_FAILED",
+                    1,
                     "Command failed locally; check configuration and inputs.",
-                    null, false, false);
+                    null,
+                    false,
+                    false);
         }
-        return error(out, "INTERNAL_ERROR", 1,
+        return error(
+                out,
+                "INTERNAL_ERROR",
+                1,
                 "Unexpected command failure; do not retry writes automatically.",
-                null, true, false);
+                null,
+                true,
+                false);
     }
 
-    private static int error(PrintWriter out, String code, int exitCode,
-            String message, Integer httpStatus, boolean unknown, boolean retryable) {
+    private static int error(
+            PrintWriter out,
+            String code,
+            int exitCode,
+            String message,
+            Integer httpStatus,
+            boolean unknown,
+            boolean retryable) {
         var response = envelope(false);
         var error = new JsonObject();
         error.addProperty("code", code);

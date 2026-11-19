@@ -4,7 +4,6 @@ import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagRun;
 import io.github.devpulse.core.dag.DagWorkflow;
 import io.github.devpulse.core.dag.TaskKey;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Objects;
@@ -74,8 +73,11 @@ public final class WorkflowRun {
         }
         try {
             if (event.daemon() != null) {
-                history.daemonChecked(event.task().id(), event.daemon().health(),
-                        message(event.daemon().error()), event.daemon().checkedAt());
+                history.daemonChecked(
+                        event.task().id(),
+                        event.daemon().health(),
+                        message(event.daemon().error()),
+                        event.daemon().checkedAt());
             } else if (event.result().state() == DagRun.NodeState.RUNNING) {
                 history.started(event.task().id());
             } else if (event.result().state().isTerminal()) {
@@ -87,19 +89,26 @@ public final class WorkflowRun {
     }
 
     private void persist(TaskKey<?> key, DagRun.NodeResult result) throws IOException {
-        var state = switch (result.state()) {
-            case SUCCESS -> workflow.isDaemon(key)
-                    ? RunHistory.State.READY : RunHistory.State.SUCCESS;
-            case FAILED, TIMED_OUT -> RunHistory.State.FAILED;
-            case SKIPPED -> RunHistory.State.SKIPPED;
-            case CANCELLED -> RunHistory.State.CANCELLED;
-            default -> RunHistory.State.INTERRUPTED;
-        };
+        var state =
+                switch (result.state()) {
+                    case SUCCESS ->
+                            workflow.isDaemon(key)
+                                    ? RunHistory.State.READY
+                                    : RunHistory.State.SUCCESS;
+                    case FAILED, TIMED_OUT -> RunHistory.State.FAILED;
+                    case SKIPPED -> RunHistory.State.SKIPPED;
+                    case CANCELLED -> RunHistory.State.CANCELLED;
+                    default -> RunHistory.State.INTERRUPTED;
+                };
         Integer code = null;
         if (result.error() instanceof BashTaskAdapter.ExitFailure failure) {
             code = failure.exitCode();
         }
-        history.completed(key.id(), state, code, message(result.error()),
+        history.completed(
+                key.id(),
+                state,
+                code,
+                message(result.error()),
                 state == RunHistory.State.READY ? null : result.finishedAt());
     }
 
@@ -111,8 +120,11 @@ public final class WorkflowRun {
             }
             for (var entry : snapshot.daemons().entrySet()) {
                 var health = entry.getValue();
-                history.daemonChecked(entry.getKey().id(), health.health(),
-                        message(health.error()), health.checkedAt());
+                history.daemonChecked(
+                        entry.getKey().id(),
+                        health.health(),
+                        message(health.error()),
+                        health.checkedAt());
             }
             history.ended(state);
         } catch (IOException exception) {

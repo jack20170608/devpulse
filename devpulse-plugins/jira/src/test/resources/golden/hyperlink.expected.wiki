@@ -1,0 +1,29 @@
+h3. What
+
+Fix issue hyperlink rendering
+
+h3. Why
+
+Keep reference links clickable
+
+h3. Impact
+
+Affects issue description links
+
+h3. Description
+
+See [issue details|https://example.com/issues/123] and [documentation|https://example.com/docs?view=full&lang=en#steps].
+
+h3. SIT
+
+Please provide the steps to reproduce the issue in SIT environment.
+
+# Open the issue
+# Follow the reference links
+
+h3. UAT
+
+Please provide the steps to reproduce the issue in UAT environment.
+
+# Open the issue
+# Follow the reference links

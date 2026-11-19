@@ -29,18 +29,23 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
 /** Connection configuration: create, inspect, edit single keys, and verify. */
-@Command(name = "config", mixinStandardHelpOptions = true,
+@Command(
+        name = "config",
+        mixinStandardHelpOptions = true,
         description = "Create, show, edit, and verify the Jira connection configuration.",
-        subcommands = {JiraConfigCommands.Init.class, JiraConfigCommands.Show.class,
-                JiraConfigCommands.Set.class, JiraConfigCommands.Unset.class,
-                JiraConfigCommands.Verify.class})
+        subcommands = {
+            JiraConfigCommands.Init.class,
+            JiraConfigCommands.Show.class,
+            JiraConfigCommands.Set.class,
+            JiraConfigCommands.Unset.class,
+            JiraConfigCommands.Verify.class
+        })
 final class JiraConfigCommands implements Runnable {
     static final List<String> KEYS =
             List.of("url", "mode", "email", "apiVersion", "project", "profile");
     private static final String PROJECT_KEY = "[A-Za-z][A-Za-z0-9_]*";
 
-    @Spec
-    CommandSpec spec;
+    @Spec CommandSpec spec;
 
     @Override
     public void run() {
@@ -48,8 +53,7 @@ final class JiraConfigCommands implements Runnable {
     }
 
     /** Fields supplied to the creation wizard; null values are prompted for. */
-    record Draft(String url, String mode, Integer apiVersion, String email, String project) {
-    }
+    record Draft(String url, String mode, Integer apiVersion, String email, String project) {}
 
     /** File for creation: -g, then --config, then the current directory. */
     static Path creationFile(JiraCommand.Action action, boolean global) throws IOException {
@@ -57,7 +61,8 @@ final class JiraConfigCommands implements Runnable {
         if (global && explicit != null) {
             throw wrong("Choose either --global or --config, not both.");
         }
-        return global ? JiraConfiguration.globalFile()
+        return global
+                ? JiraConfiguration.globalFile()
                 : explicit == null ? JiraConfiguration.localFile() : explicit;
     }
 
@@ -71,7 +76,8 @@ final class JiraConfigCommands implements Runnable {
     }
 
     static boolean isGlobal(Path file) {
-        return file.toAbsolutePath().normalize()
+        return file.toAbsolutePath()
+                .normalize()
                 .equals(JiraConfiguration.globalFile().toAbsolutePath().normalize());
     }
 
@@ -91,32 +97,56 @@ final class JiraConfigCommands implements Runnable {
     /** Prompt for missing fields, then create the file; never overwrites. */
     static void create(Path file, Draft supplied, Prompter prompt) throws IOException {
         if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw wrong("Configuration already exists: " + file
-                    + "; use jira config set KEY VALUE to change it.");
+            throw wrong(
+                    "Configuration already exists: "
+                            + file
+                            + "; use jira config set KEY VALUE to change it.");
         }
-        var url = prompt.value(supplied.url(), "Jira URL (--url)", null,
-                candidate -> validate("url", candidate));
-        var mode = prompt.value(supplied.mode(), "Mode (--mode)", "cloud",
-                candidate -> validate("mode", candidate));
+        var url =
+                prompt.value(
+                        supplied.url(),
+                        "Jira URL (--url)",
+                        null,
+                        candidate -> validate("url", candidate));
+        var mode =
+                prompt.value(
+                        supplied.mode(),
+                        "Mode (--mode)",
+                        "cloud",
+                        candidate -> validate("mode", candidate));
         var apiVersion = supplied.apiVersion();
         if (apiVersion != null) {
             validate("apiVersion", apiVersion.toString());
         } else if (prompt.interactive()) {
-            var selected = prompt.value(null, "API version (2/3; auto uses mode default "
-                            + (mode.equals("cloud") ? 3 : 2) + ")", "auto", candidate -> {
-                        if (!candidate.equals("auto")) {
-                            validate("apiVersion", candidate);
-                        }
-                    });
+            var selected =
+                    prompt.value(
+                            null,
+                            "API version (2/3; auto uses mode default "
+                                    + (mode.equals("cloud") ? 3 : 2)
+                                    + ")",
+                            "auto",
+                            candidate -> {
+                                if (!candidate.equals("auto")) {
+                                    validate("apiVersion", candidate);
+                                }
+                            });
             apiVersion = selected.equals("auto") ? null : Integer.valueOf(selected);
         }
         var email = supplied.email();
         if (mode.equals("cloud") || email != null) {
-            email = prompt.value(email, "Cloud email (--email)", null,
-                    candidate -> validate("email", candidate));
+            email =
+                    prompt.value(
+                            email,
+                            "Cloud email (--email)",
+                            null,
+                            candidate -> validate("email", candidate));
         }
-        var project = prompt.value(supplied.project(), "Default project key (--project)",
-                null, candidate -> validate("project", candidate));
+        var project =
+                prompt.value(
+                        supplied.project(),
+                        "Default project key (--project)",
+                        null,
+                        candidate -> validate("project", candidate));
         var values = new LinkedHashMap<String, Object>();
         values.put("url", url);
         values.put("mode", mode);
@@ -127,12 +157,21 @@ final class JiraConfigCommands implements Runnable {
             values.put("email", email);
         }
         values.put("project", project);
-        var content = ConfigValueFactory.fromMap(values).render(
-                ConfigRenderOptions.defaults().setJson(false)
-                        .setComments(false).setOriginComments(false)) + "\n";
+        var content =
+                ConfigValueFactory.fromMap(values)
+                                .render(
+                                        ConfigRenderOptions.defaults()
+                                                .setJson(false)
+                                                .setComments(false)
+                                                .setOriginComments(false))
+                        + "\n";
         Files.createDirectories(file.toAbsolutePath().getParent());
-        Files.writeString(file, content, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        Files.writeString(
+                file,
+                content,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE);
     }
 
     /** GET myself with the given configuration; returns the identity summary. */
@@ -144,7 +183,8 @@ final class JiraConfigCommands implements Runnable {
         var identifier = jira.cloud() ? "accountId" : "name";
         var me = jira.myself();
         var result = new JsonObject();
-        result.addProperty(identifier,
+        result.addProperty(
+                identifier,
                 JiraCommand.nonblank(JiraCommand.string(me, identifier), "Current user"));
         if (me.has("displayName") && me.get("displayName").isJsonPrimitive()) {
             result.addProperty("displayName", me.get("displayName").getAsString());
@@ -155,14 +195,19 @@ final class JiraConfigCommands implements Runnable {
     static String identity(JsonObject verification) {
         return verification.has("displayName")
                 ? verification.get("displayName").getAsString()
-                : verification.has("accountId") ? verification.get("accountId").getAsString()
-                : verification.get("name").getAsString();
+                : verification.has("accountId")
+                        ? verification.get("accountId").getAsString()
+                        : verification.get("name").getAsString();
     }
 
     static void validate(String key, String value) throws IOException {
         if (!KEYS.contains(key)) {
-            throw wrong("Unknown configuration key: " + key + ". Use one of "
-                    + String.join(", ", KEYS) + ".");
+            throw wrong(
+                    "Unknown configuration key: "
+                            + key
+                            + ". Use one of "
+                            + String.join(", ", KEYS)
+                            + ".");
         }
         if (value.isBlank() || value.codePoints().anyMatch(Character::isISOControl)) {
             throw wrong("Use a nonblank value without control characters.");
@@ -181,28 +226,34 @@ final class JiraConfigCommands implements Runnable {
             }
             case "project" -> {
                 if (!value.matches(PROJECT_KEY)) {
-                    throw wrong("Project key must start with a letter "
-                            + "and contain only letters, digits, or _.");
+                    throw wrong(
+                            "Project key must start with a letter "
+                                    + "and contain only letters, digits, or _.");
                 }
             }
             case "profile" -> JiraProfiles.name(value);
-            default -> {
-            }
+            default -> {}
         }
     }
 
     /**
-     * Set (value non-null) or remove one top-level key by editing only its line,
-     * keeping other lines, comments, and formatting. Returns whether the file changed.
+     * Set (value non-null) or remove one top-level key by editing only its line, keeping other
+     * lines, comments, and formatting. Returns whether the file changed.
      */
     static boolean edit(Path file, String key, String value) throws IOException {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw wrong("Jira configuration not found: " + file
-                    + ". Run jira config init (or jira config init -g).");
+            throw wrong(
+                    "Jira configuration not found: "
+                            + file
+                            + ". Run jira config init (or jira config init -g).");
         }
         if (!KEYS.contains(key)) {
-            throw wrong("Unknown configuration key: " + key + ". Use one of "
-                    + String.join(", ", KEYS) + ".");
+            throw wrong(
+                    "Unknown configuration key: "
+                            + key
+                            + ". Use one of "
+                            + String.join(", ", KEYS)
+                            + ".");
         }
         if (value != null) {
             validate(key, value);
@@ -216,20 +267,25 @@ final class JiraConfigCommands implements Runnable {
         var original = Files.readString(file, StandardCharsets.UTF_8);
         var newline = original.contains("\r\n") ? "\r\n" : "\n";
         var lines = new ArrayList<>(List.of(original.split("\\r?\\n", -1)));
-        var pattern = Pattern.compile("^(\\s*(\"?)" + Pattern.quote(key)
-                + "\\2\\s*(?:=|:)\\s*)(.*)$");
+        var pattern =
+                Pattern.compile("^(\\s*(\"?)" + Pattern.quote(key) + "\\2\\s*(?:=|:)\\s*)(.*)$");
         int index = -1;
         for (int i = 0; i < lines.size(); i++) {
             if (pattern.matcher(lines.get(i)).matches()) {
                 if (index >= 0) {
-                    throw wrong(key + " is defined more than once in " + file
-                            + "; edit the file directly.");
+                    throw wrong(
+                            key
+                                    + " is defined more than once in "
+                                    + file
+                                    + "; edit the file directly.");
                 }
                 index = i;
             }
         }
-        var rendered = value == null ? null : key.equals("apiVersion")
-                ? value : new JsonPrimitive(value).toString();
+        var rendered =
+                value == null
+                        ? null
+                        : key.equals("apiVersion") ? value : new JsonPrimitive(value).toString();
         if (index < 0) {
             if (value == null) {
                 return false;
@@ -245,17 +301,23 @@ final class JiraConfigCommands implements Runnable {
             var matcher = pattern.matcher(lines.get(index));
             matcher.matches();
             var rest = matcher.group(3);
-            if (rest.startsWith("\"\"\"") || rest.startsWith("{") || rest.startsWith("[")
+            if (rest.startsWith("\"\"\"")
+                    || rest.startsWith("{")
+                    || rest.startsWith("[")
                     || rest.contains("${")) {
-                throw wrong(key + " in " + file
-                        + " is not a single-line value; edit the file directly.");
+                throw wrong(
+                        key
+                                + " in "
+                                + file
+                                + " is not a single-line value; edit the file directly.");
             }
             if (value == null) {
                 lines.remove(index);
             } else {
                 var comment = comment(rest);
-                lines.set(index, matcher.group(1) + rendered
-                        + (comment.isEmpty() ? "" : " " + comment));
+                lines.set(
+                        index,
+                        matcher.group(1) + rendered + (comment.isEmpty() ? "" : " " + comment));
             }
         }
         var updated = String.join(newline, lines);
@@ -275,8 +337,9 @@ final class JiraConfigCommands implements Runnable {
                 i++;
             } else if (c == '"') {
                 quoted = !quoted;
-            } else if (!quoted && (c == '#'
-                    || (c == '/' && i + 1 < rest.length() && rest.charAt(i + 1) == '/'))) {
+            } else if (!quoted
+                    && (c == '#'
+                            || (c == '/' && i + 1 < rest.length() && rest.charAt(i + 1) == '/'))) {
                 return rest.substring(i).strip();
             }
         }
@@ -293,17 +356,22 @@ final class JiraConfigCommands implements Runnable {
             JiraConfiguration.load(staging);
             try {
                 var parsed = ConfigFactory.parseString(content);
-                boolean applied = value == null ? !parsed.hasPathOrNull(key)
-                        : key.equals("apiVersion")
-                        ? parsed.getInt(key) == Integer.parseInt(value)
-                        : parsed.getString(key).equals(value);
+                boolean applied =
+                        value == null
+                                ? !parsed.hasPathOrNull(key)
+                                : key.equals("apiVersion")
+                                        ? parsed.getInt(key) == Integer.parseInt(value)
+                                        : parsed.getString(key).equals(value);
                 if (!applied) {
                     throw wrong("Could not apply " + key + " safely; edit " + file + " directly.");
                 }
             } catch (ConfigException exception) {
                 throw wrong("Could not apply " + key + " safely; edit " + file + " directly.");
             }
-            Files.move(staging, file, StandardCopyOption.REPLACE_EXISTING,
+            Files.move(
+                    staging,
+                    file,
+                    StandardCopyOption.REPLACE_EXISTING,
                     StandardCopyOption.ATOMIC_MOVE);
         } finally {
             Files.deleteIfExists(staging);
@@ -331,9 +399,10 @@ final class JiraConfigCommands implements Runnable {
             err.print(question + " [Y/n]: ");
             err.flush();
             var answer = System.console().readLine();
-            return answer != null && (answer.isBlank()
-                    || answer.strip().equalsIgnoreCase("y")
-                    || answer.strip().equalsIgnoreCase("yes"));
+            return answer != null
+                    && (answer.isBlank()
+                            || answer.strip().equalsIgnoreCase("y")
+                            || answer.strip().equalsIgnoreCase("yes"));
         }
 
         String value(String supplied, String label, String fallback, Validator validator)
@@ -344,8 +413,11 @@ final class JiraConfigCommands implements Runnable {
             }
             if (!interactive) {
                 if (fallback == null) {
-                    throw wrong("Missing " + label + "; supply it as a flag "
-                            + "or run the command in a terminal.");
+                    throw wrong(
+                            "Missing "
+                                    + label
+                                    + "; supply it as a flag "
+                                    + "or run the command in a terminal.");
                 }
                 validator.validate(fallback);
                 return fallback;
@@ -375,35 +447,55 @@ final class JiraConfigCommands implements Runnable {
         void validate(String value) throws IOException;
     }
 
-    @Command(name = "init", mixinStandardHelpOptions = true,
-            description = "Create the connection configuration from flags or prompts; "
-                    + "never stores a token or overwrites an existing file.")
+    @Command(
+            name = "init",
+            mixinStandardHelpOptions = true,
+            description =
+                    "Create the connection configuration from flags or prompts; "
+                            + "never stores a token or overwrites an existing file.")
     static final class Init extends JiraCommand.Action {
-        @Option(names = {"-g", "--global"},
-                description = "Create ~/.jira/" + JiraConfiguration.FILE_NAME
-                        + " instead of .jira/" + JiraConfiguration.FILE_NAME
-                        + " in the current directory.")
+        @Option(
+                names = {"-g", "--global"},
+                description =
+                        "Create ~/.jira/"
+                                + JiraConfiguration.FILE_NAME
+                                + " instead of .jira/"
+                                + JiraConfiguration.FILE_NAME
+                                + " in the current directory.")
         boolean global;
+
         @Option(names = "--url", paramLabel = "URL", description = "Jira base URL.")
         String url;
+
         @Option(names = "--mode", paramLabel = "MODE", description = "cloud (default) or dc.")
         String mode;
-        @Option(names = "--api-version", paramLabel = "N",
+
+        @Option(
+                names = "--api-version",
+                paramLabel = "N",
                 description = "Optional API version: 2 or 3; omit for mode defaults.")
         Integer apiVersion;
+
         @Option(names = "--email", paramLabel = "EMAIL", description = "Cloud account email.")
         String email;
-        @Option(names = {"-p", "--project"}, paramLabel = "KEY",
+
+        @Option(
+                names = {"-p", "--project"},
+                paramLabel = "KEY",
                 description = "Default project key for issue create/list and env refresh.")
         String project;
-        @Option(names = "--no-input",
+
+        @Option(
+                names = "--no-input",
                 description = "Never prompt; supply required fields using flags.")
         boolean noInput;
 
         @Override
         protected void execute() throws IOException {
             var file = creationFile(this, global);
-            create(file, new Draft(url, mode, apiVersion, email, project),
+            create(
+                    file,
+                    new Draft(url, mode, apiVersion, email, project),
                     new Prompter(spec, noInput));
             var result = new JsonObject();
             result.addProperty("config", absolute(file));
@@ -411,17 +503,24 @@ final class JiraConfigCommands implements Runnable {
             machineData = result;
             print("Created " + file + ".");
             if (!hasToken()) {
-                print("Set JIRA_API_TOKEN, then run jira config verify"
-                        + (global ? " -g" : "") + ".");
+                print(
+                        "Set JIRA_API_TOKEN, then run jira config verify"
+                                + (global ? " -g" : "")
+                                + ".");
             }
         }
     }
 
-    @Command(name = "show", mixinStandardHelpOptions = true,
-            description = "Show the configuration file in use, its effective values, "
-                    + "and whether JIRA_API_TOKEN is set (never its value).")
+    @Command(
+            name = "show",
+            mixinStandardHelpOptions = true,
+            description =
+                    "Show the configuration file in use, its effective values, "
+                            + "and whether JIRA_API_TOKEN is set (never its value).")
     static final class Show extends JiraCommand.Action {
-        @Option(names = {"-g", "--global"}, description = "Show ~/.jira configuration.")
+        @Option(
+                names = {"-g", "--global"},
+                description = "Show ~/.jira configuration.")
         boolean global;
 
         @Override
@@ -444,21 +543,31 @@ final class JiraConfigCommands implements Runnable {
             print("config\t" + absolute(file) + " (" + result.get("scope").getAsString() + ")");
             for (var key : KEYS) {
                 var entry = values.get(key);
-                print(key + "\t" + (entry == null || entry.isJsonNull() ? "" : entry.getAsString()));
+                print(
+                        key
+                                + "\t"
+                                + (entry == null || entry.isJsonNull() ? "" : entry.getAsString()));
             }
             print("token\tJIRA_API_TOKEN " + (hasToken() ? "is set" : "is not set"));
         }
     }
 
-    @Command(name = "set", mixinStandardHelpOptions = true,
-            description = "Set one key (url, mode, email, apiVersion, project, profile), "
-                    + "editing only its line and keeping comments and formatting.")
+    @Command(
+            name = "set",
+            mixinStandardHelpOptions = true,
+            description =
+                    "Set one key (url, mode, email, apiVersion, project, profile), "
+                            + "editing only its line and keeping comments and formatting.")
     static final class Set extends JiraCommand.Action {
         @Parameters(index = "0", paramLabel = "KEY")
         String key;
+
         @Parameters(index = "1", paramLabel = "VALUE")
         String value;
-        @Option(names = {"-g", "--global"}, description = "Edit ~/.jira configuration.")
+
+        @Option(
+                names = {"-g", "--global"},
+                description = "Edit ~/.jira configuration.")
         boolean global;
 
         @Override
@@ -471,12 +580,17 @@ final class JiraConfigCommands implements Runnable {
         }
     }
 
-    @Command(name = "unset", mixinStandardHelpOptions = true,
+    @Command(
+            name = "unset",
+            mixinStandardHelpOptions = true,
             description = "Remove one optional key (email, apiVersion, project, profile).")
     static final class Unset extends JiraCommand.Action {
         @Parameters(index = "0", paramLabel = "KEY")
         String key;
-        @Option(names = {"-g", "--global"}, description = "Edit ~/.jira configuration.")
+
+        @Option(
+                names = {"-g", "--global"},
+                description = "Edit ~/.jira configuration.")
         boolean global;
 
         @Override
@@ -489,10 +603,14 @@ final class JiraConfigCommands implements Runnable {
         }
     }
 
-    @Command(name = "verify", mixinStandardHelpOptions = true,
+    @Command(
+            name = "verify",
+            mixinStandardHelpOptions = true,
             description = "Test the connection with GET myself (requires JIRA_API_TOKEN).")
     static final class Verify extends JiraCommand.Action {
-        @Option(names = {"-g", "--global"}, description = "Use ~/.jira configuration.")
+        @Option(
+                names = {"-g", "--global"},
+                description = "Use ~/.jira configuration.")
         boolean global;
 
         @Override
@@ -505,8 +623,16 @@ final class JiraConfigCommands implements Runnable {
             result.addProperty("url", connection.url());
             result.add("connection", verification);
             machineData = result;
-            print("Connection OK as " + identity(verification) + " (" + connection.url()
-                    + ", " + connection.mode() + ", API v" + connection.apiVersion() + ").");
+            print(
+                    "Connection OK as "
+                            + identity(verification)
+                            + " ("
+                            + connection.url()
+                            + ", "
+                            + connection.mode()
+                            + ", API v"
+                            + connection.apiVersion()
+                            + ").");
         }
     }
 }

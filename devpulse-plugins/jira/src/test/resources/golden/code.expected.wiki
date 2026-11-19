@@ -1,0 +1,47 @@
+h3. What
+
+Render reproduction code
+
+h3. Why
+
+Preserve code formatting
+
+h3. Impact
+
+Affects PVT and root cause instructions
+
+h3. Description
+
+Include Bash and Java code snippets.
+
+h3. SIT
+
+Please provide the steps to reproduce the issue in SIT environment.
+Step1: Open the issue
+Step2: Check the code snippets
+
+h3. UAT
+
+Please provide the steps to reproduce the issue in UAT environment.
+Step1: Open the issue
+Step2: Check the code snippets
+
+h3. PVT
+
+Please refer to the below bash code to reproduce the issue in PVT environment.
+
+{code:bash}
+issue="DEV-123"
+printf '%s\n' "$issue"
+java -version
+{code}
+
+h3. Root Cause
+
+This is the source code that produce this issue. Please refer to the below code snippet.
+
+{code:java}
+public static void main(String[] args) {
+    System.out.println("Hello World");
+}
+{code}

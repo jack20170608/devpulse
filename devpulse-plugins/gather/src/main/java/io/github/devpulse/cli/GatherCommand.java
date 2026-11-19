@@ -19,29 +19,32 @@ import picocli.CommandLine.Spec;
         name = "gather",
         mixinStandardHelpOptions = true,
         versionProvider = GatherCLI.VersionProvider.class,
-        description = "Gather local environment facts "
-                + "and prepare an AI prompt."
-)
+        description = "Gather local environment facts " + "and prepare an AI prompt.")
 public final class GatherCommand implements Callable<Integer> {
-    @Spec
-    private CommandSpec spec;
+    @Spec private CommandSpec spec;
 
-    @Option(names = "--directory", defaultValue = ".",
-            description = "Project directory to inspect "
-                    + "(default: ${DEFAULT-VALUE}).")
+    @Option(
+            names = "--directory",
+            defaultValue = ".",
+            description = "Project directory to inspect " + "(default: ${DEFAULT-VALUE}).")
     private Path directory;
 
-    @Option(names = "--bash", paramLabel = "PATH",
+    @Option(
+            names = "--bash",
+            paramLabel = "PATH",
             description = "Explicit path to Bash (Git Bash on Windows).")
     private Path bash;
 
-    @Option(names = "--language", defaultValue = "both",
+    @Option(
+            names = "--language",
+            defaultValue = "both",
             paramLabel = "zh|en|both",
-            description = "Prompt language: ${COMPLETION-CANDIDATES} "
-                    + "(default: ${DEFAULT-VALUE}).")
+            description =
+                    "Prompt language: ${COMPLETION-CANDIDATES} " + "(default: ${DEFAULT-VALUE}).")
     private GatherPrompt.Language language;
 
-    @Option(names = "--no-clipboard",
+    @Option(
+            names = "--no-clipboard",
             description = "Print the prompt without changing the clipboard.")
     private boolean noClipboard;
 
@@ -52,17 +55,18 @@ public final class GatherCommand implements Callable<Integer> {
         try {
             var facts = new EnvironmentGatherer().gather(directory, bash);
             var console = System.console();
-            var encoding = console == null
-                    ? System.out.charset() : console.charset();
+            var encoding = console == null ? System.out.charset() : console.charset();
             if (!StandardCharsets.UTF_8.equals(encoding)) {
-                err.println("gather: Warning: Java reports "
-                        + (console == null ? "standard output" : "console")
-                        + " encoding " + encoding.name()
-                        + ", but devpulse writes UTF-8. Chinese text may "
-                        + "appear garbled. Configure your terminal to use "
-                        + "UTF-8; in Git Bash, open Options > Text > "
-                        + "Character set and select UTF-8. The terminal's "
-                        + "actual display encoding cannot be verified.");
+                err.println(
+                        "gather: Warning: Java reports "
+                                + (console == null ? "standard output" : "console")
+                                + " encoding "
+                                + encoding.name()
+                                + ", but devpulse writes UTF-8. Chinese text may "
+                                + "appear garbled. Configure your terminal to use "
+                                + "UTF-8; in Git Bash, open Options > Text > "
+                                + "Character set and select UTF-8. The terminal's "
+                                + "actual display encoding cannot be verified.");
                 err.flush();
             }
             var prompt = GatherPrompt.render(facts, language);
@@ -70,14 +74,18 @@ public final class GatherCommand implements Callable<Integer> {
             out.flush();
             if (!noClipboard) {
                 try {
-                    Toolkit.getDefaultToolkit().getSystemClipboard()
+                    Toolkit.getDefaultToolkit()
+                            .getSystemClipboard()
                             .setContents(new StringSelection(prompt), null);
-                    err.println("Prompt copied to the clipboard. Review it "
-                            + "before sharing it with an AI service.");
-                } catch (HeadlessException | IllegalStateException
-                        | SecurityException | AWTError exception) {
-                    err.println("Clipboard unavailable; copy the prompt "
-                            + "from standard output.");
+                    err.println(
+                            "Prompt copied to the clipboard. Review it "
+                                    + "before sharing it with an AI service.");
+                } catch (HeadlessException
+                        | IllegalStateException
+                        | SecurityException
+                        | AWTError exception) {
+                    err.println(
+                            "Clipboard unavailable; copy the prompt " + "from standard output.");
                 }
             }
             return 0;

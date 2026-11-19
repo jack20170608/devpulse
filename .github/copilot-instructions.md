@@ -56,7 +56,17 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 ### 测试
 
-- 本仓库不编写单元测试。
+- 测试是可信度门禁的一部分，不是可选项。现状：`jira` 与 `core` 有测试，`pulse`、`depmap`、`gather` 没有。
+- 采用 **test-on-touch**：修改哪个模块，就为该次改动补最小测试；不要求为全仓补齐测试。优先覆盖纯函数、边界条件和错误路径，而不是输出字符串。
+- 控制测试体积：单个测试文件不超过 150 行；大段期望输出放到 `src/test/resources` 下的黄金文件，不要内联为 Java 文本块。
+- 禁止快照膨胀：不要新增「用一个巨大文本块断言整个输出」的测试，改用黄金文件用例。
+- 只允许增加或加强测试；不允许删除测试、放宽断言、或新增 `@Disabled`/`assumeTrue` 让构建变绿。确有必要跳过时，必须在提交说明中写明原因。
+
+### 完成定义
+
+- 任何代码改动在视为完成前，必须运行 `bash verify.sh` 并通过。该脚本执行格式化检查、全量编译、全部测试和静态分析，是唯一的机器门禁入口。
+- 格式化由 Spotless（google-java-format，AOSP 风格 4 空格）在 `verify` 阶段强制。需要修正时运行 `mvn spotless:apply`，不要手工调整缩进或换行。
+- 静态分析由 SpotBugs 报告。不要为了让报告变干净而抑制警告；确需抑制时，使用带原因注释的 `@SuppressFBWarnings`。
 
 ## English
 
@@ -112,4 +122,14 @@ In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash buil
 
 ### Testing
 
-- Do not write unit tests for this repository.
+- Tests are part of the trust gate, not optional. Current state: `jira` and `core` have tests, while `pulse`, `depmap`, and `gather` have none.
+- Use **test-on-touch**: when you change a module, add the smallest test for that change; do not backfill tests across the whole repository. Prefer pure functions, boundary conditions, and error paths over rendered output strings.
+- Keep tests small: a test file stays under 150 lines; put large expected output in golden files under `src/test/resources` instead of inline Java text blocks.
+- No snapshot bloat: do not add a test that asserts an entire output with one huge text block; add a golden-file case instead.
+- Only add or strengthen tests. Never delete tests, weaken assertions, or add `@Disabled`/`assumeTrue` to make the build green. If a skip is genuinely required, state the reason in the commit message.
+
+### Definition of done
+
+- No code change is complete until `bash verify.sh` passes. That script runs the formatting check, the full compile, all tests, and static analysis, and is the single machine gate.
+- Formatting is enforced by Spotless (google-java-format, AOSP style, 4-space indent) during the `verify` phase. Fix it with `mvn spotless:apply`; do not hand-adjust indentation or wrapping.
+- Static analysis is reported by SpotBugs. Do not suppress warnings to make the report clean; when suppression is genuinely needed, use `@SuppressFBWarnings` with a comment explaining why.

@@ -45,10 +45,15 @@ public final class DagGraph {
             for (var dependency : node.needs()) {
                 var prerequisite = nodes.get(dependency.id());
                 if (prerequisite == null || !prerequisite.key().equals(dependency)) {
-                    throw new InvalidGraph(node.key(), "Unknown dependency or result type mismatch: "
-                            + node.key().id() + " -> " + dependency);
+                    throw new InvalidGraph(
+                            node.key(),
+                            "Unknown dependency or result type mismatch: "
+                                    + node.key().id()
+                                    + " -> "
+                                    + dependency);
                 }
-                dependents.computeIfAbsent(dependency.id(), ignored -> new ArrayList<>())
+                dependents
+                        .computeIfAbsent(dependency.id(), ignored -> new ArrayList<>())
                         .add(node.key().id());
             }
         }
@@ -69,9 +74,13 @@ public final class DagGraph {
             }
         }
         if (order.size() != nodes.size()) {
-            var unresolved = remaining.entrySet().stream()
-                    .filter(entry -> entry.getValue() > 0).map(Map.Entry::getKey).toList();
-            throw new InvalidGraph(nodes.get(unresolved.getFirst()).key(),
+            var unresolved =
+                    remaining.entrySet().stream()
+                            .filter(entry -> entry.getValue() > 0)
+                            .map(Map.Entry::getKey)
+                            .toList();
+            throw new InvalidGraph(
+                    nodes.get(unresolved.getFirst()).key(),
                     "Dependency cycle; unresolved tasks: " + unresolved);
         }
         topologicalOrder = List.copyOf(order);

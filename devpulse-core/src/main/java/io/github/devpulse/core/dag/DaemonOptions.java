@@ -3,10 +3,10 @@ package io.github.devpulse.core.dag;
 import java.time.Duration;
 import java.util.Objects;
 
-public record DaemonOptions(Duration readyTimeout, Duration checkInterval,
-        Duration checkTimeout) {
-    public static final DaemonOptions DEFAULT = new DaemonOptions(
-            Duration.ofSeconds(30), Duration.ofMillis(500), Duration.ofSeconds(2));
+public record DaemonOptions(Duration readyTimeout, Duration checkInterval, Duration checkTimeout) {
+    public static final DaemonOptions DEFAULT =
+            new DaemonOptions(
+                    Duration.ofSeconds(30), Duration.ofMillis(500), Duration.ofSeconds(2));
 
     public DaemonOptions {
         validate("readyTimeout", readyTimeout);

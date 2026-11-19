@@ -27,40 +27,81 @@ import picocli.CommandLine.Parameters;
 
 /** Non-fullscreen issue operations sharing the configured Jira connection. */
 public final class JiraIssueOperations {
-    private JiraIssueOperations() {
-    }
+    private JiraIssueOperations() {}
 
-    @Command(name = "view", mixinStandardHelpOptions = true,
-            description = "Print issue Markdown with YAML metadata, or select legacy text/JSON output.")
+    @Command(
+            name = "view",
+            mixinStandardHelpOptions = true,
+            description =
+                    "Print issue Markdown with YAML metadata, or select legacy text/JSON output.")
     public static final class View extends JiraCommand.Action {
-        private static final List<String> MARKDOWN_FIELDS = List.of(
-                "summary", "key", "issuetype", "status", "priority",
-                "assignee", "reporter", "created", "updated", "epic", "story-point");
+        private static final List<String> MARKDOWN_FIELDS =
+                List.of(
+                        "summary",
+                        "key",
+                        "issuetype",
+                        "status",
+                        "priority",
+                        "assignee",
+                        "reporter",
+                        "created",
+                        "updated",
+                        "epic",
+                        "story-point");
 
         @Parameters(index = "0", paramLabel = "KEY")
         String key;
-        @Option(names = "--comments", defaultValue = "1", paramLabel = "N",
+
+        @Option(
+                names = "--comments",
+                defaultValue = "1",
+                paramLabel = "N",
                 description = "Recent comments for text/JSON output, newest first (0-1000).")
         int comments;
-        @Option(names = {"--raw", "--json"},
+
+        @Option(
+                names = {"--raw", "--json"},
                 description = "Print JSON, with the requested recent comments.")
         boolean raw;
+
         @Option(names = "--plain", description = "Use the previous plain-text description display.")
         boolean plain;
-        enum DescriptionFormat { markdown, raw }
-        @Option(names = "--description-format", paramLabel = "markdown|raw",
-                description = "Description display (default: markdown). "
-                        + "Raw preserves Wiki text for v2 or ADF JSON for v3.")
+
+        enum DescriptionFormat {
+            markdown,
+            raw
+        }
+
+        @Option(
+                names = "--description-format",
+                paramLabel = "markdown|raw",
+                description =
+                        "Description display (default: markdown). "
+                                + "Raw preserves Wiki text for v2 or ADF JSON for v3.")
         DescriptionFormat descriptionFormat;
-        enum OutputFormat { text, markdown }
-        @Option(names = "--format", defaultValue = "markdown", paramLabel = "text|markdown",
-                description = "Output format (default: markdown). Markdown prints YAML "
-                        + "frontmatter and description only, without links or comments.")
+
+        enum OutputFormat {
+            text,
+            markdown
+        }
+
+        @Option(
+                names = "--format",
+                defaultValue = "markdown",
+                paramLabel = "text|markdown",
+                description =
+                        "Output format (default: markdown). Markdown prints YAML "
+                                + "frontmatter and description only, without links or comments.")
         OutputFormat format;
-        @Option(names = "--fields", split = ",", paramLabel = "FIELD,...",
-                description = "Ordered Markdown frontmatter fields: summary,key,issuetype,"
-                        + "status,priority,assignee,reporter,created,updated,epic,story-point. "
-                        + "Default: all. Requires Markdown output.")
+
+        @Option(
+                names = "--fields",
+                split = ",",
+                paramLabel = "FIELD,...",
+                description =
+                        "Ordered Markdown frontmatter fields: summary,key,issuetype,"
+                                + "status,priority,assignee,reporter,created,updated,epic,story-point. "
+                                + "Default: all. Requires Markdown output.")
         List<String> selectedFields;
 
         @Override
@@ -92,9 +133,17 @@ public final class JiraIssueOperations {
             var total = 0;
             while (recent.size() < comments) {
                 var start = recent.size();
-                var page = object(jira.request("GET", "issue/" + encode(key)
-                        + "/comment?orderBy=-created&startAt=" + start
-                        + "&maxResults=" + Math.min(100, comments - start), null));
+                var page =
+                        object(
+                                jira.request(
+                                        "GET",
+                                        "issue/"
+                                                + encode(key)
+                                                + "/comment?orderBy=-created&startAt="
+                                                + start
+                                                + "&maxResults="
+                                                + Math.min(100, comments - start),
+                                        null));
                 if (page.has("startAt") && integer(page, "startAt") != start) {
                     throw wrong("Jira returned an unexpected comment page.");
                 }
@@ -126,8 +175,15 @@ public final class JiraIssueOperations {
                 return;
             }
             print(safe(label(issue, "key") + "  " + label(fields, "summary")));
-            for (var field : List.of("issuetype", "status", "priority",
-                    "assignee", "reporter", "created", "updated")) {
+            for (var field :
+                    List.of(
+                            "issuetype",
+                            "status",
+                            "priority",
+                            "assignee",
+                            "reporter",
+                            "created",
+                            "updated")) {
                 print(field + ": " + safe(display(fields.get(field))));
             }
             var description = fields.get("description");
@@ -135,14 +191,20 @@ public final class JiraIssueOperations {
             if (plain) {
                 rendered = printable(description);
             } else if (descriptionFormat == DescriptionFormat.raw) {
-                rendered = description == null || description.isJsonNull() ? ""
-                        : description.isJsonPrimitive()
-                                ? description.getAsString() : description.toString();
+                rendered =
+                        description == null || description.isJsonNull()
+                                ? ""
+                                : description.isJsonPrimitive()
+                                        ? description.getAsString()
+                                        : description.toString();
             } else {
                 rendered = JiraDescriptionMarkdown.render(description, jira.apiVersion() == 3);
             }
-            print("\nDescription:\n" + (descriptionFormat == DescriptionFormat.raw
-                    ? rendered : safe(rendered)));
+            print(
+                    "\nDescription:\n"
+                            + (descriptionFormat == DescriptionFormat.raw
+                                    ? rendered
+                                    : safe(rendered)));
             print("\nLinked issues:");
             var links = fields.get("issuelinks");
             if (links != null && links.isJsonArray()) {
@@ -153,9 +215,13 @@ public final class JiraIssueOperations {
                         var other = link.get(direction + "Issue");
                         if (other != null && other.isJsonObject()) {
                             var linked = other.getAsJsonObject();
-                            print(safe(label(type, direction) + " "
-                                    + label(linked, "key") + " "
-                                    + display(linked.get("fields"))));
+                            print(
+                                    safe(
+                                            label(type, direction)
+                                                    + " "
+                                                    + label(linked, "key")
+                                                    + " "
+                                                    + display(linked.get("fields"))));
                         }
                     }
                 }
@@ -164,8 +230,7 @@ public final class JiraIssueOperations {
                 print("\nRecent comments (newest first):");
                 for (var value : recent) {
                     var comment = object(value);
-                    print(safe(display(comment.get("author")) + "  "
-                            + label(comment, "created")));
+                    print(safe(display(comment.get("author")) + "  " + label(comment, "created")));
                     print(printable(comment.get("body")));
                     print("");
                 }
@@ -175,8 +240,10 @@ public final class JiraIssueOperations {
         List<String> markdownFields() throws IOException {
             var parsed = spec.commandLine().getParseResult();
             if (!parsed.hasMatchedOption("--format")
-                    && (parsed.hasMatchedOption("--raw") || parsed.hasMatchedOption("--json")
-                            || plain || descriptionFormat == DescriptionFormat.raw
+                    && (parsed.hasMatchedOption("--raw")
+                            || parsed.hasMatchedOption("--json")
+                            || plain
+                            || descriptionFormat == DescriptionFormat.raw
                             || (parsed.hasMatchedOption("--comments") && comments != 0)
                             || (machine() && selectedFields == null))) {
                 format = OutputFormat.text;
@@ -187,11 +254,14 @@ public final class JiraIssueOperations {
                 }
                 return List.of();
             }
-            if (parsed.hasMatchedOption("--raw") || parsed.hasMatchedOption("--json")
-                    || plain || descriptionFormat == DescriptionFormat.raw
+            if (parsed.hasMatchedOption("--raw")
+                    || parsed.hasMatchedOption("--json")
+                    || plain
+                    || descriptionFormat == DescriptionFormat.raw
                     || (parsed.hasMatchedOption("--comments") && comments != 0)) {
-                throw wrong("--format markdown cannot be combined with --raw/--json, "
-                        + "--plain, --description-format raw, or nonzero --comments.");
+                throw wrong(
+                        "--format markdown cannot be combined with --raw/--json, "
+                                + "--plain, --description-format raw, or nonzero --comments.");
             }
             if (selectedFields == null) {
                 return MARKDOWN_FIELDS;
@@ -209,38 +279,53 @@ public final class JiraIssueOperations {
             return List.copyOf(names);
         }
 
-        private String markdownDocument(JiraClient jira, JsonObject issue,
-                JsonObject fields, List<String> names) throws IOException {
-            var metadata = names.contains("story-point")
-                    || (names.contains("epic") && !jira.cloud())
-                    ? array(jira.request("GET", "field", null)) : new JsonArray();
-            var epicField = names.contains("epic") && !jira.cloud()
-                    ? JiraAgileCommands.epicField(metadata, "Epic Link",
-                            "com.pyxis.greenhopper.jira:gh-epic-link") : null;
-            var pointsField = names.contains("story-point") ? JiraAgileCommands.storyPointsField(metadata) : null;
+        private String markdownDocument(
+                JiraClient jira, JsonObject issue, JsonObject fields, List<String> names)
+                throws IOException {
+            var metadata =
+                    names.contains("story-point") || (names.contains("epic") && !jira.cloud())
+                            ? array(jira.request("GET", "field", null))
+                            : new JsonArray();
+            var epicField =
+                    names.contains("epic") && !jira.cloud()
+                            ? JiraAgileCommands.epicField(
+                                    metadata,
+                                    "Epic Link",
+                                    "com.pyxis.greenhopper.jira:gh-epic-link")
+                            : null;
+            var pointsField =
+                    names.contains("story-point")
+                            ? JiraAgileCommands.storyPointsField(metadata)
+                            : null;
             var values = new JsonObject();
             for (var name : names) {
-                var value = switch (name) {
-                    case "key" -> issue.get("key");
-                    case "epic" -> epicValue(fields, epicField);
-                    case "story-point" -> pointsField == null ? null : fields.get(pointsField);
-                    default -> fields.get(name);
-                };
+                var value =
+                        switch (name) {
+                            case "key" -> issue.get("key");
+                            case "epic" -> epicValue(fields, epicField);
+                            case "story-point" ->
+                                    pointsField == null ? null : fields.get(pointsField);
+                            default -> fields.get(name);
+                        };
                 if (name.equals("story-point") && value != null && !value.isJsonNull()) {
                     if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
                         throw wrong("Jira returned a nonnumeric Story Points value.");
                     }
                     values.add(name, value);
                 } else {
-                    var text = value == null || value.isJsonNull() ? ""
-                            : name.equals("assignee") && value.isJsonObject()
-                                    ? label(value.getAsJsonObject(), jira.cloud() ? "accountId" : "name")
-                                    : display(value);
+                    var text =
+                            value == null || value.isJsonNull()
+                                    ? ""
+                                    : name.equals("assignee") && value.isJsonObject()
+                                            ? label(
+                                                    value.getAsJsonObject(),
+                                                    jira.cloud() ? "accountId" : "name")
+                                            : display(value);
                     values.addProperty(name, text);
                 }
             }
-            return JiraIssueDocument.render(values, markdownDescription(
-                    fields.get("description"), jira.apiVersion() == 3));
+            return JiraIssueDocument.render(
+                    values, markdownDescription(fields.get("description"), jira.apiVersion() == 3));
         }
 
         static String markdownDescription(JsonElement description, boolean adf) throws IOException {
@@ -269,24 +354,32 @@ public final class JiraIssueOperations {
             }
             var issueType = type.getAsJsonObject();
             var level = issueType.get("hierarchyLevel");
-            boolean epic = level != null && !level.isJsonNull()
-                    ? level.isJsonPrimitive() && level.getAsJsonPrimitive().isNumber()
-                            && level.getAsBigDecimal().compareTo(java.math.BigDecimal.ONE) == 0
-                    : "Epic".equalsIgnoreCase(label(issueType, "name"));
+            boolean epic =
+                    level != null && !level.isJsonNull()
+                            ? level.isJsonPrimitive()
+                                    && level.getAsJsonPrimitive().isNumber()
+                                    && level.getAsBigDecimal().compareTo(java.math.BigDecimal.ONE)
+                                            == 0
+                            : "Epic".equalsIgnoreCase(label(issueType, "name"));
             return epic ? parent.getAsJsonObject().get("key") : null;
         }
     }
 
-    @Command(name = "link", mixinStandardHelpOptions = true,
+    @Command(
+            name = "link",
+            mixinStandardHelpOptions = true,
             subcommands = Link.Remote.class,
             description = "Link issues using a configured link type or direction.")
     public static final class Link extends JiraCommand.Action {
         @Parameters(index = "0", arity = "0..1", paramLabel = "KEY")
         String key;
+
         @Parameters(index = "1", arity = "0..1", paramLabel = "OTHER")
         String other;
+
         @Parameters(index = "2", arity = "0..1", paramLabel = "TYPE")
         String type;
+
         @Option(names = "--no-input", description = "Fail instead of prompting.")
         boolean noInput;
 
@@ -296,14 +389,21 @@ public final class JiraIssueOperations {
             other = issueKey(required(this, other, "Other issue key", noInput));
             different(key, other);
             var jira = client();
-            var types = array(object(jira.request("GET", "issueLinkType", null))
-                    .get("issueLinkTypes"));
+            var types =
+                    array(object(jira.request("GET", "issueLinkType", null)).get("issueLinkTypes"));
             if (type == null && !noInput && System.console() != null) {
                 for (var value : types) {
                     var item = object(value);
-                    print(safe(label(item, "id") + ": " + label(item, "name")
-                            + " [" + label(item, "outward") + " / "
-                            + label(item, "inward") + "]"));
+                    print(
+                            safe(
+                                    label(item, "id")
+                                            + ": "
+                                            + label(item, "name")
+                                            + " ["
+                                            + label(item, "outward")
+                                            + " / "
+                                            + label(item, "inward")
+                                            + "]"));
                 }
             }
             type = required(this, type, "Link type name, ID, or direction", noInput);
@@ -311,7 +411,8 @@ public final class JiraIssueOperations {
             for (var value : types) {
                 var item = object(value);
                 var id = numeric(string(item, "id"));
-                if (matches(item, "id", type) || matches(item, "name", type)
+                if (matches(item, "id", type)
+                        || matches(item, "name", type)
                         || matches(item, "outward", type)) {
                     matches.put(id + ":out", new LinkType(id, false));
                 }
@@ -323,8 +424,9 @@ public final class JiraIssueOperations {
                 }
             }
             if (matches.size() != 1) {
-                throw wrong("Link type is unknown or ambiguous; use an exact "
-                        + "configured type ID, name, or unique direction.");
+                throw wrong(
+                        "Link type is unknown or ambiguous; use an exact "
+                                + "configured type ID, name, or unique direction.");
             }
             var selected = matches.values().iterator().next();
             var body = new JsonObject();
@@ -341,15 +443,20 @@ public final class JiraIssueOperations {
             print("Linked " + key + " and " + other + ".");
         }
 
-        @Command(name = "remote", mixinStandardHelpOptions = true,
+        @Command(
+                name = "remote",
+                mixinStandardHelpOptions = true,
                 description = "Add an HTTP(S) web link to an issue.")
         public static final class Remote extends JiraCommand.Action {
             @Parameters(index = "0", arity = "0..1", paramLabel = "KEY")
             String key;
+
             @Parameters(index = "1", arity = "0..1", paramLabel = "URL")
             String url;
+
             @Parameters(index = "2", arity = "0..1", paramLabel = "TITLE")
             String title;
+
             @Option(names = "--no-input", description = "Fail instead of prompting.")
             boolean noInput;
 
@@ -360,13 +467,19 @@ public final class JiraIssueOperations {
                 title = required(this, title, "Link title", noInput);
                 try {
                     var uri = new URI(url);
-                    if (!Set.of("http", "https").contains(
-                            uri.getScheme() == null ? "" : uri.getScheme()
-                                    .toLowerCase(java.util.Locale.ROOT))
-                            || uri.getHost() == null || uri.getUserInfo() != null
-                            || uri.getPort() < -1 || uri.getPort() > 65535) {
-                        throw wrong("URL must be an absolute HTTP(S) URL "
-                                + "without embedded credentials.");
+                    if (!Set.of("http", "https")
+                                    .contains(
+                                            uri.getScheme() == null
+                                                    ? ""
+                                                    : uri.getScheme()
+                                                            .toLowerCase(java.util.Locale.ROOT))
+                            || uri.getHost() == null
+                            || uri.getUserInfo() != null
+                            || uri.getPort() < -1
+                            || uri.getPort() > 65535) {
+                        throw wrong(
+                                "URL must be an absolute HTTP(S) URL "
+                                        + "without embedded credentials.");
                     }
                 } catch (URISyntaxException exception) {
                     throw wrong("Invalid remote link URL.");
@@ -376,8 +489,12 @@ public final class JiraIssueOperations {
                 link.addProperty("title", title);
                 var body = new JsonObject();
                 body.add("object", link);
-                var created = object(client().request("POST",
-                        "issue/" + encode(key) + "/remotelink", body));
+                var created =
+                        object(
+                                client().request(
+                                                "POST",
+                                                "issue/" + encode(key) + "/remotelink",
+                                                body));
                 var result = new JsonObject();
                 result.addProperty("key", key);
                 result.addProperty("url", url);
@@ -391,13 +508,17 @@ public final class JiraIssueOperations {
         }
     }
 
-    @Command(name = "unlink", mixinStandardHelpOptions = true,
+    @Command(
+            name = "unlink",
+            mixinStandardHelpOptions = true,
             description = "Remove all issue links between exactly two issues.")
     public static final class Unlink extends JiraCommand.Action {
         @Parameters(index = "0", arity = "0..1", paramLabel = "KEY")
         String key;
+
         @Parameters(index = "1", arity = "0..1", paramLabel = "OTHER")
         String other;
+
         @Option(names = "--no-input", description = "Fail instead of prompting.")
         boolean noInput;
 
@@ -422,8 +543,7 @@ public final class JiraIssueOperations {
                         var target = endpoint.getAsJsonObject();
                         var sameId = matches(target, "id", string(second, "id"));
                         var sameKey = matches(target, "key", string(second, "key"));
-                        if (target.has("id") && target.has("key")
-                                && sameId != sameKey) {
+                        if (target.has("id") && target.has("key") && sameId != sameKey) {
                             throw wrong("Jira returned conflicting issue link endpoints.");
                         }
                         if (target.has("id") ? sameId : sameKey) {
@@ -443,26 +563,28 @@ public final class JiraIssueOperations {
             result.addProperty("otherKey", other);
             result.addProperty("removed", ids.size());
             machineData = result;
-            print("Removed " + ids.size() + " link(s) between "
-                    + key + " and " + other + ".");
+            print("Removed " + ids.size() + " link(s) between " + key + " and " + other + ".");
         }
     }
 
-    @Command(name = "delete", mixinStandardHelpOptions = true,
+    @Command(
+            name = "delete",
+            mixinStandardHelpOptions = true,
             description = "Delete an issue directly; --cascade also deletes subtasks.")
     public static final class Delete extends JiraCommand.Action {
         @Parameters(index = "0", arity = "0..1", paramLabel = "KEY")
         String key;
+
         @Option(names = "--cascade", description = "Delete the issue's subtasks too.")
         boolean cascade;
+
         @Option(names = "--no-input", description = "Fail instead of prompting.")
         boolean noInput;
 
         @Override
         protected void execute() throws IOException {
             key = issueKey(required(this, key, "Issue key to delete", noInput));
-            client().request("DELETE", "issue/" + encode(key)
-                    + "?deleteSubtasks=" + cascade, null);
+            client().request("DELETE", "issue/" + encode(key) + "?deleteSubtasks=" + cascade, null);
             var result = new JsonObject();
             result.addProperty("key", key);
             result.addProperty("deleted", true);
@@ -472,31 +594,56 @@ public final class JiraIssueOperations {
         }
     }
 
-    @Command(name = "clone", mixinStandardHelpOptions = true,
+    @Command(
+            name = "clone",
+            mixinStandardHelpOptions = true,
             description = "Clone createable issue fields, without comments or attachments.")
     public static final class Clone extends JiraCommand.Action {
         @Parameters(index = "0", arity = "0..1", paramLabel = "KEY")
         String key;
-        @Option(names = {"-s", "--summary"}, paramLabel = "TEXT")
+
+        @Option(
+                names = {"-s", "--summary"},
+                paramLabel = "TEXT")
         String summary;
-        @Option(names = {"-y", "--priority"}, paramLabel = "NAME")
+
+        @Option(
+                names = {"-y", "--priority"},
+                paramLabel = "NAME")
         String priority;
-        @Option(names = {"-a", "--assignee"}, paramLabel = "USER",
-                description = "Cloud accountId or DC username; me=self, x=unassigned, "
-                        + "default=project default.")
+
+        @Option(
+                names = {"-a", "--assignee"},
+                paramLabel = "USER",
+                description =
+                        "Cloud accountId or DC username; me=self, x=unassigned, "
+                                + "default=project default.")
         String assignee;
-        @Option(names = {"-l", "--label"}, paramLabel = "LABEL",
+
+        @Option(
+                names = {"-l", "--label"},
+                paramLabel = "LABEL",
                 description = "Repeat to replace labels.")
         List<String> labels;
-        @Option(names = {"-C", "--component"}, paramLabel = "NAME",
+
+        @Option(
+                names = {"-C", "--component"},
+                paramLabel = "NAME",
                 description = "Repeat to replace components.")
         List<String> components;
-        @Option(names = "--fix-version", paramLabel = "NAME",
+
+        @Option(
+                names = "--fix-version",
+                paramLabel = "NAME",
                 description = "Repeat to replace fix versions.")
         List<String> fixVersions;
-        @Option(names = {"-H", "--replace"}, paramLabel = "FIND:REPLACEMENT",
+
+        @Option(
+                names = {"-H", "--replace"},
+                paramLabel = "FIND:REPLACEMENT",
                 description = "Case-sensitive replacement in summary and description; repeatable.")
         List<String> replacements;
+
         @Option(names = "--no-input", description = "Fail instead of prompting.")
         boolean noInput;
 
@@ -511,8 +658,9 @@ public final class JiraIssueOperations {
             var source = object(jira.issue(key).get("fields"));
             var project = object(source.get("project"));
             var type = object(source.get("issuetype"));
-            var metadata = createMetadata(jira, numeric(string(project, "id")),
-                    numeric(string(type, "id")));
+            var metadata =
+                    createMetadata(
+                            jira, numeric(string(project, "id")), numeric(string(type, "id")));
             if (source.has("security") && !source.get("security").isJsonNull()) {
                 requireCreateable(metadata, "security");
             }
@@ -522,8 +670,10 @@ public final class JiraIssueOperations {
             var skipped = new ArrayList<String>();
             for (var entry : metadata.entrySet()) {
                 var name = entry.getKey();
-                if (!copyable(name) || !canSet(entry.getValue())
-                        || !source.has(name) || source.get(name).isJsonNull()) {
+                if (!copyable(name)
+                        || !canSet(entry.getValue())
+                        || !source.has(name)
+                        || source.get(name).isJsonNull()) {
                     continue;
                 }
                 var value = normalized(name, source.get(name), entry.getValue(), jira);
@@ -541,13 +691,11 @@ public final class JiraIssueOperations {
                 fields.addProperty("summary", summary);
             }
             if (fields.has("summary")) {
-                fields.addProperty("summary", replace(
-                        string(fields, "summary"), changes));
+                fields.addProperty("summary", replace(string(fields, "summary"), changes));
                 checked(string(fields, "summary"), "Cloned summary");
             }
             if (fields.has("description")) {
-                fields.add("description", replaceDescription(
-                        fields.get("description"), changes));
+                fields.add("description", replaceDescription(fields.get("description"), changes));
             }
             if (priority != null) {
                 fields.add("priority", namedOverride(metadata, "priority", priority));
@@ -564,33 +712,48 @@ public final class JiraIssueOperations {
                     fields.remove("assignee");
                 } else {
                     var identifier = jira.cloud() ? "accountId" : "name";
-                    fields.add("assignee", reference(identifier, user.equals("me")
-                            ? checked(string(jira.myself(), identifier), "Current user")
-                            : user));
+                    fields.add(
+                            "assignee",
+                            reference(
+                                    identifier,
+                                    user.equals("me")
+                                            ? checked(
+                                                    string(jira.myself(), identifier),
+                                                    "Current user")
+                                            : user));
                 }
             }
             var reporter = metadata.get("reporter");
-            if (reporter != null && bool(reporter, "required")
-                    && !bool(reporter, "hasDefaultValue") && canSet(reporter)) {
+            if (reporter != null
+                    && bool(reporter, "required")
+                    && !bool(reporter, "hasDefaultValue")
+                    && canSet(reporter)) {
                 var identifier = jira.cloud() ? "accountId" : "name";
-                fields.add("reporter", reference(identifier,
-                        checked(string(jira.myself(), identifier), "Current user")));
+                fields.add(
+                        "reporter",
+                        reference(
+                                identifier,
+                                checked(string(jira.myself(), identifier), "Current user")));
             }
             for (var entry : metadata.entrySet()) {
                 var meta = entry.getValue();
-                if (bool(meta, "required") && !bool(meta, "hasDefaultValue")
+                if (bool(meta, "required")
+                        && !bool(meta, "hasDefaultValue")
                         && (!fields.has(entry.getKey())
                                 || fields.get(entry.getKey()).isJsonNull())) {
-                    throw wrong("Cannot safely clone a required create field; "
-                            + "use issue create with an explicit template.");
+                    throw wrong(
+                            "Cannot safely clone a required create field; "
+                                    + "use issue create with an explicit template.");
                 }
             }
             if (!fields.has("summary")) {
                 throw wrong("Source has no createable summary.");
             }
             if (!skipped.isEmpty()) {
-                spec.commandLine().getErr().println("jira: omitted "
-                        + skipped.size() + " unsupported field value(s).");
+                spec.commandLine()
+                        .getErr()
+                        .println(
+                                "jira: omitted " + skipped.size() + " unsupported field value(s).");
             }
             var created = jira.create(fields);
             var result = new JsonObject();
@@ -602,20 +765,21 @@ public final class JiraIssueOperations {
         }
     }
 
-    private record LinkType(String id, boolean reverse) {
-    }
+    private record LinkType(String id, boolean reverse) {}
 
-    private record Replacement(String find, String replacement) {
-    }
+    private record Replacement(String find, String replacement) {}
 
-    private static String required(JiraCommand.Action action, String value,
-            String label, boolean noInput) throws IOException {
+    private static String required(
+            JiraCommand.Action action, String value, String label, boolean noInput)
+            throws IOException {
         if (value != null) {
             return checked(value, label);
         }
         if (noInput || System.console() == null) {
-            throw wrong("Missing required argument: " + label
-                    + "; supply it explicitly (prompts require a terminal).");
+            throw wrong(
+                    "Missing required argument: "
+                            + label
+                            + "; supply it explicitly (prompts require a terminal).");
         }
         action.spec.commandLine().getErr().print(label + ": ");
         action.spec.commandLine().getErr().flush();
@@ -693,13 +857,11 @@ public final class JiraIssueOperations {
 
     private static String label(JsonObject value, String field) {
         var item = value.get(field);
-        return item != null && item.isJsonPrimitive()
-                ? item.getAsString() : "";
+        return item != null && item.isJsonPrimitive() ? item.getAsString() : "";
     }
 
     private static boolean matches(JsonObject value, String field, String query) {
-        return !label(value, field).isEmpty()
-                && label(value, field).equalsIgnoreCase(query);
+        return !label(value, field).isEmpty() && label(value, field).equalsIgnoreCase(query);
     }
 
     private static String display(JsonElement value) {
@@ -720,14 +882,16 @@ public final class JiraIssueOperations {
 
     private static String safe(String value) {
         var result = new StringBuilder();
-        value.codePoints().forEach(character -> {
-            if (!Character.isISOControl(character) || character == '\n'
-                    || character == '\t') {
-                result.appendCodePoint(character);
-            } else {
-                result.append(' ');
-            }
-        });
+        value.codePoints()
+                .forEach(character -> {
+                    if (!Character.isISOControl(character)
+                            || character == '\n'
+                            || character == '\t') {
+                        result.appendCodePoint(character);
+                    } else {
+                        result.append(' ');
+                    }
+                });
         return result.toString();
     }
 
@@ -768,8 +932,15 @@ public final class JiraIssueOperations {
                     }
                 }
             }
-            if (Set.of("paragraph", "heading", "listItem", "codeBlock",
-                    "blockquote", "tableRow", "rule").contains(type)) {
+            if (Set.of(
+                            "paragraph",
+                            "heading",
+                            "listItem",
+                            "codeBlock",
+                            "blockquote",
+                            "tableRow",
+                            "rule")
+                    .contains(type)) {
                 output.append('\n');
             } else if (type.equals("tableCell") || type.equals("tableHeader")) {
                 output.append('\t');
@@ -777,17 +948,25 @@ public final class JiraIssueOperations {
         }
     }
 
-    private static Map<String, JsonObject> createMetadata(JiraClient jira,
-            String project, String type) throws IOException {
+    private static Map<String, JsonObject> createMetadata(
+            JiraClient jira, String project, String type) throws IOException {
         var result = new LinkedHashMap<String, JsonObject>();
         if (jira.cloud()) {
             var start = 0;
             while (start < 5000) {
-                var page = object(jira.request("GET", "issue/createmeta/"
-                        + project + "/issuetypes/" + type + "?startAt="
-                        + start + "&maxResults=100", null));
-                var values = array(page.has("fields")
-                        ? page.get("fields") : page.get("values"));
+                var page =
+                        object(
+                                jira.request(
+                                        "GET",
+                                        "issue/createmeta/"
+                                                + project
+                                                + "/issuetypes/"
+                                                + type
+                                                + "?startAt="
+                                                + start
+                                                + "&maxResults=100",
+                                        null));
+                var values = array(page.has("fields") ? page.get("fields") : page.get("values"));
                 for (var value : values) {
                     var field = object(value);
                     var id = string(field, "fieldId");
@@ -796,8 +975,7 @@ public final class JiraIssueOperations {
                     }
                 }
                 start += values.size();
-                if (bool(page, "isLast")
-                        || page.has("total") && start >= integer(page, "total")) {
+                if (bool(page, "isLast") || page.has("total") && start >= integer(page, "total")) {
                     return result;
                 }
                 if (values.isEmpty()) {
@@ -806,9 +984,16 @@ public final class JiraIssueOperations {
             }
             throw wrong("Too many create fields; use issue create explicitly.");
         }
-        var data = object(jira.request("GET", "issue/createmeta?projectIds="
-                + project + "&issuetypeIds=" + type
-                + "&expand=projects.issuetypes.fields", null));
+        var data =
+                object(
+                        jira.request(
+                                "GET",
+                                "issue/createmeta?projectIds="
+                                        + project
+                                        + "&issuetypeIds="
+                                        + type
+                                        + "&expand=projects.issuetypes.fields",
+                                null));
         for (var projectValue : array(data.get("projects"))) {
             var projectMeta = object(projectValue);
             if (!matches(projectMeta, "id", project)) {
@@ -834,15 +1019,28 @@ public final class JiraIssueOperations {
 
     private static boolean bool(JsonObject data, String field) {
         var value = data.get(field);
-        return value != null && value.isJsonPrimitive()
-                && value.getAsJsonPrimitive().isBoolean() && value.getAsBoolean();
+        return value != null
+                && value.isJsonPrimitive()
+                && value.getAsJsonPrimitive().isBoolean()
+                && value.getAsBoolean();
     }
 
     private static boolean copyable(String field) {
         return field.matches("customfield_[0-9]+")
-                || Set.of("summary", "description", "priority", "assignee",
-                        "labels", "components", "fixVersions", "versions",
-                        "parent", "environment", "duedate", "security").contains(field);
+                || Set.of(
+                                "summary",
+                                "description",
+                                "priority",
+                                "assignee",
+                                "labels",
+                                "components",
+                                "fixVersions",
+                                "versions",
+                                "parent",
+                                "environment",
+                                "duedate",
+                                "security")
+                        .contains(field);
     }
 
     private static boolean canSet(JsonObject metadata) throws IOException {
@@ -850,27 +1048,29 @@ public final class JiraIssueOperations {
             return true;
         }
         for (var operation : array(metadata.get("operations"))) {
-            if (operation.isJsonPrimitive()
-                    && operation.getAsString().equals("set")) {
+            if (operation.isJsonPrimitive() && operation.getAsString().equals("set")) {
                 return true;
             }
         }
         return false;
     }
 
-    private static void requireCreateable(Map<String, JsonObject> metadata,
-            String field) throws IOException {
+    private static void requireCreateable(Map<String, JsonObject> metadata, String field)
+            throws IOException {
         if (!metadata.containsKey(field) || !canSet(metadata.get(field))) {
             throw wrong("Requested field is not createable for this project and type.");
         }
     }
 
-    private static JsonElement normalized(String field, JsonElement value,
-            JsonObject metadata, JiraClient jira) throws IOException {
+    private static JsonElement normalized(
+            String field, JsonElement value, JsonObject metadata, JiraClient jira)
+            throws IOException {
         if (field.equals("description") || field.equals("environment")) {
-            return value.isJsonPrimitive() || value.isJsonObject()
-                    && label(value.getAsJsonObject(), "type").equals("doc")
-                    ? value.deepCopy() : null;
+            return value.isJsonPrimitive()
+                            || value.isJsonObject()
+                                    && label(value.getAsJsonObject(), "type").equals("doc")
+                    ? value.deepCopy()
+                    : null;
         }
         if (field.equals("assignee")) {
             return identity(value, jira.cloud() ? "accountId" : "name");
@@ -884,8 +1084,7 @@ public final class JiraIssueOperations {
         if (!field.startsWith("customfield_")) {
             if (field.equals("labels") && value.isJsonArray()) {
                 for (var item : value.getAsJsonArray()) {
-                    if (!item.isJsonPrimitive()
-                            || !item.getAsJsonPrimitive().isString()) {
+                    if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString()) {
                         return null;
                     }
                 }
@@ -925,8 +1124,16 @@ public final class JiraIssueOperations {
         if (type.equals("user")) {
             return identity(value, jira.cloud() ? "accountId" : "name");
         }
-        if (Set.of("option", "option-with-child", "version", "component", "project", "issuetype",
-                "priority", "group").contains(type)) {
+        if (Set.of(
+                        "option",
+                        "option-with-child",
+                        "version",
+                        "component",
+                        "project",
+                        "issuetype",
+                        "priority",
+                        "group")
+                .contains(type)) {
             var copy = identity(value, type.equals("group") ? "name" : "id");
             var childValue = copy == null ? null : value.getAsJsonObject().get("child");
             if (copy != null && childValue != null && !childValue.isJsonNull()) {
@@ -939,8 +1146,9 @@ public final class JiraIssueOperations {
             return copy;
         }
         return value.isJsonPrimitive()
-                && Set.of("string", "number", "date", "datetime", "boolean")
-                        .contains(type) ? value.deepCopy() : null;
+                        && Set.of("string", "number", "date", "datetime", "boolean").contains(type)
+                ? value.deepCopy()
+                : null;
     }
 
     private static JsonObject identity(JsonElement value, String field) {
@@ -966,8 +1174,8 @@ public final class JiraIssueOperations {
         return result;
     }
 
-    private static JsonObject namedOverride(Map<String, JsonObject> metadata,
-            String field, String input) throws IOException {
+    private static JsonObject namedOverride(
+            Map<String, JsonObject> metadata, String field, String input) throws IOException {
         requireCreateable(metadata, field);
         checked(input, "Field override");
         var choices = metadata.get(field).get("allowedValues");
@@ -977,8 +1185,7 @@ public final class JiraIssueOperations {
         var matches = new ArrayList<JsonObject>();
         for (var choice : choices.getAsJsonArray()) {
             var candidate = object(choice);
-            if (label(candidate, "name").equals(input)
-                    || label(candidate, "id").equals(input)) {
+            if (label(candidate, "name").equals(input) || label(candidate, "id").equals(input)) {
                 var id = identity(candidate, "id");
                 if (id != null && !matches.contains(id)) {
                     matches.add(id);
@@ -991,9 +1198,13 @@ public final class JiraIssueOperations {
         return matches.getFirst();
     }
 
-    private static void overrideList(JsonObject fields,
-            Map<String, JsonObject> metadata, String field,
-            List<String> values, boolean named) throws IOException {
+    private static void overrideList(
+            JsonObject fields,
+            Map<String, JsonObject> metadata,
+            String field,
+            List<String> values,
+            boolean named)
+            throws IOException {
         if (values == null) {
             return;
         }
@@ -1010,8 +1221,7 @@ public final class JiraIssueOperations {
         fields.add(field, result);
     }
 
-    private static List<Replacement> replacementRules(List<String> values)
-            throws IOException {
+    private static List<Replacement> replacementRules(List<String> values) throws IOException {
         var result = new ArrayList<Replacement>();
         if (values != null) {
             for (var value : values) {
@@ -1019,8 +1229,9 @@ public final class JiraIssueOperations {
                 if (separator <= 0) {
                     throw wrong("--replace requires nonempty FIND:REPLACEMENT.");
                 }
-                result.add(new Replacement(value.substring(0, separator),
-                        value.substring(separator + 1)));
+                result.add(
+                        new Replacement(
+                                value.substring(0, separator), value.substring(separator + 1)));
             }
         }
         return result;
@@ -1033,19 +1244,18 @@ public final class JiraIssueOperations {
         return text;
     }
 
-    private static JsonElement replaceDescription(JsonElement value,
-            List<Replacement> replacements) {
+    private static JsonElement replaceDescription(
+            JsonElement value, List<Replacement> replacements) {
         var copy = value.deepCopy();
         if (copy.isJsonPrimitive() && copy.getAsJsonPrimitive().isString()) {
-            return new com.google.gson.JsonPrimitive(
-                    replace(copy.getAsString(), replacements));
+            return new com.google.gson.JsonPrimitive(replace(copy.getAsString(), replacements));
         }
         replaceTextNodes(copy, replacements, 0);
         return copy;
     }
 
-    private static void replaceTextNodes(JsonElement value,
-            List<Replacement> replacements, int depth) {
+    private static void replaceTextNodes(
+            JsonElement value, List<Replacement> replacements, int depth) {
         if (depth > 100) {
             return;
         }
@@ -1056,8 +1266,7 @@ public final class JiraIssueOperations {
         } else if (value.isJsonObject()) {
             var node = value.getAsJsonObject();
             var text = node.get("text");
-            if (text != null && text.isJsonPrimitive()
-                    && text.getAsJsonPrimitive().isString()) {
+            if (text != null && text.isJsonPrimitive() && text.getAsJsonPrimitive().isString()) {
                 node.addProperty("text", replace(text.getAsString(), replacements));
             }
             if (node.has("content")) {

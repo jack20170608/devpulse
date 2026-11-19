@@ -25,10 +25,12 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
 /**
- * Template profiles: {@code .jira/profiles/NAME} in the current directory
- * shadows {@code ~/.jira/profiles/NAME}; missing files use bundled defaults.
+ * Template profiles: {@code .jira/profiles/NAME} in the current directory shadows {@code
+ * ~/.jira/profiles/NAME}; missing files use bundled defaults.
  */
-@Command(name = "profile", mixinStandardHelpOptions = true,
+@Command(
+        name = "profile",
+        mixinStandardHelpOptions = true,
         description = "Manage template profiles used by bundled AI skills.",
         subcommands = {JiraProfiles.ListProfiles.class, JiraProfiles.Init.class})
 final class JiraProfiles implements Runnable {
@@ -49,8 +51,7 @@ final class JiraProfiles implements Runnable {
         }
     }
 
-    @Spec
-    CommandSpec spec;
+    @Spec CommandSpec spec;
 
     @Override
     public void run() {
@@ -58,7 +59,8 @@ final class JiraProfiles implements Runnable {
     }
 
     static Path root(boolean global) {
-        return global ? JiraConfiguration.globalFile().getParent().resolve("profiles")
+        return global
+                ? JiraConfiguration.globalFile().getParent().resolve("profiles")
                 : Path.of(".jira", "profiles");
     }
 
@@ -87,8 +89,8 @@ final class JiraProfiles implements Runnable {
                     }
                 }
             }
-            found.forEach((candidate, directory) -> result.add(
-                    new Location(candidate, global ? "global" : "local", directory)));
+            found.forEach((candidate, directory) ->
+                    result.add(new Location(candidate, global ? "global" : "local", directory)));
         }
         return result;
     }
@@ -104,9 +106,14 @@ final class JiraProfiles implements Runnable {
 
     static IOException missing(String name) throws IOException {
         var available = names();
-        return wrong("Profile not found: " + name + ". Available: "
-                + (available.isEmpty() ? "none (run jira init or jira profile init NAME)"
-                : String.join(", ", available)) + ".");
+        return wrong(
+                "Profile not found: "
+                        + name
+                        + ". Available: "
+                        + (available.isEmpty()
+                                ? "none (run jira init or jira profile init NAME)"
+                                : String.join(", ", available))
+                        + ".");
     }
 
     /** Template content from a profile directory, or null when the profile lacks it. */
@@ -117,7 +124,8 @@ final class JiraProfiles implements Runnable {
         }
         if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
                 || Files.size(source) > MAX_TEMPLATE) {
-            throw wrong("Profile template must be a regular UTF-8 file of at most 1 MiB: " + source);
+            throw wrong(
+                    "Profile template must be a regular UTF-8 file of at most 1 MiB: " + source);
         }
         var content = Files.readString(source, StandardCharsets.UTF_8);
         if (content.isBlank()) {
@@ -131,20 +139,27 @@ final class JiraProfiles implements Runnable {
     }
 
     /** Write missing profile templates from source or preset; never overwrite. */
-    static List<Path> materialize(Path profile, Path source, String preset,
-            JiraSkillCommands.Language language) throws IOException {
+    static List<Path> materialize(
+            Path profile, Path source, String preset, JiraSkillCommands.Language language)
+            throws IOException {
         return materialize(profile, source, preset, language, false);
     }
 
     /** Write profile templates; replace existing template files when requested. */
-    static List<Path> materialize(Path profile, Path source, String preset,
-            JiraSkillCommands.Language language, boolean replace) throws IOException {
+    static List<Path> materialize(
+            Path profile,
+            Path source,
+            String preset,
+            JiraSkillCommands.Language language,
+            boolean replace)
+            throws IOException {
         var selectedPreset = preset(preset);
         var contents = new LinkedHashMap<Path, String>();
         for (var template : TEMPLATES) {
             var content = source == null ? null : read(source, template);
-            contents.put(file(profile, template), content != null ? content
-                    : presetTemplate(selectedPreset, template, language));
+            contents.put(
+                    file(profile, template),
+                    content != null ? content : presetTemplate(selectedPreset, template, language));
         }
         var created = new ArrayList<Path>();
         for (Map.Entry<Path, String> entry : contents.entrySet()) {
@@ -155,7 +170,8 @@ final class JiraProfiles implements Runnable {
                 if (!Files.isRegularFile(entry.getKey(), LinkOption.NOFOLLOW_LINKS)) {
                     throw wrong("Profile template is not a regular file: " + entry.getKey());
                 }
-                var staging = Files.createTempFile(entry.getKey().getParent(), ".jira-profile-", ".md");
+                var staging =
+                        Files.createTempFile(entry.getKey().getParent(), ".jira-profile-", ".md");
                 try {
                     Files.writeString(staging, entry.getValue(), StandardCharsets.UTF_8);
                     Files.move(staging, entry.getKey(), StandardCopyOption.REPLACE_EXISTING);
@@ -166,8 +182,12 @@ final class JiraProfiles implements Runnable {
                 continue;
             }
             Files.createDirectories(entry.getKey().getParent());
-            Files.writeString(entry.getKey(), entry.getValue(), StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            Files.writeString(
+                    entry.getKey(),
+                    entry.getValue(),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE);
             created.add(entry.getKey());
         }
         return created;
@@ -175,14 +195,19 @@ final class JiraProfiles implements Runnable {
 
     static String preset(String name) throws IOException {
         if (name == null || !PRESETS.contains(name)) {
-            throw wrong("Unknown template preset: " + name + ". Available: "
-                    + String.join(", ", PRESETS) + ".");
+            throw wrong(
+                    "Unknown template preset: "
+                            + name
+                            + ". Available: "
+                            + String.join(", ", PRESETS)
+                            + ".");
         }
         return name;
     }
 
-    static String presetTemplate(String preset, String template,
-            JiraSkillCommands.Language language) throws IOException {
+    static String presetTemplate(
+            String preset, String template, JiraSkillCommands.Language language)
+            throws IOException {
         return JiraSkillCommands.Export.bundled(
                 Path.of("presets", preset, "templates", template), language);
     }
@@ -193,11 +218,12 @@ final class JiraProfiles implements Runnable {
         return result;
     }
 
-    @Command(name = "list", mixinStandardHelpOptions = true,
+    @Command(
+            name = "list",
+            mixinStandardHelpOptions = true,
             description = "List local and global profiles; optionally include bundled presets.")
     static final class ListProfiles extends JiraCommand.Action {
-        @Option(names = "--presets",
-                description = "Also list built-in template presets.")
+        @Option(names = "--presets", description = "Also list built-in template presets.")
         boolean includePresets;
 
         @Override
@@ -210,13 +236,19 @@ final class JiraProfiles implements Runnable {
                 entry.addProperty("shadowed", shadowed);
                 profiles.add(entry);
                 seen.add(location.name());
-                print(location.name() + "\t" + location.scope()
-                        + (shadowed ? " (shadowed)" : "") + "\t"
-                        + location.directory().toAbsolutePath().normalize());
+                print(
+                        location.name()
+                                + "\t"
+                                + location.scope()
+                                + (shadowed ? " (shadowed)" : "")
+                                + "\t"
+                                + location.directory().toAbsolutePath().normalize());
             }
             if (profiles.isEmpty()) {
-                print(includePresets ? "No profiles."
-                        : "No profiles. Run jira init or jira profile init NAME.");
+                print(
+                        includePresets
+                                ? "No profiles."
+                                : "No profiles. Run jira init or jira profile init NAME.");
             }
             var result = new JsonObject();
             result.add("profiles", profiles);
@@ -232,30 +264,49 @@ final class JiraProfiles implements Runnable {
         }
     }
 
-    @Command(name = "init", mixinStandardHelpOptions = true,
+    @Command(
+            name = "init",
+            mixinStandardHelpOptions = true,
             description = "Create a profile from a bundled preset or another profile.")
     static final class Init extends JiraCommand.Action {
         @Parameters(index = "0", paramLabel = "NAME", description = "Profile name.")
         String profile;
-        @Option(names = "--from", paramLabel = "NAME",
+
+        @Option(
+                names = "--from",
+                paramLabel = "NAME",
                 description = "Copy another profile; missing files use the standard preset.")
         String from;
-        @Option(names = "--preset", paramLabel = "NAME",
-                description = "Seed from a built-in preset (standard, story, bug, spike, agile; "
-                        + "default: standard).")
+
+        @Option(
+                names = "--preset",
+                paramLabel = "NAME",
+                description =
+                        "Seed from a built-in preset (standard, story, bug, spike, agile; "
+                                + "default: standard).")
         String preset;
-        @Option(names = {"-g", "--global"},
+
+        @Option(
+                names = {"-g", "--global"},
                 description = "Create under ~/.jira/profiles instead of .jira/profiles.")
         boolean global;
-        @Option(names = "--language", defaultValue = "en", paramLabel = "en|zh",
-                description = "Language of bundled templates: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}).")
+
+        @Option(
+                names = "--language",
+                defaultValue = "en",
+                paramLabel = "en|zh",
+                description =
+                        "Language of bundled templates: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}).")
         JiraSkillCommands.Language language;
-        @Option(names = "--overwrite",
-                description = "Replace the templates of an existing profile without asking. "
-                        + "Otherwise an interactive terminal asks for confirmation.")
+
+        @Option(
+                names = "--overwrite",
+                description =
+                        "Replace the templates of an existing profile without asking. "
+                                + "Otherwise an interactive terminal asks for confirmation.")
         boolean overwrite;
-        @Option(names = "--no-input",
-                description = "Never prompt for overwrite confirmation.")
+
+        @Option(names = "--no-input", description = "Never prompt for overwrite confirmation.")
         boolean noInput;
 
         @Override
@@ -293,19 +344,24 @@ final class JiraProfiles implements Runnable {
             result.add("createdFiles", paths(created));
             result.addProperty("overwritten", replace);
             machineData = result;
-            print((replace ? "Replaced templates of profile " : "Created profile ") + profile
-                    + " at " + target.toAbsolutePath().normalize() + ".");
+            print(
+                    (replace ? "Replaced templates of profile " : "Created profile ")
+                            + profile
+                            + " at "
+                            + target.toAbsolutePath().normalize()
+                            + ".");
         }
 
         private boolean confirmOverwrite(Path target) throws IOException {
             var console = System.console();
             if (noInput || machine() || console == null) {
-                throw wrong("Profile already exists: " + target
-                        + "; rerun with --overwrite to replace its templates.");
+                throw wrong(
+                        "Profile already exists: "
+                                + target
+                                + "; rerun with --overwrite to replace its templates.");
             }
             var err = spec.commandLine().getErr();
-            err.print("Profile already exists: " + target
-                    + "\nOverwrite its templates? [y/N]: ");
+            err.print("Profile already exists: " + target + "\nOverwrite its templates? [y/N]: ");
             err.flush();
             var answer = console.readLine();
             if (answer == null) {

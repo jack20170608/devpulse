@@ -20,8 +20,8 @@ public record TaskOptions(int maxAttempts, Duration retryDelay, Duration timeout
     private static void validateDuration(String name, Duration value, boolean allowZero) {
         try {
             if (value.toNanos() < 0 || (!allowZero && value.isZero())) {
-                throw new IllegalArgumentException(name + " must be "
-                        + (allowZero ? "nonnegative." : "positive."));
+                throw new IllegalArgumentException(
+                        name + " must be " + (allowZero ? "nonnegative." : "positive."));
             }
         } catch (ArithmeticException exception) {
             throw new IllegalArgumentException(name + " is too large.", exception);

@@ -12,14 +12,20 @@ public final class TaskDetails {
         if (daemon == null) {
             return List.of();
         }
-        return List.of("Type: daemon; needs waits for readiness",
+        return List.of(
+                "Type: daemon; needs waits for readiness",
                 "Readiness / Bash: " + daemon.readyCommand(),
-                "Readiness timeout: " + options.readyTimeout()
-                        + "; interval: " + options.checkInterval()
-                        + "; check timeout: " + options.checkTimeout(),
+                "Readiness timeout: "
+                        + options.readyTimeout()
+                        + "; interval: "
+                        + options.checkInterval()
+                        + "; check timeout: "
+                        + options.checkTimeout(),
                 "Lifecycle: user-managed; no automatic stop",
-                "Stop / Bash: " + (daemon.stopCommand() == null
-                        ? "(terminate owned process tree)" : daemon.stopCommand()),
+                "Stop / Bash: "
+                        + (daemon.stopCommand() == null
+                                ? "(terminate owned process tree)"
+                                : daemon.stopCommand()),
                 "Stop timeout: " + daemon.stopTimeout());
     }
 }

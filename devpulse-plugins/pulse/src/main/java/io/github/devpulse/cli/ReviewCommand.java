@@ -2,8 +2,8 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.execution.PulseConfiguration;
-import io.github.devpulse.review.TaskDetails;
 import io.github.devpulse.review.ReviewTui;
+import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
@@ -18,31 +18,33 @@ import picocli.CommandLine.Spec;
         name = "review",
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
-        description = "Validate and review a task or pipeline plan "
-                + "without executing commands."
-)
+        description =
+                "Validate and review a task or pipeline plan " + "without executing commands.")
 public final class ReviewCommand implements Callable<Integer> {
-    @Spec
-    private CommandSpec spec;
+    @Spec private CommandSpec spec;
 
-    @Parameters(index = "0", arity = "0..1", defaultValue = "dev",
+    @Parameters(
+            index = "0",
+            arity = "0..1",
+            defaultValue = "dev",
             paramLabel = "TARGET",
-            description = "Task or pipeline to review "
-                    + "(default: ${DEFAULT-VALUE}).")
+            description = "Task or pipeline to review " + "(default: ${DEFAULT-VALUE}).")
     private String target;
 
-    @Option(names = "--directory", defaultValue = ".",
-            description = "Project directory containing .devpulse.yaml "
-                    + "(default: ${DEFAULT-VALUE}).")
+    @Option(
+            names = "--directory",
+            defaultValue = ".",
+            description =
+                    "Project directory containing .devpulse.yaml " + "(default: ${DEFAULT-VALUE}).")
     private Path directory;
 
-    @Option(names = "--jobs", paramLabel = "N",
-            description = "Review with this concurrency limit; "
-                    + "overrides parallelism.")
+    @Option(
+            names = "--jobs",
+            paramLabel = "N",
+            description = "Review with this concurrency limit; " + "overrides parallelism.")
     private Integer jobs;
 
-    @Option(names = "--plain",
-            description = "Print a plain-text plan instead of opening the TUI.")
+    @Option(names = "--plain", description = "Print a plain-text plan instead of opening the TUI.")
     private boolean plain;
 
     @Override
@@ -60,31 +62,40 @@ public final class ReviewCommand implements Callable<Integer> {
             if (!plain && ReviewTui.show(target, config, plan, concurrency)) {
                 return 0;
             }
-            out.println("Plan: " + target + " (" + plan.tasks().size()
-                    + " tasks, parallelism " + concurrency + ")");
+            out.println(
+                    "Plan: "
+                            + target
+                            + " ("
+                            + plan.tasks().size()
+                            + " tasks, parallelism "
+                            + concurrency
+                            + ")");
             out.println("Project directory: " + config.directory());
             out.println();
             out.println("Dependencies (task <- prerequisites):");
             for (var task : plan.tasks()) {
-                var dependencies = task.needs().isEmpty()
-                        ? "(none)" : task.needs().stream()
-                                .map(name -> "[" + name + "]")
-                                .collect(Collectors.joining(", "));
+                var dependencies =
+                        task.needs().isEmpty()
+                                ? "(none)"
+                                : task.needs().stream()
+                                        .map(name -> "[" + name + "]")
+                                        .collect(Collectors.joining(", "));
                 out.println("  [" + task.name() + "] <- " + dependencies);
             }
             out.println();
-            out.println("Topological order and commands "
-                    + "(not a fixed execution schedule):");
+            out.println("Topological order and commands " + "(not a fixed execution schedule):");
             var index = 1;
             for (var task : plan.tasks()) {
                 out.println(index++ + ". [" + task.name() + "]");
                 out.println(task.command());
-                TaskDetails.daemonDetails(task, plan.daemonOptions().get(task.name())).forEach(out::println);
+                TaskDetails.daemonDetails(task, plan.daemonOptions().get(task.name()))
+                        .forEach(out::println);
                 out.println();
             }
-            out.println("Static review only: no commands executed. "
-                    + "Configuration validity does not guarantee "
-                    + "command safety or tool availability.");
+            out.println(
+                    "Static review only: no commands executed. "
+                            + "Configuration validity does not guarantee "
+                            + "command safety or tool availability.");
             out.flush();
             return 0;
         } catch (ConfigException | IOException exception) {

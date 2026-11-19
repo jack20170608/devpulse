@@ -19,29 +19,27 @@ import java.time.Duration;
 import java.util.Base64;
 
 public final class JiraClient {
-    public record AttachmentUpload(JsonArray attachments, String sha256,
-            long size, String contentType, String filename) {
-    }
+    public record AttachmentUpload(
+            JsonArray attachments, String sha256, long size, String contentType, String filename) {}
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NEVER).build();
+    private final HttpClient http =
+            HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .followRedirects(HttpClient.Redirect.NEVER)
+                    .build();
     private final URI base;
     private final String authorization;
     private final String api;
     private final boolean cloud;
     private final int apiVersion;
 
-    public JiraClient(JiraConfiguration configuration, String token)
-            throws IOException {
+    public JiraClient(JiraConfiguration configuration, String token) throws IOException {
         var mode = configuration.mode();
         if (token == null || token.isBlank()) {
-            throw new IOException("Set JIRA_API_TOKEN "
-                    + "in the environment.");
+            throw new IOException("Set JIRA_API_TOKEN " + "in the environment.");
         }
         if (token.codePoints().anyMatch(Character::isISOControl)) {
-            throw new IOException("JIRA_API_TOKEN must not "
-                    + "contain control characters.");
+            throw new IOException("JIRA_API_TOKEN must not " + "contain control characters.");
         }
         base = JiraConfiguration.validateUrl(configuration.url());
         if (!mode.equals("cloud") && !mode.equals("dc")) {
@@ -50,18 +48,19 @@ public final class JiraClient {
         cloud = mode.equals("cloud");
         apiVersion = configuration.apiVersion();
         if (apiVersion != 2 && apiVersion != 3) {
-            throw new IOException("Jira configuration apiVersion "
-                    + "must be the number 2 or 3.");
+            throw new IOException("Jira configuration apiVersion " + "must be the number 2 or 3.");
         }
         api = "rest/api/" + apiVersion + "/";
         if (cloud) {
             var email = configuration.email();
             if (email == null || email.isBlank()) {
-                throw new IOException("Jira configuration requires "
-                        + "an email for Cloud.");
+                throw new IOException("Jira configuration requires " + "an email for Cloud.");
             }
-            authorization = "Basic " + Base64.getEncoder().encodeToString(
-                    (email + ":" + token).getBytes(StandardCharsets.UTF_8));
+            authorization =
+                    "Basic "
+                            + Base64.getEncoder()
+                                    .encodeToString(
+                                            (email + ":" + token).getBytes(StandardCharsets.UTF_8));
         } else {
             authorization = "Bearer " + token;
         }
@@ -80,21 +79,23 @@ public final class JiraClient {
     }
 
     public JsonObject issue(String key) throws IOException {
-        return object(request("GET", "issue/" + segment(key)
-                + "?fields=*all", null));
+        return object(request("GET", "issue/" + segment(key) + "?fields=*all", null));
     }
 
     public JsonObject editMeta(String key) throws IOException {
-        return object(request("GET", "issue/" + segment(key)
-                + "/editmeta", null));
+        return object(request("GET", "issue/" + segment(key) + "/editmeta", null));
     }
 
-    public JsonArray assignableUsers(String key, String query)
-            throws IOException {
-        var result = request("GET", "user/assignable/search?issueKey="
-                + segment(key) + (cloud ? "&query=" : "&username=")
-                + URLEncoder.encode(query, StandardCharsets.UTF_8)
-                + "&maxResults=50", null);
+    public JsonArray assignableUsers(String key, String query) throws IOException {
+        var result =
+                request(
+                        "GET",
+                        "user/assignable/search?issueKey="
+                                + segment(key)
+                                + (cloud ? "&query=" : "&username=")
+                                + URLEncoder.encode(query, StandardCharsets.UTF_8)
+                                + "&maxResults=50",
+                        null);
         if (!result.isJsonArray()) {
             throw new IOException("Expected a JSON array from Jira.");
         }
@@ -118,7 +119,8 @@ public final class JiraClient {
         var response = request("POST", "issue", body);
         try {
             var result = object(response);
-            if (!result.has("key") || !result.get("key").isJsonPrimitive()
+            if (!result.has("key")
+                    || !result.get("key").isJsonPrimitive()
                     || !result.getAsJsonPrimitive("key").isString()
                     || result.get("key").getAsString().isBlank()) {
                 throw new IOException("Missing issue key.");
@@ -127,19 +129,31 @@ public final class JiraClient {
         } catch (IOException exception) {
             throw new JiraRequestException(
                     "Jira create response has no usable issue key; inspect Jira before retrying.",
-                    "OUTCOME_UNKNOWN", null, true, false, exception);
+                    "OUTCOME_UNKNOWN",
+                    null,
+                    true,
+                    false,
+                    exception);
         }
     }
 
-    public JsonObject search(String jql, int limit, Integer startAt,
-            String nextPageToken) throws IOException {
-        return search(jql, limit, startAt, nextPageToken,
-                java.util.List.of("summary", "status", "issuetype",
-                        "priority", "assignee", "updated"));
+    public JsonObject search(String jql, int limit, Integer startAt, String nextPageToken)
+            throws IOException {
+        return search(
+                jql,
+                limit,
+                startAt,
+                nextPageToken,
+                java.util.List.of(
+                        "summary", "status", "issuetype", "priority", "assignee", "updated"));
     }
 
-    public JsonObject search(String jql, int limit, Integer startAt,
-            String nextPageToken, java.util.List<String> requestedFields)
+    public JsonObject search(
+            String jql,
+            int limit,
+            Integer startAt,
+            String nextPageToken,
+            java.util.List<String> requestedFields)
             throws IOException {
         if (jql == null || jql.isBlank()) {
             throw new IOException("Search JQL must not be blank.");
@@ -151,12 +165,10 @@ public final class JiraClient {
             throw new IOException("--start-at must not be negative.");
         }
         if (cloud && startAt != null) {
-            throw new IOException("Cloud uses --next-page-token, "
-                    + "not --start-at.");
+            throw new IOException("Cloud uses --next-page-token, " + "not --start-at.");
         }
         if (!cloud && nextPageToken != null) {
-            throw new IOException("Data Center uses --start-at, "
-                    + "not --next-page-token.");
+            throw new IOException("Data Center uses --start-at, " + "not --next-page-token.");
         }
         if (nextPageToken != null && nextPageToken.isBlank()) {
             throw new IOException("--next-page-token must not be blank.");
@@ -176,16 +188,14 @@ public final class JiraClient {
         } else {
             body.addProperty("startAt", startAt == null ? 0 : startAt);
         }
-        return object(request("POST", cloud ? "search/jql" : "search",
-                body));
+        return object(request("POST", cloud ? "search/jql" : "search", body));
     }
 
     public void edit(String key, JsonObject fields) throws IOException {
         edit(key, fields, new JsonObject());
     }
 
-    public void edit(String key, JsonObject fields, JsonObject updates)
-            throws IOException {
+    public void edit(String key, JsonObject fields, JsonObject updates) throws IOException {
         var body = new JsonObject();
         body.add("fields", fields);
         if (!updates.isEmpty()) {
@@ -198,19 +208,23 @@ public final class JiraClient {
         return transitions(key, false);
     }
 
-    public JsonObject transitions(String key, boolean includeFields)
-            throws IOException {
-        return object(request("GET", "issue/" + segment(key)
-                + "/transitions"
-                + (includeFields ? "?expand=transitions.fields" : ""), null));
+    public JsonObject transitions(String key, boolean includeFields) throws IOException {
+        return object(
+                request(
+                        "GET",
+                        "issue/"
+                                + segment(key)
+                                + "/transitions"
+                                + (includeFields ? "?expand=transitions.fields" : ""),
+                        null));
     }
 
     public void transition(String key, String id) throws IOException {
         transition(key, id, new JsonObject(), new JsonObject());
     }
 
-    public void transition(String key, String id, JsonObject fields,
-            JsonObject updates) throws IOException {
+    public void transition(String key, String id, JsonObject fields, JsonObject updates)
+            throws IOException {
         var body = new JsonObject();
         var transition = new JsonObject();
         transition.addProperty("id", id);
@@ -227,26 +241,21 @@ public final class JiraClient {
     public JsonObject comment(String key, JsonElement body) throws IOException {
         var data = new JsonObject();
         data.add("body", body);
-        return object(request("POST", "issue/" + segment(key)
-                + "/comment", data));
+        return object(request("POST", "issue/" + segment(key) + "/comment", data));
     }
 
     public JsonObject comment(String key, String id) throws IOException {
-        return object(request("GET", "issue/" + segment(key)
-                + "/comment/" + numeric(id), null));
+        return object(request("GET", "issue/" + segment(key) + "/comment/" + numeric(id), null));
     }
 
-    public void editComment(String key, String id, JsonElement body)
-            throws IOException {
+    public void editComment(String key, String id, JsonElement body) throws IOException {
         var data = new JsonObject();
         data.add("body", body);
-        request("PUT", "issue/" + segment(key) + "/comment/"
-                + numeric(id), data);
+        request("PUT", "issue/" + segment(key) + "/comment/" + numeric(id), data);
     }
 
     public JsonArray attachments(String key) throws IOException {
-        var issue = object(request("GET", "issue/" + segment(key)
-                + "?fields=attachment", null));
+        var issue = object(request("GET", "issue/" + segment(key) + "?fields=attachment", null));
         var fields = issue.get("fields");
         if (fields == null || !fields.isJsonObject()) {
             throw new IOException("Jira returned no attachment fields.");
@@ -260,21 +269,18 @@ public final class JiraClient {
 
     public AttachmentUpload attach(String key, Path file) throws IOException {
         if (!Files.isRegularFile(file) || Files.size(file) > 25_000_000) {
-            throw new IOException("Attachment must be a regular file "
-                    + "of at most 25 MB.");
+            throw new IOException("Attachment must be a regular file " + "of at most 25 MB.");
         }
         byte[] content;
         try (var input = Files.newInputStream(file)) {
             content = input.readNBytes(25_000_001);
         }
         if (content.length > 25_000_000) {
-            throw new IOException("Attachment must be a regular file "
-                    + "of at most 25 MB.");
+            throw new IOException("Attachment must be a regular file " + "of at most 25 MB.");
         }
         var boundary = "devpulse-" + java.util.UUID.randomUUID();
         var name = file.getFileName().toString();
-        if (name.contains("\r") || name.contains("\n")
-                || name.contains("\"")) {
+        if (name.contains("\r") || name.contains("\n") || name.contains("\"")) {
             throw new IOException("Unsafe attachment filename.");
         }
         var contentType = Files.probeContentType(file);
@@ -282,37 +288,52 @@ public final class JiraClient {
                 || !contentType.matches("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+")) {
             contentType = "application/octet-stream";
         }
-        var prefix = ("--" + boundary + "\r\n"
-                + "Content-Disposition: form-data; name=\"file\"; "
-                + "filename=\"" + name + "\"\r\n"
-                + "Content-Type: " + contentType + "\r\n\r\n")
-                .getBytes(StandardCharsets.UTF_8);
-        var suffix = ("\r\n--" + boundary + "--\r\n")
-                .getBytes(StandardCharsets.UTF_8);
-        var request = builder("issue/" + segment(key) + "/attachments")
-                .header("X-Atlassian-Token", "no-check")
-                .header("Content-Type", "multipart/form-data; boundary="
-                        + boundary)
-                .POST(HttpRequest.BodyPublishers.concat(
-                        HttpRequest.BodyPublishers.ofByteArray(prefix),
-                        HttpRequest.BodyPublishers.ofByteArray(content),
-                        HttpRequest.BodyPublishers.ofByteArray(suffix)))
-                .build();
+        var prefix =
+                ("--"
+                                + boundary
+                                + "\r\n"
+                                + "Content-Disposition: form-data; name=\"file\"; "
+                                + "filename=\""
+                                + name
+                                + "\"\r\n"
+                                + "Content-Type: "
+                                + contentType
+                                + "\r\n\r\n")
+                        .getBytes(StandardCharsets.UTF_8);
+        var suffix = ("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8);
+        var request =
+                builder("issue/" + segment(key) + "/attachments")
+                        .header("X-Atlassian-Token", "no-check")
+                        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                        .POST(
+                                HttpRequest.BodyPublishers.concat(
+                                        HttpRequest.BodyPublishers.ofByteArray(prefix),
+                                        HttpRequest.BodyPublishers.ofByteArray(content),
+                                        HttpRequest.BodyPublishers.ofByteArray(suffix)))
+                        .build();
         JsonElement result;
         try {
             result = JsonParser.parseString(send(request));
         } catch (com.google.gson.JsonParseException exception) {
             throw new JiraRequestException(
                     "Jira returned invalid attachment JSON.",
-                    "INVALID_RESPONSE", null, true, false, exception);
+                    "INVALID_RESPONSE",
+                    null,
+                    true,
+                    false,
+                    exception);
         }
         if (!result.isJsonArray()) {
             throw new JiraRequestException(
                     "Jira returned an invalid attachment response.",
-                    "INVALID_RESPONSE", null, true, false, null);
+                    "INVALID_RESPONSE",
+                    null,
+                    true,
+                    false,
+                    null);
         }
-        return new AttachmentUpload(result.getAsJsonArray(),
-                sha256(content), content.length, contentType, name);
+        return new AttachmentUpload(
+                result.getAsJsonArray(), sha256(content), content.length, contentType, name);
     }
 
     public void deleteAttachment(String id) throws IOException {
@@ -324,42 +345,44 @@ public final class JiraClient {
 
     public static String sha256(byte[] content) {
         try {
-            var digest = MessageDigest.getInstance("SHA-256")
-                    .digest(content);
+            var digest = MessageDigest.getInstance("SHA-256").digest(content);
             return java.util.HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable.", exception);
         }
     }
 
-    public JsonElement request(String method, String path, JsonObject data)
-            throws IOException {
+    public JsonElement request(String method, String path, JsonObject data) throws IOException {
         return request(method, path, data, false);
     }
 
-    public JsonElement agile(String method, String path, JsonObject data)
-            throws IOException {
+    public JsonElement agile(String method, String path, JsonObject data) throws IOException {
         return request(method, path, data, true);
     }
 
-    private JsonElement request(String method, String path, JsonObject data,
-            boolean agile) throws IOException {
+    private JsonElement request(String method, String path, JsonObject data, boolean agile)
+            throws IOException {
         var builder = builder(agile ? "rest/agile/1.0/" : api, path);
         if (data == null) {
             builder.method(method, HttpRequest.BodyPublishers.noBody());
         } else {
             builder.header("Content-Type", "application/json")
-                    .method(method, HttpRequest.BodyPublishers.ofString(
-                            data.toString(), StandardCharsets.UTF_8));
+                    .method(
+                            method,
+                            HttpRequest.BodyPublishers.ofString(
+                                    data.toString(), StandardCharsets.UTF_8));
         }
         try {
             var response = send(builder.build());
-            return response.isBlank() ? new JsonObject()
-                    : JsonParser.parseString(response);
+            return response.isBlank() ? new JsonObject() : JsonParser.parseString(response);
         } catch (com.google.gson.JsonParseException exception) {
-            throw new JiraRequestException("Jira returned invalid JSON.",
-                    "INVALID_RESPONSE", null, !readOnly(method, path),
-                    false, exception);
+            throw new JiraRequestException(
+                    "Jira returned invalid JSON.",
+                    "INVALID_RESPONSE",
+                    null,
+                    !readOnly(method, path),
+                    false,
+                    exception);
         }
     }
 
@@ -376,21 +399,29 @@ public final class JiraClient {
 
     private String send(HttpRequest request) throws IOException {
         try {
-            var response = http.send(request,
-                    HttpResponse.BodyHandlers.ofString(
-                            StandardCharsets.UTF_8));
+            var response =
+                    http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 // Response bodies may contain private issue data.
                 var status = response.statusCode();
-                boolean unknown = !readOnly(request.method(), request.uri().getPath())
-                        && status >= 500;
-                throw new JiraRequestException("Jira HTTP " + status
-                        + " for " + request.method() + " "
-                        + request.uri().getPath() + ".",
+                boolean unknown =
+                        !readOnly(request.method(), request.uri().getPath()) && status >= 500;
+                throw new JiraRequestException(
+                        "Jira HTTP "
+                                + status
+                                + " for "
+                                + request.method()
+                                + " "
+                                + request.uri().getPath()
+                                + ".",
                         unknown ? "OUTCOME_UNKNOWN" : "HTTP_ERROR",
-                        status, unknown, !unknown && (status == 429
-                        || (readOnly(request.method(), request.uri().getPath())
-                        && status >= 500)), null);
+                        status,
+                        unknown,
+                        !unknown
+                                && (status == 429
+                                        || (readOnly(request.method(), request.uri().getPath())
+                                                && status >= 500)),
+                        null);
             }
             return response.body();
         } catch (JiraRequestException exception) {
@@ -398,28 +429,38 @@ public final class JiraClient {
         } catch (IOException exception) {
             boolean read = readOnly(request.method(), request.uri().getPath());
             throw new JiraRequestException(
-                    read ? "Jira request failed during transport."
+                    read
+                            ? "Jira request failed during transport."
                             : "Jira write outcome is unknown; inspect Jira before retrying.",
                     read ? "TRANSPORT_ERROR" : "OUTCOME_UNKNOWN",
-                    null, !read, read, exception);
+                    null,
+                    !read,
+                    read,
+                    exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             boolean read = readOnly(request.method(), request.uri().getPath());
-            throw new JiraRequestException("Jira request interrupted.",
+            throw new JiraRequestException(
+                    "Jira request interrupted.",
                     read ? "REQUEST_INTERRUPTED" : "OUTCOME_UNKNOWN",
-                    null, !read, false, exception);
+                    null,
+                    !read,
+                    false,
+                    exception);
         }
     }
 
     private static boolean readOnly(String method, String path) {
-        return method.equals("GET") || method.equals("HEAD")
+        return method.equals("GET")
+                || method.equals("HEAD")
                 || (method.equals("POST")
-                && (path.equals("search") || path.equals("search/jql")
-                || path.endsWith("/search") || path.endsWith("/search/jql")));
+                        && (path.equals("search")
+                                || path.equals("search/jql")
+                                || path.endsWith("/search")
+                                || path.endsWith("/search/jql")));
     }
 
-    private static JsonObject object(JsonElement element)
-            throws IOException {
+    private static JsonObject object(JsonElement element) throws IOException {
         if (element == null || !element.isJsonObject()) {
             throw new IOException("Expected a JSON object from Jira.");
         }
@@ -427,8 +468,7 @@ public final class JiraClient {
     }
 
     private static String segment(String value) throws IOException {
-        if (!value.matches("[A-Za-z][A-Za-z0-9_]*-[0-9]+")
-                && !value.matches("[0-9]+")) {
+        if (!value.matches("[A-Za-z][A-Za-z0-9_]*-[0-9]+") && !value.matches("[0-9]+")) {
             throw new IOException("Invalid Jira issue key or ID.");
         }
 
@@ -441,5 +481,4 @@ public final class JiraClient {
         }
         return value;
     }
-
 }

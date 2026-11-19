@@ -1,12 +1,9 @@
 package io.github.devpulse.core.environment;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Path;
 import java.util.List;
-
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 @Disabled
 public class BashShellTest {
@@ -18,19 +15,21 @@ public class BashShellTest {
     }
 
     @Test
-    void testScript() throws Exception{
+    void testScript() throws Exception {
         var bash = BashShell.discover(null);
-//        assertThat(bash).isNotNull();
-//        var processBuilder = bash.script(Path.of("src/test/resources/test.sh"));
-//        assertThat(processBuilder).isNotNull();
+        //        assertThat(bash).isNotNull();
+        //        var processBuilder = bash.script(Path.of("src/test/resources/test.sh"));
+        //        assertThat(processBuilder).isNotNull();
 
         List<String> TOOLS = List.of("git", "java");
-        var scan = """
+        var scan =
+                """
                 for tool in %s; do
                     location=$(command -v "$tool") || location=
                     printf '%%s\\t%%s\\n' "$tool" "$location"
                 done
-                """.formatted(String.join(" ", TOOLS));
+                """
+                        .formatted(String.join(" ", TOOLS));
         var root = Path.of(".").toAbsolutePath().normalize();
         var output = bash.capture(scan, root);
         System.out.println(output);
@@ -43,5 +42,4 @@ public class BashShellTest {
         var output = bash.capture("sleep 6 && echo 'done'", root);
         System.out.println(output);
     }
-
 }

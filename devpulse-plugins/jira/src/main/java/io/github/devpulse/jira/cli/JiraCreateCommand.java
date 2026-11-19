@@ -12,76 +12,126 @@ import com.google.gson.JsonObject;
 import io.github.devpulse.jira.JiraClient;
 import io.github.devpulse.jira.JiraMarkdown;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
-@Command(name = "create", mixinStandardHelpOptions = true,
-        description = "Create an issue using prompts, flags, or "
-                + "Markdown issue documents.")
+@Command(
+        name = "create",
+        mixinStandardHelpOptions = true,
+        description = "Create an issue using prompts, flags, or " + "Markdown issue documents.")
 public class JiraCreateCommand extends JiraCommand.Action {
-    @Mixin
-    JiraCommand.DescriptionFormat descriptionFormat = new JiraCommand.DescriptionFormat();
-    @Option(names = {"--template", "--file"}, paramLabel = "ISSUE.md|-",
-            description = "Complete Markdown issue document: YAML metadata and "
-                    + "description; - reads stdin. Explicit flags override it.")
+    @Mixin JiraCommand.DescriptionFormat descriptionFormat = new JiraCommand.DescriptionFormat();
+
+    @Option(
+            names = {"--template", "--file"},
+            paramLabel = "ISSUE.md|-",
+            description =
+                    "Complete Markdown issue document: YAML metadata and "
+                            + "description; - reads stdin. Explicit flags override it.")
     Path file;
+
     private JiraIssueDocument document;
-    @Option(names = {"-p", "--project"}, paramLabel = "KEY",
+
+    @Option(
+            names = {"-p", "--project"},
+            paramLabel = "KEY",
             description = "Project key; defaults to template or connection configuration.")
     String project;
-    @Option(names = {"-t", "--type"}, paramLabel = "NAME",
+
+    @Option(
+            names = {"-t", "--type"},
+            paramLabel = "NAME",
             description = "Issue type name, e.g. Task or Bug.")
     String type;
-    @Option(names = {"-s", "--summary"}, paramLabel = "TEXT",
+
+    @Option(
+            names = {"-s", "--summary"},
+            paramLabel = "TEXT",
             description = "Issue summary.")
     String summary;
-    @Option(names = {"-y", "--priority"}, paramLabel = "NAME",
+
+    @Option(
+            names = {"-y", "--priority"},
+            paramLabel = "NAME",
             description = "Priority name.")
     String priority;
-    @Option(names = {"-a", "--assignee"}, paramLabel = "USER",
-            description = "Cloud accountId or DC username; "
-                    + "me=self, x=unassigned, default=project default.")
+
+    @Option(
+            names = {"-a", "--assignee"},
+            paramLabel = "USER",
+            description =
+                    "Cloud accountId or DC username; "
+                            + "me=self, x=unassigned, default=project default.")
     String assignee;
-    @Option(names = {"-l", "--label"}, paramLabel = "LABEL",
-            description = "Repeat for multiple labels; replaces "
-                    + "template labels.")
+
+    @Option(
+            names = {"-l", "--label"},
+            paramLabel = "LABEL",
+            description = "Repeat for multiple labels; replaces " + "template labels.")
     List<String> labels;
-    @Option(names = {"-C", "--component"}, paramLabel = "NAME",
+
+    @Option(
+            names = {"-C", "--component"},
+            paramLabel = "NAME",
             description = "Repeat for multiple component names.")
     List<String> components;
-    @Option(names = "--fix-version", paramLabel = "NAME",
+
+    @Option(
+            names = "--fix-version",
+            paramLabel = "NAME",
             description = "Repeat for multiple fix versions.")
     List<String> fixVersions;
-    @Option(names = "--affects-version", paramLabel = "NAME",
+
+    @Option(
+            names = "--affects-version",
+            paramLabel = "NAME",
             description = "Repeat for multiple affected versions.")
     List<String> affectsVersions;
-    @Option(names = {"-P", "--parent"}, paramLabel = "KEY",
+
+    @Option(
+            names = {"-P", "--parent"},
+            paramLabel = "KEY",
             description = "Parent issue key; subject to Jira hierarchy.")
     String parent;
-    @Option(names = "--epic", paramLabel = "KEY",
-            description = "Optional Epic key; blank skips association. "
-                    + "Cannot be combined with --parent.")
+
+    @Option(
+            names = "--epic",
+            paramLabel = "KEY",
+            description =
+                    "Optional Epic key; blank skips association. "
+                            + "Cannot be combined with --parent.")
     String epic;
-    @Option(names = "--story-point", paramLabel = "NUMBER",
+
+    @Option(
+            names = "--story-point",
+            paramLabel = "NUMBER",
             description = "Story Points; overrides document metadata.")
     BigDecimal storyPoint;
-    @Option(names = {"--desc", "-b", "--body"}, paramLabel = "TEXT",
-            description = "Description only; - reads stdin. "
-                    + "Overrides the template description, not its metadata. "
-                    + "--body is a compatibility alias.")
+
+    @Option(
+            names = {"--desc", "-b", "--body"},
+            paramLabel = "TEXT",
+            description =
+                    "Description only; - reads stdin. "
+                            + "Overrides the template description, not its metadata. "
+                            + "--body is a compatibility alias.")
     String body;
-    @Option(names = "--custom", paramLabel = "FIELD=HOCON",
-            description = "Repeat to set customfield_ID using a "
-                    + "HOCON value; overrides template custom fields.")
+
+    @Option(
+            names = "--custom",
+            paramLabel = "FIELD=HOCON",
+            description =
+                    "Repeat to set customfield_ID using a "
+                            + "HOCON value; overrides template custom fields.")
     List<String> custom;
-    @Option(names = "--no-input",
-            description = "Never prompt; missing required fields fail.")
+
+    @Option(names = "--no-input", description = "Never prompt; missing required fields fail.")
     boolean noInput;
 
     @Override
@@ -132,8 +182,10 @@ public class JiraCreateCommand extends JiraCommand.Action {
             overridden.add("story-point");
         }
         if (document != null) {
-            var metadata = document.needsMetadata(jira.cloud(), overridden)
-                    ? jira.request("GET", "field", null).getAsJsonArray() : new JsonArray();
+            var metadata =
+                    document.needsMetadata(jira.cloud(), overridden)
+                            ? jira.request("GET", "field", null).getAsJsonArray()
+                            : new JsonArray();
             var imported = document.fields(true, jira.cloud(), overridden, metadata);
             for (var entry : issue.entrySet()) {
                 imported.add(entry.getKey(), entry.getValue());
@@ -147,8 +199,11 @@ public class JiraCreateCommand extends JiraCommand.Action {
         requiredField(issue, "issuetype", "name", "Issue type", "--type");
         requiredField(issue, "summary", null, "Summary", "--summary");
 
-        if (!epicSupplied && !noInput && System.console() != null
-                && file == null && !issue.has("parent")
+        if (!epicSupplied
+                && !noInput
+                && System.console() != null
+                && file == null
+                && !issue.has("parent")
                 && !"Epic".equalsIgnoreCase(type)) {
             var answer = prompt("Epic key (optional; Enter to skip)");
             if (!answer.isBlank()) {
@@ -160,16 +215,18 @@ public class JiraCreateCommand extends JiraCommand.Action {
             setEpic(issue, jira);
         }
         if (storyPoint != null) {
-            var field = JiraAgileCommands.storyPointsField(
-                    jira.request("GET", "field", null).getAsJsonArray());
+            var field =
+                    JiraAgileCommands.storyPointsField(
+                            jira.request("GET", "field", null).getAsJsonArray());
             if (field == null) {
                 throw wrong("Jira field metadata does not expose Story Points.");
             }
             issue.addProperty(field, storyPoint);
         }
         if (description != null) {
-            issue.add("description", JiraMarkdown.toJira(description,
-                    jira.apiVersion() == 3, format));
+            issue.add(
+                    "description",
+                    JiraMarkdown.toJira(description, jira.apiVersion() == 3, format));
         }
         if (assignee != null) {
             var user = nonblank(assignee, "--assignee");
@@ -200,16 +257,17 @@ public class JiraCreateCommand extends JiraCommand.Action {
     private void setEpic(JsonObject issue, JiraClient jira) throws IOException {
         if (jira.cloud()) {
             if (issue.has("parent")) {
-                throw wrong("--epic conflicts with the template parent field; "
-                        + "Cloud uses parent for Epic association.");
+                throw wrong(
+                        "--epic conflicts with the template parent field; "
+                                + "Cloud uses parent for Epic association.");
             }
             setNamed(issue, "parent", "key", epic);
         } else {
-            var field = JiraAgileCommands.epicField(jira, "Epic Link",
-                    "com.pyxis.greenhopper.jira:gh-epic-link");
+            var field =
+                    JiraAgileCommands.epicField(
+                            jira, "Epic Link", "com.pyxis.greenhopper.jira:gh-epic-link");
             if (field == null) {
-                throw wrong("Jira field metadata does not expose "
-                        + "an Epic Link field.");
+                throw wrong("Jira field metadata does not expose " + "an Epic Link field.");
             }
             issue.addProperty(field, epic);
         }
@@ -223,25 +281,28 @@ public class JiraCreateCommand extends JiraCommand.Action {
             return document.body().isBlank() ? null : document.body();
         }
         if (!machine() && System.console() == null) {
-            var input = new String(System.in.readAllBytes(),
-                    StandardCharsets.UTF_8);
+            var input = new String(System.in.readAllBytes(), StandardCharsets.UTF_8);
             return input.isEmpty() ? null : input;
         }
         if (!noInput && System.console() != null) {
-            return prompt("Description (optional; use --desc - "
-                    + "for multiline stdin)");
+            return prompt("Description (optional; use --desc - " + "for multiline stdin)");
         }
         return null;
     }
 
-    private void requiredField(JsonObject issue, String field,
-            String member, String label, String flag) throws IOException {
+    private void requiredField(
+            JsonObject issue, String field, String member, String label, String flag)
+            throws IOException {
         var value = issue.get(field);
         if (value == null || value.isJsonNull()) {
             if (noInput || System.console() == null) {
-                throw wrong("Missing required issue field: " + field
-                        + "; supply " + flag + " or --file"
-                        + " (interactive prompts require a terminal).");
+                throw wrong(
+                        "Missing required issue field: "
+                                + field
+                                + "; supply "
+                                + flag
+                                + " or --file"
+                                + " (interactive prompts require a terminal).");
             }
             var answer = nonblank(prompt(label), flag);
             if (member == null) {
@@ -253,18 +314,16 @@ public class JiraCreateCommand extends JiraCommand.Action {
         }
         if (member != null) {
             if (!value.isJsonObject()) {
-                throw wrong("Issue field " + field
-                        + " must contain a nonblank id or " + member + ".");
+                throw wrong(
+                        "Issue field " + field + " must contain a nonblank id or " + member + ".");
             }
             var named = value.getAsJsonObject();
-            if (!nonblankString(named.get("id"))
-                    && !nonblankString(named.get(member))) {
-                throw wrong("Issue field " + field
-                        + " must contain a nonblank id or " + member + ".");
+            if (!nonblankString(named.get("id")) && !nonblankString(named.get(member))) {
+                throw wrong(
+                        "Issue field " + field + " must contain a nonblank id or " + member + ".");
             }
         } else if (!nonblankString(value)) {
-            throw wrong("Issue field " + field
-                    + " must be a nonblank string.");
+            throw wrong("Issue field " + field + " must be a nonblank string.");
         }
     }
 
@@ -283,13 +342,14 @@ public class JiraCreateCommand extends JiraCommand.Action {
     }
 
     private static boolean nonblankString(JsonElement value) {
-        return value != null && value.isJsonPrimitive()
+        return value != null
+                && value.isJsonPrimitive()
                 && value.getAsJsonPrimitive().isString()
                 && !value.getAsString().isBlank();
     }
 
-    private static void setList(JsonObject issue, String field,
-            List<String> values, boolean named) throws IOException {
+    private static void setList(JsonObject issue, String field, List<String> values, boolean named)
+            throws IOException {
         if (values == null) {
             return;
         }
