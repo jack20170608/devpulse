@@ -15,8 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Add '21' here once the root pom lowers maven.compiler.release to 21.
-        java: ['25']
+        java: ['21', '25']
     steps:
       - uses: actions/checkout@v4
 

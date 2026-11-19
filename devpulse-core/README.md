@@ -8,7 +8,7 @@
 
 ### 范围与入口
 
-`devpulse-core` 的 `io.github.devpulse.core.dag` 提供单 JVM、本地、静态 DAG 框架，适用于少于 5000 个节点的工作流。仅依赖 JDK 25，不读取配置文件、不注册 CLI 或 JVM 退出钩子。`io.github.devpulse.core.bash` 提供 Bash Adapter、进程管理、日志与 Bash 运行历史，使用同一个 DAG 调度器，不维护另一套执行调度。
+`devpulse-core` 的 `io.github.devpulse.core.dag` 提供单 JVM、本地、静态 DAG 框架，适用于少于 5000 个节点的工作流。仅依赖 JDK 21，不读取配置文件、不注册 CLI 或 JVM 退出钩子。`io.github.devpulse.core.bash` 提供 Bash Adapter、进程管理、日志与 Bash 运行历史，使用同一个 DAG 调度器，不维护另一套执行调度。
 
 `DagWorkflow.builder()` 定义 Java 任务；`build()` 在执行前拒绝空工作流、重复节点或依赖、自依赖、未知依赖、结果类型不匹配及循环依赖。依赖可以前向声明。校验与拓扑排序采用非递归算法，复杂度为 O(V + E)，无固定节点数上限。Builder 不保证线程安全；构建后的定义可复用，每次调用 `newRun` 创建独立运行状态，但任务 Lambda 捕获的对象仍由调用方负责线程安全。
 
@@ -276,7 +276,7 @@ try (var history = new RunHistory(directory).begin("dev", graph, 4)) {
 
 ### Scope and entry points
 
-`io.github.devpulse.core.dag` in `devpulse-core` provides a local, static DAG framework for a single JVM, intended for workflows with fewer than 5000 nodes. It depends only on JDK 25 and reads no configuration files or registers CLI commands or JVM shutdown hooks. `io.github.devpulse.core.bash` supplies the Bash Adapter, process management, logs, and Bash run history, sharing the same DAG scheduler rather than maintaining a second execution scheduler.
+`io.github.devpulse.core.dag` in `devpulse-core` provides a local, static DAG framework for a single JVM, intended for workflows with fewer than 5000 nodes. It depends only on JDK 21 and reads no configuration files or registers CLI commands or JVM shutdown hooks. `io.github.devpulse.core.bash` supplies the Bash Adapter, process management, logs, and Bash run history, sharing the same DAG scheduler rather than maintaining a second execution scheduler.
 
 `DagWorkflow.builder()` defines Java tasks; `build()` rejects empty workflows, duplicate nodes or dependencies, self-dependencies, unknown dependencies, result type mismatches, and cycles before execution. Forward references are supported. Validation and topological sorting are iterative with O(V + E) complexity and no hard node limit. Builders are not thread-safe; built definitions are reusable and each `newRun` creates independent execution state, but callers remain responsible for thread safety of objects captured by task Lambdas.
 

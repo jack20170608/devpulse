@@ -313,7 +313,7 @@ public final class MavenAnalyzer {
         var kinds = new LinkedHashMap<String, LinkedHashSet<String>>();
         for (var plugin : model.getBuild().getPlugins()) {
             plugins.put(plugin.getKey(), plugin.clone());
-            kinds.computeIfAbsent(plugin.getKey(), _ -> new LinkedHashSet<>())
+            kinds.computeIfAbsent(plugin.getKey(), ignored -> new LinkedHashSet<>())
                     .add(declared.contains(plugin.getKey()) ? "build" : "lifecycle");
         }
         for (var report : project.getReportPlugins()) {
@@ -323,7 +323,7 @@ public final class MavenAnalyzer {
             plugin.setVersion(report.getVersion());
             var key = "report:" + report.getKey();
             plugins.put(key, plugin);
-            kinds.computeIfAbsent(key, _ -> new LinkedHashSet<>()).add("report");
+            kinds.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).add("report");
         }
         var pluginReports = new ArrayList<DependencyReport.Plugin>();
         for (var entry : plugins.entrySet()) {
@@ -399,7 +399,7 @@ public final class MavenAnalyzer {
             result =
                     resolver.resolve(
                             new DefaultDependencyResolutionRequest(project, session)
-                                    .setResolutionFilter((_, _) -> false));
+                                    .setResolutionFilter((node, parents) -> false));
         } catch (DependencyResolutionException exception) {
             result = exception.getResult();
             issues.add(

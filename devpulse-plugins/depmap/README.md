@@ -18,13 +18,13 @@
 
 ### 构建与运行
 
-构建需要 JDK 25+ 和 Maven。在仓库根目录通过 Git Bash 构建：
+构建需要 JDK 21+ 和 Maven。在仓库根目录通过 Git Bash 构建：
 
 ```bash
 bash build.sh depmap
 ```
 
-运行只需要 Java 25+，不要求安装 Maven 或 Bash。以下为 PowerShell 示例：
+运行只需要 Java 21+，不要求安装 Maven 或 Bash。以下为 PowerShell 示例：
 
 ```powershell
 java -jar devpulse-plugins\depmap\target\devpulse-depmap.jar --help
@@ -88,13 +88,13 @@ This is not Maven Wrapper and does not promise byte-for-byte logs or identical d
 
 ### Build and run
 
-Building requires JDK 25+ and Maven. Build from the repository root using Git Bash:
+Building requires JDK 21+ and Maven. Build from the repository root using Git Bash:
 
 ```bash
 bash build.sh depmap
 ```
 
-Running only requires Java 25+, without Maven or Bash installed. These examples use PowerShell:
+Running only requires Java 21+, without Maven or Bash installed. These examples use PowerShell:
 
 ```powershell
 java -jar devpulse-plugins\depmap\target\devpulse-depmap.jar --help

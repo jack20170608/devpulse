@@ -10,7 +10,7 @@
 
 ### 构建和运行
 
-需要 JDK 25+ 和 Maven。在仓库根目录执行以下 PowerShell 命令：
+需要 JDK 21+ 和 Maven。在仓库根目录执行以下 PowerShell 命令：
 
 ```powershell
 mvn --batch-mode --no-transfer-progress --projects :devpulse-poc --also-make package
@@ -52,7 +52,7 @@ Validate local rendering in `devpulse-poc`: template path + parameters → a new
 
 ### Build and run
 
-Require JDK 25+ and Maven. Run these PowerShell commands from the repository root:
+Require JDK 21+ and Maven. Run these PowerShell commands from the repository root:
 
 ```powershell
 mvn --batch-mode --no-transfer-progress --projects :devpulse-poc --also-make package

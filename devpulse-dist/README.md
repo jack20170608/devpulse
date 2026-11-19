@@ -27,7 +27,7 @@ jira --help
 
 ### 构建和直接运行
 
-在仓库根目录使用 JDK 25+ 和 Maven 构建。`bash build.sh dist` 默认执行 `clean package`，清理发行模块及其 reactor 依赖的旧构建产物，避免不同版本归档残留。`devpulse-dist/target/` 生成各工具独立的 `devpulse-pulse-<版本>.tar.gz`、`devpulse-jira-<版本>.tar.gz` 及对应 `.sha256` 文件。每个归档只含对应工具的可执行 JAR、Bash 启动脚本、版本文件和 JAR 校验文件。
+在仓库根目录使用 JDK 21+ 和 Maven 构建。`bash build.sh dist` 默认执行 `clean package`，清理发行模块及其 reactor 依赖的旧构建产物，避免不同版本归档残留。`devpulse-dist/target/` 生成各工具独立的 `devpulse-pulse-<版本>.tar.gz`、`devpulse-jira-<版本>.tar.gz` 及对应 `.sha256` 文件。每个归档只含对应工具的可执行 JAR、Bash 启动脚本、版本文件和 JAR 校验文件。
 
 ```bash
 bash build.sh dist
@@ -35,7 +35,7 @@ tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
 bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
 ```
 
-Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接解压无需安装器或 Maven；运行需要 Java 25+，脚本需要 Bash（Windows 使用 Git Bash）。Pulse 实际执行任务、`status --tools` 需要 Bash；Jira JAR 本身不依赖 Bash。也可直接运行归档内的 `java -jar devpulse-pulse.jar` 或 `java -jar devpulse-jira.jar`。
+Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接解压无需安装器或 Maven；运行需要 Java 21+，脚本需要 Bash（Windows 使用 Git Bash）。Pulse 实际执行任务、`status --tools` 需要 Bash；Jira JAR 本身不依赖 Bash。也可直接运行归档内的 `java -jar devpulse-pulse.jar` 或 `java -jar devpulse-jira.jar`。
 
 ### 按需安装、升级和卸载
 
@@ -54,7 +54,7 @@ bash devpulse-dist/install.sh --uninstall --tool pulse
 
 `devpulse-dist` 生成可单独安装的 Pulse 和 Jira 发行包，不是可执行命令，也不包含 Gather 或组合式 `devpulse` 入口。目前没有公开下载渠道，可先从源码构建，再安装本地发行包。
 
-准备 JDK 25+、Maven、Bash、`tar` 和 `sha256sum`，在仓库根目录执行以下命令（Windows 使用 Git Bash）：
+准备 JDK 21+、Maven、Bash、`tar` 和 `sha256sum`，在仓库根目录执行以下命令（Windows 使用 Git Bash）：
 
 ```bash
 bash build.sh dist
@@ -83,7 +83,7 @@ bash devpulse-dist/install.sh jira --base-url "/opt/devpulse/releases"
 
 安装脚本固定使用 LF 换行；安装时也兼容 Windows 构建归档中启动脚本及版本文件的 CRLF，不修改 JAR 内容或跳过 SHA-256 校验。
 
-默认安装到 `$HOME/.local`，无需管理员权限；将上述 `export PATH=...` 加入 `~/.bashrc` 可供后续 Bash 会话使用。安装后直接执行 `pulse` 或 `jira`，不需要 Maven 或源码目录，但仍需 Java 25+ 和 Bash。
+默认安装到 `$HOME/.local`，无需管理员权限；将上述 `export PATH=...` 加入 `~/.bashrc` 可供后续 Bash 会话使用。安装后直接执行 `pulse` 或 `jira`，不需要 Maven 或源码目录，但仍需 Java 21+ 和 Bash。
 
 可通过 `--prefix` 自定义安装目录，并将其 `bin` 加入 `PATH`。卸载使用 `bash devpulse-dist/install.sh --uninstall --tool pulse` 或 `--tool jira`；自定义安装目录时需传入相同的 `--prefix`。
 
@@ -114,7 +114,7 @@ By default, install from `target` beside the installer without `--local`, `--too
 
 ### Build and run without installation
 
-Build from the repository root with JDK 25+ and Maven. `bash build.sh dist` defaults to `clean package`, removing previous build outputs from the distribution module and its reactor dependencies so archives from different versions do not linger. `devpulse-dist/target/` produces separate `devpulse-pulse-<version>.tar.gz` and `devpulse-jira-<version>.tar.gz` archives with adjacent `.sha256` files. Each archive contains only its tool's executable JAR, Bash launcher, version file, and JAR checksum.
+Build from the repository root with JDK 21+ and Maven. `bash build.sh dist` defaults to `clean package`, removing previous build outputs from the distribution module and its reactor dependencies so archives from different versions do not linger. `devpulse-dist/target/` produces separate `devpulse-pulse-<version>.tar.gz` and `devpulse-jira-<version>.tar.gz` archives with adjacent `.sha256` files. Each archive contains only its tool's executable JAR, Bash launcher, version file, and JAR checksum.
 
 ```bash
 bash build.sh dist
@@ -122,7 +122,7 @@ tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
 bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
 ```
 
-For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct extraction needs neither the installer nor Maven; running requires Java 25+, and the launcher needs Bash (Git Bash on Windows). Pulse task execution and `status --tools` require Bash; the Jira JAR itself does not. You can also run `java -jar devpulse-pulse.jar` or `java -jar devpulse-jira.jar` directly inside the extracted archive.
+For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct extraction needs neither the installer nor Maven; running requires Java 21+, and the launcher needs Bash (Git Bash on Windows). Pulse task execution and `status --tools` require Bash; the Jira JAR itself does not. You can also run `java -jar devpulse-pulse.jar` or `java -jar devpulse-jira.jar` directly inside the extracted archive.
 
 ### Selective installation, upgrades, and removal
 
@@ -141,7 +141,7 @@ The URL above is a placeholder; replace it with an actual release location. For 
 
 `devpulse-dist` produces separately installable Pulse and Jira archives; it is not an executable command and does not include Gather or the combined `devpulse` entry point. No public download channel is available yet, so build from source and install the local archives.
 
-Prepare JDK 25+, Maven, Bash, `tar`, and `sha256sum`, then run these commands from the repository root (use Git Bash on Windows):
+Prepare JDK 21+, Maven, Bash, `tar`, and `sha256sum`, then run these commands from the repository root (use Git Bash on Windows):
 
 ```bash
 bash build.sh dist
@@ -170,7 +170,7 @@ Supported forms include relative paths, absolute POSIX paths, Git Bash `/d/...`,
 
 The installer is kept with LF line endings. Installation also handles CRLF launchers and version files in Windows-built archives without changing JAR contents or bypassing SHA-256 checks.
 
-Installation defaults to `$HOME/.local` without administrator access. Add the `export PATH=...` line above to `~/.bashrc` for future Bash sessions. Once installed, run `pulse` or `jira` directly without Maven or the source checkout; Java 25+ and Bash are still required.
+Installation defaults to `$HOME/.local` without administrator access. Add the `export PATH=...` line above to `~/.bashrc` for future Bash sessions. Once installed, run `pulse` or `jira` directly without Maven or the source checkout; Java 21+ and Bash are still required.
 
 Use `--prefix` to customize the installation directory and add its `bin` directory to `PATH`. To uninstall, run `bash devpulse-dist/install.sh --uninstall --tool pulse` or use `--tool jira`; pass the same `--prefix` if you customized it.
 

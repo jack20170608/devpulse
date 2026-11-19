@@ -12,7 +12,7 @@
 
 ### 技术栈
 
-- 开发、构建和运行环境均要求 JDK 25 或更高版本。
+- 开发、构建和运行环境均要求 JDK 21 或更高版本。
 - 使用 Maven 管理依赖、构建与打包。`devpulse-dependencies/pom.xml` 管理外部依赖版本，`devpulse-bom/pom.xml` 管理内部可消费模块版本；根 `pom.xml` 的 `pluginManagement` 管理构建插件版本。
 - 项目版本只在根 `pom.xml` 的 `<revision>` 定义；根项目及子模块父版本使用 `${revision}`，内部依赖版本继续用 `${project.version}`。保留 Flatten Maven Plugin 的 `resolveCiFriendliesOnly` 设置，使安装和发布的 POM 不含未解析的 `${revision}`。
 - 核心、插件聚合模块、兼容入口、发行模块及内部 BOM 通过本地相对路径继承 `devpulse-dependencies`，无需先安装兄弟 BOM 才能解析父 POM；存在内部代码依赖的模块仍需通过根 reactor 的 `--also-make` 一起构建。不要在运行模块中声明对 BOM 的普通运行时依赖。
@@ -24,7 +24,8 @@
 ### Java 实现规范
 
 - 优先保证设计的清晰性和可维护性，不为向后兼容保留不必要的旧接口、命令或实现；确需破坏兼容时同步更新相关使用说明。
-- 优先使用 Java 25 中已正式发布的语言特性，在适合的场景使用 `record` 表达不可变配置和环境事实。
+- 优先使用 Java 21 中已正式发布的语言特性，在适合的场景使用 `record` 表达不可变配置和环境事实。
+- 源码兼容基线是 Java 21，由根 POM 的 `release=21` 强制。禁止使用 Java 22 及以上的语法或 API，包括未命名变量 `_`、`Stream.gather`、`ScopedValue`、ClassFile API；这类代码会让 `release=21` 构建失败。工具链可以用 JDK 25 构建，但产物和源码必须停留在 Java 21。
 - 当能够简化封闭状态集合的处理时，使用 sealed 类型、模式匹配和 switch 表达式。
 - 使用文本块维护多行 AI 提示词模板。
 - 默认不启用预览特性；确需使用时，记录原因及构建、运行要求，包括 `--enable-preview`。
@@ -37,11 +38,11 @@
 
 ### Maven 构建与分发
 
-- 设置 UTF-8 源码编码，并将 Maven Compiler Plugin 的 `release` 配置为 `25`，保证产物可在 Java 25 上运行。
+- 设置 UTF-8 源码编码，并将 Maven Compiler Plugin 的 `release` 配置为 `21`，保证产物可在 Java 21 上运行。
 - 使用 Maven Shade Plugin 在 `package` 阶段生成包含运行依赖的可执行 JAR。
 - 每个模块通过 `ManifestResourceTransformer` 设置自身的 `Main-Class`。
 - 组合式兼容入口为 `devpulse-cli/target/devpulse.jar`，独立工具产物在 `devpulse-plugins/{pulse,gather,jira}/target/devpulse-{pulse,gather,jira}.jar`；`devpulse-dist` 按工具打包。
-- 分发时，目标机器需要安装 Java 25 或更高版本。
+- 分发时，目标机器需要安装 Java 21 或更高版本。
 
 在仓库根目录构建并运行：
 
@@ -65,8 +66,10 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ### 完成定义
 
 - 任何代码改动在视为完成前，必须运行 `bash verify.sh` 并通过。该脚本执行格式化检查、全量编译、全部测试和静态分析，是唯一的机器门禁入口。
+- 修改编译器设置（如 `release`）或升级依赖版本后，必须运行 `bash verify.sh --clean`。Maven 增量编译不会因为配置变化而重编源文件内容未变的模块，会留下旧字节码并让门禁假绿。
 - 格式化由 Spotless（google-java-format，AOSP 风格 4 空格）在 `verify` 阶段强制。需要修正时运行 `mvn spotless:apply`，不要手工调整缩进或换行。
 - 静态分析由 SpotBugs 报告。不要为了让报告变干净而抑制警告；确需抑制时，使用带原因注释的 `@SuppressFBWarnings`。
+- SpotBugs 用 `[ERROR]` 前缀打印的条目只是报告内容，不代表构建失败；判断门禁结果只看 `verify.sh` 的退出码和末尾的 `BUILD SUCCESS`。
 
 ## English
 
@@ -78,7 +81,7 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 ### Technology stack
 
-- Require JDK 25 or later for development, builds, and runtime.
+- Require JDK 21 or later for development, builds, and runtime.
 - Use Maven for dependencies, builds, and packaging. Manage external dependency versions in `devpulse-dependencies/pom.xml`, consumable internal module versions in `devpulse-bom/pom.xml`, and build plugin versions in the root `pom.xml`'s `pluginManagement`.
 - Define the project version only in the root `pom.xml`'s `<revision>`; use `${revision}` for root and child parent versions, while keeping `${project.version}` for internal dependencies. Retain the Flatten Maven Plugin's `resolveCiFriendliesOnly` setting so installed and deployed POMs have no unresolved `${revision}`.
 - Core, the plugin aggregator, the compatibility entry point, the distribution module, and the internal BOM inherit `devpulse-dependencies` via local relative parent paths so the parent POM does not require installing a sibling BOM first. Modules with internal code dependencies must still be built through the root reactor with `--also-make`. Do not add a BOM as a regular runtime dependency.
@@ -90,7 +93,8 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ### Java implementation conventions
 
 - Prioritize clear, maintainable design over backward compatibility; do not retain unnecessary legacy interfaces, commands, or implementations. Update relevant usage documentation when making breaking changes.
-- Prefer finalized language features available in Java 25. Use `record` for immutable configuration and environment facts where appropriate.
+- Prefer finalized language features available in Java 21. Use `record` for immutable configuration and environment facts where appropriate.
+- The source compatibility baseline is Java 21, enforced by `release=21` in the root POM. Do not use Java 22 or newer syntax or APIs, including unnamed variables `_`, `Stream.gather`, `ScopedValue`, and the ClassFile API; such code fails the `release=21` build. The toolchain may build with JDK 25, but sources and artifacts stay on Java 21.
 - Use sealed types, pattern matching, and switch expressions where they simplify handling closed sets of states.
 - Use text blocks for multiline AI prompt templates.
 - Do not enable preview features by default. If needed, document the reason and the build/runtime requirements, including `--enable-preview`.
@@ -103,11 +107,11 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 ### Maven build and distribution
 
-- Set UTF-8 source encoding and configure Maven Compiler Plugin with `release` set to `25`, so artifacts remain runnable on Java 25.
+- Set UTF-8 source encoding and configure Maven Compiler Plugin with `release` set to `21`, so artifacts remain runnable on Java 21.
 - Use Maven Shade Plugin during the `package` phase to produce an executable JAR containing runtime dependencies.
 - Use `ManifestResourceTransformer` to set each module's own `Main-Class`.
 - The combined compatibility entry point builds `devpulse-cli/target/devpulse.jar`; standalone tools build `devpulse-plugins/{pulse,gather,jira}/target/devpulse-{pulse,gather,jira}.jar`. `devpulse-dist` packages the tools individually.
-- Distribution requires Java 25 or later on the target machine.
+- Distribution requires Java 21 or later on the target machine.
 
 Build and run from the repository root:
 
@@ -131,5 +135,7 @@ In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash buil
 ### Definition of done
 
 - No code change is complete until `bash verify.sh` passes. That script runs the formatting check, the full compile, all tests, and static analysis, and is the single machine gate.
+- After changing compiler settings (such as `release`) or upgrading a dependency version, run `bash verify.sh --clean`. Maven incremental compilation does not recompile modules whose source content is unchanged, which leaves stale bytecode and makes the gate falsely green.
 - Formatting is enforced by Spotless (google-java-format, AOSP style, 4-space indent) during the `verify` phase. Fix it with `mvn spotless:apply`; do not hand-adjust indentation or wrapping.
 - Static analysis is reported by SpotBugs. Do not suppress warnings to make the report clean; when suppression is genuinely needed, use `@SuppressFBWarnings` with a comment explaining why.
+- SpotBugs lines prefixed with `[ERROR]` are report content, not build failures. Judge the gate only by the `verify.sh` exit code and the trailing `BUILD SUCCESS`.

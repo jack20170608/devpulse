@@ -8,7 +8,7 @@
 
 ### 环境与构建
 
-开发、构建和运行需要 Java 25+；构建使用 Maven 和 Bash（Windows 使用 Git Bash）。盘点需要 Bash；帮助与版本输出不需要 Bash。以下示例从仓库根目录运行：
+开发、构建和运行需要 Java 21+；构建使用 Maven 和 Bash（Windows 使用 Git Bash）。盘点需要 Bash；帮助与版本输出不需要 Bash。以下示例从仓库根目录运行：
 
 ```powershell
 bash build.sh gather
@@ -64,7 +64,7 @@ java -jar devpulse-plugins\gather\target\devpulse-gather.jar --language en --no-
 
 ### Requirements and build
 
-Development, builds, and runtime require Java 25+; building uses Maven and Bash (Git Bash on Windows). Inventory requires Bash, while help and version output do not. Run these examples from the repository root:
+Development, builds, and runtime require Java 21+; building uses Maven and Bash (Git Bash on Windows). Inventory requires Bash, while help and version output do not. Run these examples from the repository root:
 
 ```powershell
 bash build.sh gather

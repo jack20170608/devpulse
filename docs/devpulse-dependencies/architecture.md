@@ -16,7 +16,7 @@ core、插件聚合模块、兼容 CLI、发行模块及内部 BOM 通过本地�
 
 根 `pom.xml` 的 `<revision>` 是项目版本的唯一值；根项目及子模块父版本使用 `${revision}`，内部依赖使用 `${project.version}`。外部依赖版本、构建插件版本和配置格式版本有独立语义，不跟随项目版本递增。
 
-构建插件版本由根 POM 的 `pluginManagement` 管理，设置 UTF-8 和 Java `release=25`，默认不启用预览。继承的 Flatten Maven Plugin 保留 `resolveCiFriendliesOnly`，安装和发布时解析 CI-friendly 版本占位符，避免消费者获得未解析的 `${revision}`。
+构建插件版本由根 POM 的 `pluginManagement` 管理，设置 UTF-8 和 Java `release=21`，默认不启用预览。继承的 Flatten Maven Plugin 保留 `resolveCiFriendliesOnly`，安装和发布时解析 CI-friendly 版本占位符，避免消费者获得未解析的 `${revision}`。
 
 ## English
 
@@ -32,4 +32,4 @@ Core, the plugin aggregator, compatibility CLI, distribution, and internal BOM i
 
 The root `pom.xml`'s `<revision>` is the sole project version value. Root and child parent versions use `${revision}`, while internal dependencies use `${project.version}`. External dependency versions, build plugin versions, and configuration schema versions have independent meanings and do not advance with the project version.
 
-The root POM's `pluginManagement` manages build plugin versions, with UTF-8 and Java `release=25` and no preview features by default. The inherited Flatten Maven Plugin retains `resolveCiFriendliesOnly`, resolving CI-friendly placeholders during installation and publishing so consumers do not receive unresolved `${revision}` values.
+The root POM's `pluginManagement` manages build plugin versions, with UTF-8 and Java `release=21` and no preview features by default. The inherited Flatten Maven Plugin retains `resolveCiFriendliesOnly`, resolving CI-friendly placeholders during installation and publishing so consumers do not receive unresolved `${revision}` values.

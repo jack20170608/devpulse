@@ -10,7 +10,7 @@ Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批�
 
 ### 环境与构建
 
-构建需要 JDK 25+、Maven 和 Bash（Windows 使用 Git Bash）；JAR 运行需要 Java 25+。实际任务执行和 `status --tools` 需要 Bash；`init`、`review`、`--dry-run`、历史列表及日志读取不需要 Bash。就绪检查及自定义停止命令使用启动时保存的 Bash 路径。
+构建需要 JDK 21+、Maven 和 Bash（Windows 使用 Git Bash）；JAR 运行需要 Java 21+。实际任务执行和 `status --tools` 需要 Bash；`init`、`review`、`--dry-run`、历史列表及日志读取不需要 Bash。就绪检查及自定义停止命令使用启动时保存的 Bash 路径。
 
 从仓库根目录运行：
 
@@ -247,7 +247,7 @@ Pulse reads YAML task configuration and executes batches and local daemons throu
 
 ### Requirements and build
 
-Building requires JDK 25+, Maven, and Bash (Git Bash on Windows); running the JAR requires Java 25+. Actual task execution and `status --tools` require Bash; `init`, `review`, `--dry-run`, history lists, and log reads do not. Readiness and custom stop commands use the Bash path saved at startup.
+Building requires JDK 21+, Maven, and Bash (Git Bash on Windows); running the JAR requires Java 21+. Actual task execution and `status --tools` require Bash; `init`, `review`, `--dry-run`, history lists, and log reads do not. Readiness and custom stop commands use the Bash path saved at startup.
 
 Run from the repository root:
 
