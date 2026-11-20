@@ -6,7 +6,6 @@ import io.github.devpulse.storage.jdbi.TableDescription;
 import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jdbi.v3.core.Jdbi;
@@ -25,16 +24,10 @@ public final class TaskNeedDao extends BaseDaoJdbiImpl<TaskNeedRecord, TaskNeedK
     }
 
     private static TableDescription description() {
-        var columns = new LinkedHashMap<String, String>();
-        columns.put("runId", "run_id");
-        columns.put("taskName", "task_name");
-        columns.put("needName", "need_name");
-        columns.put("sortOrder", "sort_order");
         return TableDescription.builder()
                 .withName("task_need")
                 .withEntityClass(TaskNeedRecord.class)
                 .withIdFields(List.of("runId", "taskName", "needName"))
-                .withFieldColumnMap(columns)
                 .build();
     }
 

@@ -9,7 +9,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jdbi.v3.core.Jdbi;
@@ -28,27 +27,11 @@ public final class TaskDao extends BaseDaoJdbiImpl<TaskRecord, TaskKey> {
     }
 
     private static TableDescription description() {
-        var columns = new LinkedHashMap<String, String>();
-        columns.put("runId", "run_id");
-        columns.put("name", "name");
-        columns.put("taskId", "task_id");
-        columns.put("fingerprint", "fingerprint");
-        columns.put("state", "state");
-        columns.put("exitCode", "exit_code");
-        columns.put("error", "error");
-        columns.put("startedAt", "started_at");
-        columns.put("finishedAt", "finished_at");
-        columns.put("logPath", "log_path");
-        columns.put("reusedFrom", "reused_from");
-        columns.put("daemonHealth", "daemon_health");
-        columns.put("daemonError", "daemon_error");
-        columns.put("daemonCheckedAt", "daemon_checked_at");
-        columns.put("sortOrder", "sort_order");
         return TableDescription.builder()
                 .withName("task")
                 .withEntityClass(TaskRecord.class)
                 .withIdFields(List.of("runId", "name"))
-                .withFieldColumnMap(columns)
+                .withoutField("needs")
                 .build();
     }
 

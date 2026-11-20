@@ -7,7 +7,6 @@ import io.github.devpulse.storage.jdbi.TableDescription;
 import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import org.jdbi.v3.core.Jdbi;
@@ -39,16 +38,10 @@ public final class TaskResultDao extends BaseDaoJdbiImpl<TaskResult, TaskResultK
     }
 
     private static TableDescription description() {
-        var columns = new LinkedHashMap<String, String>();
-        columns.put("name", "name");
-        columns.put("fingerprint", "fingerprint");
-        columns.put("runId", "run_id");
-        columns.put("finishedAt", "finished_at");
         return TableDescription.builder()
                 .withName("task_result")
                 .withEntityClass(TaskResult.class)
                 .withIdFields(List.of("name", "fingerprint"))
-                .withFieldColumnMap(columns)
                 .build();
     }
 

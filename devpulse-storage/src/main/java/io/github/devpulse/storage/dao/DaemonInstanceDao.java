@@ -7,7 +7,6 @@ import io.github.devpulse.storage.jdbi.TableDescription;
 import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jdbi.v3.core.Jdbi;
@@ -43,29 +42,10 @@ public final class DaemonInstanceDao extends BaseDaoJdbiImpl<DaemonRecord, Daemo
     }
 
     private static TableDescription description() {
-        var columns = new LinkedHashMap<String, String>();
-        columns.put("runId", "run_id");
-        columns.put("taskId", "task_id");
-        columns.put("instanceId", "instance_id");
-        columns.put("attempt", "attempt");
-        columns.put("name", "name");
-        columns.put("project", "project");
-        columns.put("bash", "bash");
-        columns.put("pid", "pid");
-        columns.put("processStartedAt", "process_started_at");
-        columns.put("readyCommand", "ready_command");
-        columns.put("stopCommand", "stop_command");
-        columns.put("stopTimeoutNanos", "stop_timeout_nanos");
-        columns.put("intervalNanos", "interval_nanos");
-        columns.put("timeoutNanos", "timeout_nanos");
-        columns.put("checkTimeoutNanos", "check_timeout_nanos");
-        columns.put("readyAt", "ready_at");
-        columns.put("stoppedAt", "stopped_at");
         return TableDescription.builder()
                 .withName("daemon_instance")
                 .withEntityClass(DaemonRecord.class)
                 .withIdFields(List.of("runId", "taskId", "instanceId"))
-                .withFieldColumnMap(columns)
                 .build();
     }
 

@@ -26,24 +26,10 @@ public final class RunDao extends BaseDaoJdbiImpl<RunRecord, RunKey> {
     }
 
     private static TableDescription description() {
-        var columns = new LinkedHashMap<String, String>();
-        columns.put("id", "id");
-        columns.put("project", "project");
-        columns.put("target", "target");
-        columns.put("parallelism", "parallelism");
-        columns.put("state", "state");
-        columns.put("executorPid", "executor_pid");
-        columns.put("executorStartedAt", "executor_started_at");
-        columns.put("startedAt", "started_at");
-        columns.put("finishedAt", "finished_at");
-        columns.put("bash", "bash");
-        columns.put("toolVersion", "tool_version");
-        columns.put("parentRunId", "parent_run_id");
         return TableDescription.builder()
                 .withName("run")
                 .withEntityClass(RunRecord.class)
-                .withIdFields(List.of("id"))
-                .withFieldColumnMap(columns)
+                .withIdField("id")
                 .build();
     }
 

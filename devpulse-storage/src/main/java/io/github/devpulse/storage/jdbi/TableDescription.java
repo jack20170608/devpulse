@@ -1,8 +1,10 @@
 package io.github.devpulse.storage.jdbi;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * Describes how an entity maps onto a table.
@@ -10,6 +12,12 @@ import java.util.TreeMap;
  * <p>The key is a list of entity fields, not a single id: a run is keyed by one string column,
  * while a task, a dependency edge and the reuse index are keyed by two or three columns. Generated
  * {@code Long} keys remain supported for the single-column case.
+ *
+ * <p>Columns are derived from the entity's record components: a camel-cased component maps to the
+ * snake-cased column of the same name, which is the convention every table here follows. Name the
+ * exceptions with {@link Builder#withFieldColumn} and leave out components that are not columns
+ * with {@link Builder#withoutField}. The component list is therefore the single source of truth,
+ * and a new component cannot silently miss its column.
  */
 public class TableDescription {
 
@@ -69,6 +77,8 @@ public class TableDescription {
     }
 
     public static final class Builder {
+        private final Map<String, String> columnOverrides = new TreeMap<>();
+        private final TreeSet<String> excludedFields = new TreeSet<>();
         private boolean idAutoGenerate;
         private String name;
         private Map<String, String> fieldColumnMap;
@@ -88,8 +98,26 @@ public class TableDescription {
             return this;
         }
 
+        /**
+         * Use an explicit field-to-column map instead of deriving the columns.
+         *
+         * <p>Kept for tables whose columns do not follow the naming convention; the DAOs rely on
+         * the derived form.
+         */
         public Builder withFieldColumnMap(Map<String, String> fieldColumnMap) {
             this.fieldColumnMap = fieldColumnMap == null ? null : new TreeMap<>(fieldColumnMap);
+            return this;
+        }
+
+        /** Name the column of one field when it does not follow the naming convention. */
+        public Builder withFieldColumn(String field, String column) {
+            columnOverrides.put(field, column);
+            return this;
+        }
+
+        /** Leave out a record component that is not a column, such as a child collection. */
+        public Builder withoutField(String field) {
+            excludedFields.add(field);
             return this;
         }
 
@@ -113,8 +141,48 @@ public class TableDescription {
         }
 
         public TableDescription build() {
+            var columns = fieldColumnMap;
+            if (columns == null) {
+                if (entityClass == null) {
+                    throw new IllegalArgumentException(
+                            "A table description needs an entity class or a field-to-column map.");
+                }
+                columns = derive(entityClass, columnOverrides, excludedFields);
+            }
             return new TableDescription(
-                    name, entityClass, idAutoGenerate, fromClause, fieldColumnMap, idFields);
+                    name, entityClass, idAutoGenerate, fromClause, columns, idFields);
+        }
+
+        private static Map<String, String> derive(
+                Class<?> entityClass, Map<String, String> overrides, TreeSet<String> excluded) {
+            var components = entityClass.getRecordComponents();
+            if (components == null || components.length == 0) {
+                throw new IllegalArgumentException(
+                        "Cannot derive columns for "
+                                + entityClass.getName()
+                                + ": it is not a record, so name them with withFieldColumnMap.");
+            }
+            var columns = new LinkedHashMap<String, String>();
+            for (var component : components) {
+                var field = component.getName();
+                if (!excluded.contains(field)) {
+                    columns.put(field, overrides.getOrDefault(field, snake(field)));
+                }
+            }
+            return columns;
+        }
+
+        private static String snake(String field) {
+            var result = new StringBuilder(field.length() + 8);
+            for (var index = 0; index < field.length(); index++) {
+                var character = field.charAt(index);
+                if (Character.isUpperCase(character)) {
+                    result.append('_').append(Character.toLowerCase(character));
+                } else {
+                    result.append(character);
+                }
+            }
+            return result.toString();
         }
     }
 
