@@ -2,6 +2,7 @@ package io.github.devpulse.storage.dao;
 
 import io.github.devpulse.storage.TaskKey;
 import io.github.devpulse.storage.TaskRecord;
+import io.github.devpulse.storage.jdbi.Bindings;
 import io.github.devpulse.storage.jdbi.TableDescription;
 import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
@@ -10,6 +11,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.jdbi.v3.core.Jdbi;
 
 /**
@@ -48,6 +50,48 @@ public final class TaskDao extends BaseDaoJdbiImpl<TaskRecord, TaskKey> {
                 .withIdFields(List.of("runId", "name"))
                 .withFieldColumnMap(columns)
                 .build();
+    }
+
+    /**
+     * Update only the mutable execution state of a task.
+     *
+     * <p>Identity, fingerprint and stored order stay untouched, so a caller that does not know the
+     * fingerprint cannot erase it by passing {@code null}.
+     */
+    public void updateState(TaskRecord task) {
+        jdbi.useHandle(handle -> {
+            var update =
+                    handle.createUpdate(
+                            "UPDATE task SET state = :state, exit_code = :exitCode, "
+                                    + "error = :error, started_at = :startedAt, "
+                                    + "finished_at = :finishedAt, log_path = :logPath, "
+                                    + "reused_from = :reusedFrom, "
+                                    + "daemon_health = :daemonHealth, "
+                                    + "daemon_error = :daemonError, "
+                                    + "daemon_checked_at = :daemonCheckedAt "
+                                    + "WHERE run_id = :runId AND name = :name");
+            Bindings.text(update, "runId", task.runId());
+            Bindings.text(update, "name", task.name());
+            Bindings.text(update, "state", task.state());
+            Bindings.number(update, "exitCode", task.exitCode());
+            Bindings.text(update, "error", task.error());
+            Bindings.instant(update, "startedAt", task.startedAt());
+            Bindings.instant(update, "finishedAt", task.finishedAt());
+            Bindings.text(update, "logPath", task.logPath());
+            Bindings.text(update, "reusedFrom", task.reusedFrom());
+            Bindings.text(update, "daemonHealth", task.daemonHealth());
+            Bindings.text(update, "daemonError", task.daemonError());
+            Bindings.instant(update, "daemonCheckedAt", task.daemonCheckedAt());
+            update.execute();
+        });
+    }
+
+    /** Every task of one run, in the order the run recorded them. */
+    public List<TaskRecord> listByRun(String runId) {
+        return find(
+                "SELECT * FROM task WHERE run_id = :runId ORDER BY sort_order, name",
+                Map.of("runId", runId),
+                null);
     }
 
     @Override

@@ -2,13 +2,12 @@ package io.github.devpulse.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.devpulse.storage.dao.RunDao;
+import io.github.devpulse.storage.dao.TaskDao;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
-import io.github.devpulse.storage.dao.RunDao;
-import io.github.devpulse.storage.dao.TaskDao;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

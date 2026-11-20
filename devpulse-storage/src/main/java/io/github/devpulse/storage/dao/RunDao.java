@@ -2,6 +2,7 @@ package io.github.devpulse.storage.dao;
 
 import io.github.devpulse.storage.RunKey;
 import io.github.devpulse.storage.RunRecord;
+import io.github.devpulse.storage.jdbi.Bindings;
 import io.github.devpulse.storage.jdbi.TableDescription;
 import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
@@ -44,6 +45,36 @@ public final class RunDao extends BaseDaoJdbiImpl<RunRecord, RunKey> {
                 .withIdFields(List.of("id"))
                 .withFieldColumnMap(columns)
                 .build();
+    }
+
+    /** Mark the run finished; only the two completion columns change. */
+    public void finish(String runId, String state, Instant finishedAt) {
+        jdbi.useHandle(handle -> {
+            var update =
+                    handle.createUpdate(
+                            "UPDATE run SET state = :state, finished_at = :finishedAt "
+                                    + "WHERE id = :id");
+            Bindings.text(update, "state", state);
+            Bindings.instant(update, "finishedAt", finishedAt);
+            Bindings.text(update, "id", runId);
+            update.execute();
+        });
+    }
+
+    /** Runs of one project, newest first; a {@code null} project means every run. */
+    public List<RunRecord> list(String project, int limit) {
+        var params = new LinkedHashMap<String, Object>();
+        params.put("limit", limit);
+        if (project != null) {
+            params.put("project", project);
+        }
+        return find(
+                project == null
+                        ? "SELECT * FROM run ORDER BY started_at DESC LIMIT :limit"
+                        : "SELECT * FROM run WHERE project = :project "
+                                + "ORDER BY started_at DESC LIMIT :limit",
+                params,
+                null);
     }
 
     @Override
