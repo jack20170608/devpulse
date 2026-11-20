@@ -70,7 +70,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\y
 
 任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录。普通任务的输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志；长驻进程的合并输出直接写入日志文件，不在控制台实时转发，以便 CLI 返回后仍能输出。普通任务以 Bash 退出码判断结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
 
-普通任务失败后跳过其后继，独立分支继续；Daemon 就绪后失效会取消正在执行的受影响后继并跳过未启动的后继。日志、启动或持久化基础设施故障会取消本次运行。全部节点成功且 Daemon 最后检测正常返回 `0`。失败时返回可供程序判定的分类退出码：配置整体无效 `10`，依赖图或字段值错误 `11`，目标不存在或歧义 `12`，缺少 Bash 等环境能力 `20`，任务或健康检查失败 `30`，运行记录或日志等本地基础设施故障 `40`，协调线程中断 `130`。搭配 `--format json` 使用时，同样的分类还会以 `code`、`file` 和 `line` 出现在错误文档中。取消时尽力清理批任务进程及其可见后代，不停止 Daemon。所有执行由 core 的 `DagRun` 统一调度。
+普通任务失败后跳过其后继，独立分支继续；Daemon 就绪后失效会取消正在执行的受影响后继并跳过未启动的后继。日志、启动或持久化基础设施故障会取消本次运行。全部节点成功且 Daemon 最后检测正常返回 `0`。失败时返回可供程序判定的分类退出码：配置整体无效 `10`，依赖图或字段值错误 `11`，目标不存在或歧义 `12`，缺少 Bash 等环境能力 `20`，任务失败 `30`，Daemon 未在启动时限内就绪 `31`，Daemon 就绪后失效 `32`，运行记录或日志等本地基础设施故障 `40`，协调线程中断 `130`。Daemon 问题优先于普通任务失败。搭配 `--format json` 时，同样的分类还会以 `code`、`file` 和 `line` 出现在错误文档中，运行结果的 `daemonOutcome` 字段给出 `NONE`、`NEVER_READY` 或 `LOST`。取消时尽力清理批任务进程及其可见后代，不停止 Daemon。所有执行由 core 的 `DagRun` 统一调度。
 
 支持非交互批任务和显式声明的本地长驻进程，不提供普通批任务超时或沙箱。运行前必须审核命令；并发上限限制批任务和长驻进程的启动等待阶段，不限制已就绪的长驻进程数量、探测进程或任务内部的并发。
 
@@ -150,6 +150,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\
 | `--directory <目录>` | 项目配置目录，默认当前目录 |
 | `--jobs <N>` | 覆盖审阅时显示的并发上限，不修改配置 |
 | `--plain` | 强制输出纯文本计划，不打开 TUI |
+| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出与 `pulse --dry-run --format json` 相同的计划文档，且不打开 TUI |
 
 ```powershell
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review
@@ -158,7 +159,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 
 交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、用户管理生命周期和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `pulse --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
 
-成功返回 `0`，配置、目标或界面错误返回 `1`，中断返回 `130`。拓扑顺序和依赖深度不是固定执行批次；静态校验通过不代表命令安全或工具可用。
+成功返回 `0`。配置整体无效返回 `10`，依赖图或字段值错误返回 `11`，目标不存在或歧义返回 `12`，界面或本地基础设施故障返回 `40`，中断返回 `130`。拓扑顺序和依赖深度不是固定执行批次；静态校验通过不代表命令安全或工具可用。
 
 ### `status`：查询运行状态和日志
 
@@ -170,6 +171,9 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 | `--run <ID>` | 查看指定历史运行，默认选择最新运行 |
 | `--list` | 按开始时间从新到旧列出全部运行 |
 | `--log <任务名>` | 输出选中运行的任务日志，可与 `--run` 配合 |
+| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 为默认视图、`--run`、`--list`、`--tools`、`--log` 各输出一个 JSON 文档 |
+| `--tail <N>` | 配合 `--log`，只保留最后 N 行；`0` 表示全部。文本模式默认全部，JSON 模式默认 `200` |
+| `--grep <正则>` | 配合 `--log`，只保留匹配该大小写敏感正则的行；用 `(?i)` 开启忽略大小写 |
 | `--tools` | 仅检查 Bash 和固定工具清单的可用性，不查询执行历史 |
 | `--bash <路径>` | 仅与 `--tools` 配合，显式指定 Bash |
 
@@ -180,7 +184,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 ```
 
-`--list` 不能与 `--run` 或 `--log` 混用；`--tools` 不能与历史查询选项混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `1`，参数冲突返回 `2`，工具盘点中断返回 `130`。
+`--list` 不能与 `--run` 或 `--log` 混用；`--tools` 不能与历史查询选项混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `40`，`--run` 指定的运行无法使用时返回 `12`，参数冲突返回 `2`，工具盘点中断返回 `130`。
 
 任务历史状态区分 `PENDING`、`RUNNING`、`READY`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED` 和 `INTERRUPTED`。`READY` 表示长驻进程在执行时达到就绪，不代表后来始终存活。读取遗留的未完成记录时，通过运行锁及执行器身份判断是否已退出；确认退出后保存中断状态，无法确认时保留记录并警告，不自动续跑或接管进程。
 
@@ -308,7 +312,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\y
 
 Tasks run through non-login, non-interactive Bash in the project configuration directory. Batch output and errors are merged, prefixed in the console, and saved as UTF-8 logs. Daemon output is merged and redirected directly to its log, without live console forwarding, so output continues after CLI exit. Bash's exit code determines batch results; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly when needed.
 
-Ordinary task failures skip descendants while independent branches continue. Daemon faults after readiness cancel running affected descendants and skip unstarted descendants. Logging, startup, or persistence infrastructure faults cancel the run. Successful nodes and last-observed healthy daemons return `0`. Failures return a categorized exit code a program can act on: wholly invalid configuration `10`, dependency-graph or field-value errors `11`, a missing or ambiguous target `12`, a missing environment capability such as Bash `20`, task or health-check failure `30`, local infrastructure faults such as run records or logs `40`, and coordinator interruption `130`. With `--format json` the same classification also appears as `code`, `file`, and `line` in the error document. Cancellation attempts batch/visible-descendant cleanup without stopping daemons. Core's `DagRun` handles all scheduling.
+Ordinary task failures skip descendants while independent branches continue. Daemon faults after readiness cancel running affected descendants and skip unstarted descendants. Logging, startup, or persistence infrastructure faults cancel the run. Successful nodes and last-observed healthy daemons return `0`. Failures return a categorized exit code a program can act on: wholly invalid configuration `10`, dependency-graph or field-value errors `11`, a missing or ambiguous target `12`, a missing environment capability such as Bash `20`, task failure `30`, a daemon that never became ready within its startup limit `31`, a daemon lost after readiness `32`, local infrastructure faults such as run records or logs `40`, and coordinator interruption `130`. A daemon problem outranks an ordinary task failure. With `--format json` the same classification also appears as `code`, `file`, and `line` in the error document, and the run document reports `daemonOutcome` as `NONE`, `NEVER_READY`, or `LOST`. Cancellation attempts batch/visible-descendant cleanup without stopping daemons. Core's `DagRun` handles all scheduling.
 
 Non-interactive batch tasks and explicitly declared local daemons are supported. There is no ordinary batch-task timeout or sandbox. Review commands before execution. The concurrency limit covers batch tasks and daemon startup waits, not already-ready daemons, probe processes, or internal task concurrency.
 
@@ -388,6 +392,7 @@ Repeated cleanup of exited instances returns `0`, as do empty history or a selec
 | `--directory <directory>` | Project configuration directory; defaults to the current directory |
 | `--jobs <N>` | Override the displayed concurrency limit without modifying configuration |
 | `--plain` | Force a plain-text plan instead of opening the TUI |
+| `--format <FORMAT>` | Result format; defaults to `text`. `json` emits the same plan document as `pulse --dry-run --format json` and never opens the TUI |
 
 ```powershell
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review
@@ -396,7 +401,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 
 An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, user-managed lifecycle, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `pulse --dry-run` also show all lifecycle commands without running checks or cleanup.
 
-Success returns `0`, configuration, target, or interface errors return `1`, and interruption returns `130`. Topological order and dependency depth are not fixed execution batches; valid configuration does not guarantee command safety or tool availability.
+Success returns `0`. Wholly invalid configuration returns `10`, dependency-graph or field-value errors return `11`, a missing or ambiguous target returns `12`, interface or local infrastructure faults return `40`, and interruption returns `130`. Topological order and dependency depth are not fixed execution batches; valid configuration does not guarantee command safety or tool availability.
 
 ### `status`: query run status and logs
 
@@ -408,6 +413,9 @@ Every actual `pulse` execution creates an independent run ID, storing `state.con
 | `--run <ID>` | Select a historical run instead of the latest |
 | `--list` | List all runs by start time, newest first |
 | `--log <task>` | Print a task log from the selected run; can be combined with `--run` |
+| `--format <FORMAT>` | Result format; defaults to `text`. `json` emits one document per view for the default view, `--run`, `--list`, `--tools`, or `--log` |
+| `--tail <N>` | With `--log`, keep only the last N lines; `0` keeps all. Text mode defaults to all, JSON mode to `200` |
+| `--grep <regex>` | With `--log`, keep lines matching this case-sensitive regular expression; use `(?i)` for case-insensitive matching |
 | `--tools` | Check only Bash and fixed-list tool availability, without querying run history |
 | `--bash <path>` | Explicit Bash path, used only with `--tools` |
 
@@ -418,7 +426,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 ```
 
-`--list` cannot be combined with `--run` or `--log`; `--tools` cannot be combined with history query options. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `1`, conflicting options return `2`, and tool inventory interruption returns `130`.
+`--list` cannot be combined with `--run` or `--log`; `--tools` cannot be combined with history query options. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `40`, an unusable `--run` identifier returns `12`, conflicting options return `2`, and tool inventory interruption returns `130`.
 
 Historical task states distinguish `PENDING`, `RUNNING`, `READY`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. `READY` records that a daemon became ready during execution, not that it remains alive later. Reading unfinished records checks the run lock and executor identity. Confirmed exit persists an interrupted result; uncertainty preserves the record and prints a warning. There is no automatic resume or process takeover.
 

@@ -29,6 +29,12 @@ public final class ExitCodes {
     /** At least one task ran and failed, or the run state is not success. */
     public static final int TASK_FAILED = 30;
 
+    /** A daemon never became ready before its startup timeout. */
+    public static final int DAEMON_NOT_READY = 31;
+
+    /** A daemon that had become ready later became unavailable or exited. */
+    public static final int DAEMON_LOST = 32;
+
     /** Run records, logs, or another local infrastructure could not be written. */
     public static final int INFRASTRUCTURE = 40;
 

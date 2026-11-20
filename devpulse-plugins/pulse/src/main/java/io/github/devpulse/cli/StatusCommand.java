@@ -4,15 +4,17 @@ import io.github.devpulse.core.bash.DaemonManager;
 import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.environment.EnvironmentGatherer;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Callable;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -54,6 +56,31 @@ public final class StatusCommand implements Callable<Integer> {
             description = "Print a task log from the selected run.")
     private String log;
 
+    @Option(
+            names = "--format",
+            paramLabel = "FORMAT",
+            defaultValue = "text",
+            description = "Result format: text (default) or json.")
+    private OutputFormat format;
+
+    @Option(
+            names = "--tail",
+            paramLabel = "N",
+            description =
+                    "With --log, keep only the last N lines; 0 keeps all. "
+                            + "Defaults to all in text mode and 200 with --format json.")
+    private Integer tail;
+
+    @Option(
+            names = "--grep",
+            paramLabel = "REGEX",
+            description =
+                    "With --log, keep lines matching this case-sensitive regular expression; "
+                            + "use (?i) for case-insensitive matching.")
+    private String grep;
+
+    private static final int DEFAULT_JSON_LOG_LINES = 200;
+
     @Override
     public Integer call() {
         var out = spec.commandLine().getOut();
@@ -66,9 +93,31 @@ public final class StatusCommand implements Callable<Integer> {
                     "Use --tools with optional --bash, --list alone, "
                             + "or --run with optional --log.");
         }
+        var json = format == OutputFormat.json;
+        if (log == null && (tail != null || grep != null)) {
+            throw new ParameterException(spec.commandLine(), "--tail and --grep require --log.");
+        }
+        if (tail != null && tail < 0) {
+            throw new ParameterException(spec.commandLine(), "--tail must not be negative.");
+        }
+        Pattern filter = null;
+        if (grep != null) {
+            try {
+                filter = Pattern.compile(grep);
+            } catch (PatternSyntaxException exception) {
+                throw new ParameterException(
+                        spec.commandLine(),
+                        "Invalid --grep regular expression: " + exception.getDescription());
+            }
+        }
         try {
             if (tools) {
                 var facts = new EnvironmentGatherer().gather(directory, bash);
+                if (json) {
+                    out.println(StatusJson.tools(facts));
+                    out.flush();
+                    return ExitCodes.OK;
+                }
                 out.println("OS: " + facts.os());
                 out.println("Java: " + facts.javaVersion());
                 out.println("Bash: " + facts.bash().executable());
@@ -80,19 +129,42 @@ public final class StatusCommand implements Callable<Integer> {
                             tool.location().isEmpty() ? "NOT_FOUND" : "AVAILABLE",
                             tool.location());
                 }
-                return 0;
+                return ExitCodes.OK;
             }
             var history = new RunHistory(directory);
             if (run != null) {
-                return display(history, history.get(run));
+                return display(history, history.get(run), json, filter);
             }
             var records = history.list();
             if (records.isEmpty()) {
+                if (log != null) {
+                    // Asking for a log implies a run exists; reporting a list view would answer a
+                    // question that was not asked.
+                    return CommandOutput.fail(
+                            json,
+                            out,
+                            err,
+                            "status",
+                            ExitCodes.TARGET_INVALID,
+                            "TARGET_INVALID",
+                            "No pulse executions recorded; nothing to read a log from.",
+                            null);
+                }
+                if (json) {
+                    out.println(StatusJson.list(records, Instant.now()));
+                    out.flush();
+                    return ExitCodes.OK;
+                }
                 out.println("No pulse executions recorded. Run pulse first.");
-                return 0;
+                return ExitCodes.OK;
             }
             if (list) {
                 var now = Instant.now();
+                if (json) {
+                    out.println(StatusJson.list(records, now));
+                    out.flush();
+                    return ExitCodes.OK;
+                }
                 out.printf(
                         "%-36s %-12s %-20s %-20s %-20s %s%n",
                         "RUN_ID", "STATE", "TARGET", "STARTED", "FINISHED", "DURATION");
@@ -117,24 +189,35 @@ public final class StatusCommand implements Callable<Integer> {
                 if (records.stream().anyMatch(item -> estimated(item.snapshot().state()))) {
                     timingNote();
                 }
-                return 0;
+                return ExitCodes.OK;
             }
-            return display(history, records.getFirst());
+            return display(history, records.getFirst(), json, filter);
         } catch (IOException exception) {
-            err.println("status: " + exception.getMessage());
-            return 1;
+            // RunHistory reports an unusable --run with these two messages; everything else is a
+            // failure to read local infrastructure.
+            var message = exception.getMessage() == null ? "" : exception.getMessage();
+            var targetProblem =
+                    message.startsWith("Run not found: ") || message.startsWith("Invalid run ID: ");
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "status",
+                    targetProblem ? ExitCodes.TARGET_INVALID : ExitCodes.INFRASTRUCTURE,
+                    targetProblem ? "TARGET_INVALID" : "INFRASTRUCTURE",
+                    message,
+                    exception);
         } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            err.println("status: interrupted.");
-            return 130;
+            return CommandOutput.interrupted(json, out, err, "status", "interrupted.");
         }
     }
 
-    private int display(RunHistory history, RunHistory.Observation item)
+    private int display(
+            RunHistory history, RunHistory.Observation item, boolean json, Pattern filter)
             throws IOException, InterruptedException {
         var snapshot = item.snapshot();
         var out = spec.commandLine().getOut();
-        if (item.warning() != null) {
+        if (item.warning() != null && !json) {
             spec.commandLine().getErr().println(item.warning());
         }
         if (log != null) {
@@ -142,22 +225,83 @@ public final class StatusCommand implements Callable<Integer> {
                     snapshot.tasks().stream()
                             .filter(value -> value.name().equals(log))
                             .findFirst()
-                            .orElseThrow(
-                                    () -> new IOException("Task not found in this run: " + log));
+                            .orElse(null);
+            if (task == null) {
+                return CommandOutput.fail(
+                        json,
+                        out,
+                        spec.commandLine().getErr(),
+                        "status",
+                        ExitCodes.TARGET_INVALID,
+                        "TARGET_INVALID",
+                        "Task not found in this run: " + log,
+                        null);
+            }
             var file = history.logFile(snapshot, task);
             if (!Files.exists(file)) {
-                out.println("No log was created for " + log + " (state: " + task.state() + ").");
-                return 0;
-            }
-            try (var reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    out.println(line);
+                var note = "No log was created for " + log + " (state: " + task.state() + ").";
+                if (json) {
+                    out.println(
+                            StatusJson.log(
+                                    log,
+                                    task.state().name(),
+                                    file.toString(),
+                                    List.of(),
+                                    0,
+                                    0,
+                                    false,
+                                    note));
+                    out.flush();
+                } else {
+                    out.println(note);
                 }
+                return ExitCodes.OK;
             }
-            return 0;
+            var limit =
+                    json
+                            ? (tail == null ? DEFAULT_JSON_LOG_LINES : tail)
+                            : (tail == null ? 0 : tail);
+            var result = LogTail.read(file, limit, filter);
+            if (json) {
+                out.println(
+                        StatusJson.log(
+                                log,
+                                task.state().name(),
+                                file.toString(),
+                                result.lines(),
+                                result.matched(),
+                                result.total(),
+                                result.truncated(),
+                                null));
+                out.flush();
+                return ExitCodes.OK;
+            }
+            result.lines().forEach(out::println);
+            if (result.truncated()) {
+                spec.commandLine()
+                        .getErr()
+                        .println(
+                                "status: showing the last "
+                                        + result.lines().size()
+                                        + " of "
+                                        + result.matched()
+                                        + " matching lines; raise --tail or pass --tail 0 for all.");
+            }
+            return ExitCodes.OK;
+        }
+        var runDirectory = history.runDirectory(snapshot);
+        var daemons = new LinkedHashMap<String, List<DaemonManager.Instance>>();
+        for (var task : snapshot.tasks()) {
+            if (DaemonManager.recorded(runDirectory, task.id())) {
+                daemons.put(task.id(), DaemonManager.instances(runDirectory, task.id()));
+            }
         }
         var now = Instant.now();
+        if (json) {
+            out.println(StatusJson.run(snapshot, daemons, item.warning(), now));
+            out.flush();
+            return ExitCodes.OK;
+        }
         out.println("Run ID: " + snapshot.id());
         out.println("Target: " + snapshot.target());
         out.println("State: " + snapshot.state());
@@ -197,25 +341,22 @@ public final class StatusCommand implements Callable<Integer> {
                 }
             }
         }
-        var directory = history.runDirectory(snapshot);
-        var daemons = new ArrayList<RunHistory.TaskState>();
-        for (var task : snapshot.tasks()) {
-            if (DaemonManager.recorded(directory, task.id())) {
-                daemons.add(task);
-            }
-        }
         if (!daemons.isEmpty()) {
             out.println();
             out.println(
                     "Daemon processes (live checks; " + "run state records the pipeline outcome):");
             out.printf(
                     "%-24s %-36s %-7s %-12s %s%n", "TASK", "INSTANCE", "ATTEMPT", "STATE", "PID");
-            for (var daemon : daemons) {
-                for (var instance : DaemonManager.instances(directory, daemon.id())) {
+            for (var task : snapshot.tasks()) {
+                var instances = daemons.get(task.id());
+                if (instances == null) {
+                    continue;
+                }
+                for (var instance : instances) {
                     var observation = instance.observation();
                     out.printf(
                             "%-24s %-36s %-7s %-12s %s%n",
-                            daemon.name(),
+                            task.name(),
                             instance.id(),
                             instance.attempt(),
                             observation.state(),
@@ -230,7 +371,7 @@ public final class StatusCommand implements Callable<Integer> {
                 || snapshot.tasks().stream().anyMatch(task -> estimated(task.state()))) {
             timingNote();
         }
-        return 0;
+        return ExitCodes.OK;
     }
 
     private static String time(Instant value) {

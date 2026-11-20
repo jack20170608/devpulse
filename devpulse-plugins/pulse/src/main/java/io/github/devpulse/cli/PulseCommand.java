@@ -31,12 +31,6 @@ import picocli.CommandLine.Spec;
         },
         description = "Run a local task or pipeline " + "according to its dependencies.")
 public final class PulseCommand implements Callable<Integer> {
-    /** Output format for the command's own result. */
-    public enum Format {
-        text,
-        json
-    }
-
     @Spec private CommandSpec spec;
 
     @Parameters(
@@ -77,13 +71,13 @@ public final class PulseCommand implements Callable<Integer> {
                     "Result format: text (default) or json. "
                             + "JSON prints exactly one document on stdout; "
                             + "task logs then go only to their log files.")
-    private Format format;
+    private OutputFormat format;
 
     @Override
     public Integer call() {
         var out = spec.commandLine().getOut();
         var err = spec.commandLine().getErr();
-        var json = format == Format.json;
+        var json = format == OutputFormat.json;
 
         if (jobs != null && jobs <= 0) {
             return fail(
@@ -197,6 +191,7 @@ public final class PulseCommand implements Callable<Integer> {
                                     result.succeeded(),
                                     result.failed(),
                                     result.skipped(),
+                                    result.daemons().name(),
                                     ok));
                 } else {
                     out.println(
@@ -209,7 +204,7 @@ public final class PulseCommand implements Callable<Integer> {
                                     + " skipped.");
                 }
                 out.flush();
-                return ok ? ExitCodes.OK : ExitCodes.TASK_FAILED;
+                return exitCodeFor(result);
             } finally {
                 try {
                     Runtime.getRuntime().removeShutdownHook(hook);
@@ -231,16 +226,23 @@ public final class PulseCommand implements Callable<Integer> {
         }
     }
 
+    /**
+     * Map a run to the exit code that names what to fix. A daemon problem outranks an ordinary task
+     * failure, because the daemon is the precondition for everything that depends on it.
+     */
+    static int exitCodeFor(WorkflowRun.Result result) {
+        if (result.state() == RunHistory.State.SUCCESS) {
+            return ExitCodes.OK;
+        }
+        return switch (result.daemons()) {
+            case NEVER_READY -> ExitCodes.DAEMON_NOT_READY;
+            case LOST -> ExitCodes.DAEMON_LOST;
+            case NONE -> ExitCodes.TASK_FAILED;
+        };
+    }
+
     private static Integer interrupted(boolean json, PrintWriter out, PrintWriter err) {
-        Thread.currentThread().interrupt();
-        return fail(
-                json,
-                out,
-                err,
-                ExitCodes.INTERRUPTED,
-                "INTERRUPTED",
-                "execution interrupted.",
-                null);
+        return CommandOutput.interrupted(json, out, err, "pulse", "execution interrupted.");
     }
 
     /**
@@ -255,22 +257,6 @@ public final class PulseCommand implements Callable<Integer> {
             String code,
             String message,
             Exception cause) {
-        if (json) {
-            out.println(
-                    PulseJson.error(
-                            exitCode, code, message, configFilename(cause), configLine(cause)));
-            out.flush();
-        } else {
-            err.println("pulse: " + message);
-        }
-        return exitCode;
-    }
-
-    private static String configFilename(Exception cause) {
-        return cause instanceof ConfigException bad ? bad.origin().filename() : null;
-    }
-
-    private static Integer configLine(Exception cause) {
-        return cause instanceof ConfigException bad ? bad.origin().lineNumber() : null;
+        return CommandOutput.fail(json, out, err, "pulse", exitCode, code, message, cause);
     }
 }

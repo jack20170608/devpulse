@@ -2,6 +2,7 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.execution.PulseConfiguration;
+import io.github.devpulse.execution.PulsePlan;
 import io.github.devpulse.review.ReviewTui;
 import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
@@ -47,20 +48,79 @@ public final class ReviewCommand implements Callable<Integer> {
     @Option(names = "--plain", description = "Print a plain-text plan instead of opening the TUI.")
     private boolean plain;
 
+    @Option(
+            names = "--format",
+            paramLabel = "FORMAT",
+            defaultValue = "text",
+            description =
+                    "Result format: text (default) or json. "
+                            + "JSON emits the same plan document as "
+                            + "pulse --dry-run --format json and never opens the TUI.")
+    private OutputFormat format;
+
     @Override
     public Integer call() {
         var out = spec.commandLine().getOut();
         var err = spec.commandLine().getErr();
+        var json = format == OutputFormat.json;
+        if (jobs != null && jobs <= 0) {
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "review",
+                    ExitCodes.USAGE,
+                    "USAGE",
+                    "--jobs must be a positive integer.",
+                    null);
+        }
+        PulseConfiguration config;
         try {
-            if (jobs != null && jobs <= 0) {
-                err.println("review: --jobs must be a positive integer.");
-                return 1;
-            }
-            var config = PulseConfiguration.load(directory);
-            var plan = config.plan(target);
-            var concurrency = jobs == null ? config.parallelism() : jobs;
+            config = PulseConfiguration.load(directory);
+        } catch (ConfigException | IOException exception) {
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "review",
+                    ExitCodes.CONFIG_INVALID,
+                    "CONFIG_INVALID",
+                    exception.getMessage(),
+                    exception);
+        }
+        PulsePlan plan;
+        try {
+            plan = config.plan(target);
+        } catch (ConfigException.BadValue exception) {
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "review",
+                    ExitCodes.CONFIG_GRAPH,
+                    "CONFIG_GRAPH",
+                    exception.getMessage(),
+                    exception);
+        } catch (IOException exception) {
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "review",
+                    ExitCodes.TARGET_INVALID,
+                    "TARGET_INVALID",
+                    exception.getMessage(),
+                    exception);
+        }
+        var concurrency = jobs == null ? config.parallelism() : jobs;
+        if (json) {
+            out.println(PulseJson.plan(target, config.directory(), concurrency, plan));
+            out.flush();
+            return ExitCodes.OK;
+        }
+        try {
             if (!plain && ReviewTui.show(target, config, plan, concurrency)) {
-                return 0;
+                return ExitCodes.OK;
             }
             out.println(
                     "Plan: "
@@ -97,14 +157,19 @@ public final class ReviewCommand implements Callable<Integer> {
                             + "Configuration validity does not guarantee "
                             + "command safety or tool availability.");
             out.flush();
-            return 0;
-        } catch (ConfigException | IOException exception) {
-            err.println("review: " + exception.getMessage());
-            return 1;
+            return ExitCodes.OK;
+        } catch (IOException exception) {
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "review",
+                    ExitCodes.INFRASTRUCTURE,
+                    "INFRASTRUCTURE",
+                    exception.getMessage(),
+                    exception);
         } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            err.println("review: interrupted.");
-            return 130;
+            return CommandOutput.interrupted(json, out, err, "review", "interrupted.");
         }
     }
 }

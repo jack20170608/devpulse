@@ -64,6 +64,7 @@ final class PulseJson {
             int succeeded,
             int failed,
             int skipped,
+            String daemonOutcome,
             boolean ok) {
         var root = base("run", ok);
         root.addProperty("target", target);
@@ -73,6 +74,7 @@ final class PulseJson {
         root.addProperty("succeeded", succeeded);
         root.addProperty("failed", failed);
         root.addProperty("skipped", skipped);
+        root.addProperty("daemonOutcome", daemonOutcome);
         return GSON.toJson(root);
     }
 

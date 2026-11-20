@@ -6,10 +6,68 @@ import io.github.devpulse.core.dag.DagWorkflow;
 import io.github.devpulse.core.dag.TaskKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Map;
 import java.util.Objects;
 
 public final class WorkflowRun {
-    public record Result(RunHistory.State state, int succeeded, int failed, int skipped) {}
+    /** How the run's daemons behaved, so a caller can classify why the run failed. */
+    public enum DaemonOutcome {
+        /** No daemon failed, or the run had no daemons. */
+        NONE,
+        /** A daemon never reached readiness, which points at startup rather than at a task. */
+        NEVER_READY,
+        /** A daemon had started and later became unavailable or exited. */
+        LOST
+    }
+
+    public record Result(
+            RunHistory.State state,
+            int succeeded,
+            int failed,
+            int skipped,
+            DaemonOutcome daemons) {}
+
+    /**
+     * Classify daemon health for exit-code purposes.
+     *
+     * <p>The health value alone is not enough: {@code UNKNOWN} is both the initial value and the
+     * value of an inconclusive check, so the startup node's outcome decides which. A successful
+     * startup node means readiness had been reached; a skipped or cancelled node means the daemon
+     * was never attempted and cannot be blamed.
+     */
+    static DaemonOutcome outcome(
+            Map<TaskKey<?>, DagRun.NodeResult> tasks,
+            Map<TaskKey<?>, DagRun.DaemonResult> daemons) {
+        var outcome = DaemonOutcome.NONE;
+        for (var entry : daemons.entrySet()) {
+            var node = tasks.get(entry.getKey());
+            if (node == null) {
+                continue;
+            }
+            var classified = classify(node.state(), entry.getValue().health());
+            if (classified == DaemonOutcome.NEVER_READY) {
+                return DaemonOutcome.NEVER_READY;
+            }
+            if (classified == DaemonOutcome.LOST) {
+                outcome = DaemonOutcome.LOST;
+            }
+        }
+        return outcome;
+    }
+
+    private static DaemonOutcome classify(DagRun.NodeState state, DagDaemon.Health health) {
+        return switch (health) {
+            case READY -> DaemonOutcome.NONE;
+            case STARTING -> DaemonOutcome.NEVER_READY;
+            case UNAVAILABLE, EXITED -> DaemonOutcome.LOST;
+            case UNKNOWN ->
+                    switch (state) {
+                        case SUCCESS -> DaemonOutcome.LOST;
+                        case FAILED, TIMED_OUT -> DaemonOutcome.NEVER_READY;
+                        case PENDING, RUNNING, RETRYING, SKIPPED, CANCELLED -> DaemonOutcome.NONE;
+                    };
+        };
+    }
 
     private final RunHistory.Writer history;
     private final DagWorkflow workflow;
@@ -41,7 +99,8 @@ public final class WorkflowRun {
                 }
             }
             var skipped = result.tasks().size() - succeeded - failed;
-            return new Result(state, succeeded, failed, skipped);
+            return new Result(
+                    state, succeeded, failed, skipped, outcome(result.tasks(), result.daemons()));
         } catch (InterruptedException exception) {
             finishFailure(RunHistory.State.CANCELLED, exception);
             throw exception;

@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.devpulse.core.bash.RunHistory;
+import io.github.devpulse.core.bash.WorkflowRun;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -158,6 +160,46 @@ class PulseCommandJsonTest {
         assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_GRAPH);
         var error = JsonParser.parseString(result.out()).getAsJsonObject().getAsJsonObject("error");
         assertThat(error.get("code").getAsString()).isEqualTo("CONFIG_GRAPH");
+    }
+
+    @Test
+    void mapsDaemonOutcomesToTheirOwnExitCodes() {
+        assertThat(
+                        PulseCommand.exitCodeFor(
+                                new WorkflowRun.Result(
+                                        RunHistory.State.SUCCESS,
+                                        1,
+                                        0,
+                                        0,
+                                        WorkflowRun.DaemonOutcome.NONE)))
+                .isEqualTo(ExitCodes.OK);
+        assertThat(
+                        PulseCommand.exitCodeFor(
+                                new WorkflowRun.Result(
+                                        RunHistory.State.FAILED,
+                                        0,
+                                        1,
+                                        0,
+                                        WorkflowRun.DaemonOutcome.NONE)))
+                .isEqualTo(ExitCodes.TASK_FAILED);
+        assertThat(
+                        PulseCommand.exitCodeFor(
+                                new WorkflowRun.Result(
+                                        RunHistory.State.FAILED,
+                                        0,
+                                        1,
+                                        0,
+                                        WorkflowRun.DaemonOutcome.NEVER_READY)))
+                .isEqualTo(ExitCodes.DAEMON_NOT_READY);
+        assertThat(
+                        PulseCommand.exitCodeFor(
+                                new WorkflowRun.Result(
+                                        RunHistory.State.FAILED,
+                                        0,
+                                        1,
+                                        0,
+                                        WorkflowRun.DaemonOutcome.LOST)))
+                .isEqualTo(ExitCodes.DAEMON_LOST);
     }
 
     @Test
