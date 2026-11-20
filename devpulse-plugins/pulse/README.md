@@ -60,6 +60,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init --directory "D:\
 | `--bash <路径>` | 显式指定 Bash；Windows 使用 Git Bash |
 | `--jobs <N>` | 正整数并发上限，覆盖配置中的 `parallelism`，内置默认值为 `4` |
 | `--dry-run` | 仅校验并打印计划和命令，不探测 Bash、不执行任务、不创建运行记录 |
+| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 时标准输出只打印一个 JSON 文档，任务日志只写入日志文件 |
 
 ```powershell
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar
@@ -69,7 +70,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\y
 
 任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录。普通任务的输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志；长驻进程的合并输出直接写入日志文件，不在控制台实时转发，以便 CLI 返回后仍能输出。普通任务以 Bash 退出码判断结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
 
-普通任务失败后跳过其后继，独立分支继续；Daemon 就绪后失效会取消正在执行的受影响后继并跳过未启动的后继。日志、启动或持久化基础设施故障会取消本次运行。全部节点成功且 Daemon 最后检测正常返回 `0`；配置、任务、健康或持久化失败返回 `1`；协调线程中断返回 `130`。取消时尽力清理批任务进程及其可见后代，不停止 Daemon。所有执行由 core 的 `DagRun` 统一调度。
+普通任务失败后跳过其后继，独立分支继续；Daemon 就绪后失效会取消正在执行的受影响后继并跳过未启动的后继。日志、启动或持久化基础设施故障会取消本次运行。全部节点成功且 Daemon 最后检测正常返回 `0`。失败时返回可供程序判定的分类退出码：配置整体无效 `10`，依赖图或字段值错误 `11`，目标不存在或歧义 `12`，缺少 Bash 等环境能力 `20`，任务或健康检查失败 `30`，运行记录或日志等本地基础设施故障 `40`，协调线程中断 `130`。搭配 `--format json` 使用时，同样的分类还会以 `code`、`file` 和 `line` 出现在错误文档中。取消时尽力清理批任务进程及其可见后代，不停止 Daemon。所有执行由 core 的 `DagRun` 统一调度。
 
 支持非交互批任务和显式声明的本地长驻进程，不提供普通批任务超时或沙箱。运行前必须审核命令；并发上限限制批任务和长驻进程的启动等待阶段，不限制已就绪的长驻进程数量、探测进程或任务内部的并发。
 
@@ -297,6 +298,7 @@ The entire configuration is validated before execution, including field types, u
 | `--bash <path>` | Explicitly select Bash; use Git Bash on Windows |
 | `--jobs <N>` | Positive concurrency limit overriding configuration `parallelism`, whose built-in default is `4` |
 | `--dry-run` | Validate and print the plan and commands without discovering Bash, running tasks, or creating run records |
+| `--format <FORMAT>` | Result format; defaults to `text`. With `json`, stdout carries exactly one JSON document and task logs go only to their log files |
 
 ```powershell
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar
@@ -306,7 +308,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\y
 
 Tasks run through non-login, non-interactive Bash in the project configuration directory. Batch output and errors are merged, prefixed in the console, and saved as UTF-8 logs. Daemon output is merged and redirected directly to its log, without live console forwarding, so output continues after CLI exit. Bash's exit code determines batch results; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly when needed.
 
-Ordinary task failures skip descendants while independent branches continue. Daemon faults after readiness cancel running affected descendants and skip unstarted descendants. Logging, startup, or persistence infrastructure faults cancel the run. Successful nodes and last-observed healthy daemons return `0`; configuration, task, health, or persistence failures return `1`; coordinator interruption returns `130`. Cancellation attempts batch/visible-descendant cleanup without stopping daemons. Core's `DagRun` handles all scheduling.
+Ordinary task failures skip descendants while independent branches continue. Daemon faults after readiness cancel running affected descendants and skip unstarted descendants. Logging, startup, or persistence infrastructure faults cancel the run. Successful nodes and last-observed healthy daemons return `0`. Failures return a categorized exit code a program can act on: wholly invalid configuration `10`, dependency-graph or field-value errors `11`, a missing or ambiguous target `12`, a missing environment capability such as Bash `20`, task or health-check failure `30`, local infrastructure faults such as run records or logs `40`, and coordinator interruption `130`. With `--format json` the same classification also appears as `code`, `file`, and `line` in the error document. Cancellation attempts batch/visible-descendant cleanup without stopping daemons. Core's `DagRun` handles all scheduling.
 
 Non-interactive batch tasks and explicitly declared local daemons are supported. There is no ordinary batch-task timeout or sandbox. Review commands before execution. The concurrency limit covers batch tasks and daemon startup waits, not already-ready daemons, probe processes, or internal task concurrency.
 
