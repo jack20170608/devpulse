@@ -1,5 +1,7 @@
-package io.github.devpulse.storage;
+package io.github.devpulse.storage.dao;
 
+import io.github.devpulse.storage.RunKey;
+import io.github.devpulse.storage.RunRecord;
 import io.github.devpulse.storage.jdbi.TableDescription;
 import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
