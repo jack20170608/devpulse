@@ -6,6 +6,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.devpulse.execution.PulsePlan;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Builds the JSON documents that {@code --format json} prints.
@@ -98,6 +100,28 @@ final class PulseJson {
             error.addProperty("line", line);
         }
         root.add("error", error);
+        return GSON.toJson(root);
+    }
+
+    /** The retry decision for a parent run: what will rerun, what will be reused, and why. */
+    static String retry(
+            String parentRunId,
+            boolean dryRun,
+            List<String> rerun,
+            List<String> reuse,
+            Map<String, String> reasons) {
+        var root = base("retry", true);
+        root.addProperty("dryRun", dryRun);
+        root.addProperty("parentRunId", parentRunId);
+        var rerunArray = new JsonArray();
+        rerun.forEach(rerunArray::add);
+        root.add("rerun", rerunArray);
+        var reuseArray = new JsonArray();
+        reuse.forEach(reuseArray::add);
+        root.add("reuse", reuseArray);
+        var reasonObject = new JsonObject();
+        reasons.forEach(reasonObject::addProperty);
+        root.add("rerunReasons", reasonObject);
         return GSON.toJson(root);
     }
 

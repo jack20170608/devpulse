@@ -140,6 +140,30 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\
 
 已退出实例重复清理返回 `0`；不存在任何运行或所选运行没有长驻进程也返回 `0`。指定任务未记录进程、停止命令失败或无法确认清理结果返回 `1`；中断返回 `130`。手动停止仍被执行中的 DAG 使用的长驻进程，会触发受影响分支的取消与跳过。
 
+### `retry`：查看失败运行的重试计划
+
+`retry` 读取该运行的清单 `plan.conf`，按**逐节点执行指纹**判断当前配置中哪些节点必须重跑：父运行中失败的节点、指纹变化的节点、daemon 节点（接管尚未实现），以及上述全部节点的后继。其余节点进入复用集合。
+
+当前阶段**只报告计划，不执行任何命令**：必须传入 `--dry-run`，否则返回退出码 `13`。
+
+| 参数 | 作用 |
+|------|------|
+| `RUN_ID` | 要重试的运行 id |
+| `--directory <目录>` | 项目配置目录，默认当前目录 |
+| `--dry-run` | 只输出重跑与复用集合；本阶段必填 |
+| `--force` | 允许对仍在执行的运行生成计划 |
+| `--from-scratch` | 忽略全部复用，所有节点重跑 |
+| `--jobs <N>` | 重试时的并发上限 |
+| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出重跑与复用集合，以及逐节点原因 |
+
+```powershell
+java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
+```
+
+成功返回 `0`；运行 id 不存在或父运行目标已不可解析返回 `12`；父运行仍在执行、缺少清单，或本阶段未传 `--dry-run` 返回 `13`；读取记录失败返回 `40`。
+
+**复用不等于结果仍然有效**：`retry` 只校验节点定义与执行环境，不检测工作区文件变化。
+
 ### `review`：执行前审阅计划
 
 `review [TARGET]` 复用 `pulse` 的完整配置校验和依赖补齐规则，默认目标为 `dev`，但不探测 Bash、不执行任务、不创建运行记录。
@@ -381,6 +405,30 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\
 `stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Task-level stopping handles every recorded instance of that task; omission processes all tasks in reverse dependency order. `--instance <ID>` requires a task name and targets only an instance belonging to that task. Recorded stop settings are used without requiring the current `.devpulse.yaml`, cleaning other runs, or deleting logs/business data. PID/start time confirm identity; uncertain identity is refused. A failed instance cleanup does not prevent processing other instances and returns diagnostics. Legacy single-instance records remain queryable and stoppable.
 
 Repeated cleanup of exited instances returns `0`, as do empty history or a selected run without daemons. A requested task without a recorded process, failed stop command, or unconfirmed cleanup returns `1`; interruption returns `130`. Manually stopping a daemon still used by an executing DAG triggers affected-branch cancellation and skipping.
+
+### `retry`: inspect the retry plan for a failed run
+
+`retry` reads the run's `plan.conf` manifest and uses **per-node execution fingerprints** to decide what must rerun: nodes that failed in the parent, nodes whose fingerprint changed, daemon nodes (adoption is not implemented yet), and every descendant of those. All remaining nodes are reused.
+
+This stage **reports only and executes nothing**: `--dry-run` is required, and omitting it returns exit code `13`.
+
+| Option | Effect |
+|--------|--------|
+| `RUN_ID` | The run to retry |
+| `--directory <directory>` | Project configuration directory; defaults to the current directory |
+| `--dry-run` | Report the rerun and reuse sets; required in this stage |
+| `--force` | Allow a plan for a run that is still executing |
+| `--from-scratch` | Ignore all reuse and rerun every node |
+| `--jobs <N>` | Concurrency limit for the retry |
+| `--format <FORMAT>` | Result format; defaults to `text`. `json` reports both sets plus a per-node reason |
+
+```powershell
+java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
+```
+
+Success returns `0`; an unknown run id or a parent target that no longer resolves returns `12`; a run that is still executing, a missing manifest, or a missing `--dry-run` returns `13`; a failure to read the record returns `40`.
+
+**Reuse is not a claim that the result is still valid**: `retry` verifies node definitions and the execution environment, not working-tree changes.
 
 ### `review`: review plans before execution
 

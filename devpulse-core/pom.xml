@@ -14,6 +14,11 @@
     <name>devpulse workflow engine and shared environment library</name>
     <dependencies>
         <dependency>
+            <groupId>io.github.devpulse</groupId>
+            <artifactId>devpulse-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
         </dependency>

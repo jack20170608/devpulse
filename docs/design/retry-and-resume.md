@@ -65,18 +65,22 @@ fingerprint = SHA-256(
 
 ### 6. 数据格式
 
-全新格式，`state.conf` 为 `version: 2`，**读取时只接受 `2`**；其他值直接报错，不做迁移。
+**实现后的修正**：原设计把清单写进 `state.conf` 并升到 `version: 2`。实现时改为**独立文件 `plan.conf`**——清单是不可变输入，`state.conf` 是持续变化的执行状态；分离后状态更新不可能损坏重试依赖的证据，也不必改动 `Snapshot`／`TaskState` 两个记录类型。
 
-| 位置 | 字段 | 说明 |
-|------|------|------|
-| 运行级 | `version` | 固定 `2` |
-| 运行级 | `parentRunId` | 重试时指向父运行；首次执行为空 |
-| 运行级 | `bash` | 执行所用 Bash 的绝对路径与版本 |
-| 运行级 | `plan` | 规范化计划：每个节点的 `name`、`fingerprint`、`needs` |
-| `tasks[]` | `fingerprint` | 该节点执行时的指纹 |
-| `tasks[]` | `reusedFrom` | 复用时写入 `"<父运行 id>/<父 task id>"`，否则为空 |
+`<run>/plan.conf`，`version: 1`：
 
-`state.conf` 采用**原子写入**（同目录临时文件 + 重命名），避免中断留下半截记录。
+| 字段 | 说明 |
+|------|------|
+| `version` | 固定 `1` |
+| `runId` | 所属运行 |
+| `target`、`project`、`parallelism` | 本次运行的定位与并发 |
+| `bash`、`toolVersion` | 执行环境 |
+| `parentRunId` | 重试时指向父运行 |
+| `nodes[]` | 每个实际参与运行的节点：`name`、`fingerprint`、`needs` |
+
+`state.conf` 保持 `version: 1` 不变。两个文件都走既有的 `writeData` **原子写入**（同目录临时文件 + `force` + 重命名）——该机制原本已存在，不需要新增。
+
+清单在运行开始时写入一次，此后不再改写；`retry` 通过 `RunHistory.plan(runId)` 读取，缺失即拒绝重试（`13`）。
 
 ### 7. CLI 契约
 
@@ -126,7 +130,7 @@ pulse retry <RUN_ID> [--directory <目录>] [--bash <路径>] [--jobs <N>]
 
 | 阶段 | 内容 | 风险 |
 |------|------|------|
-| 1 | 写入 v2 格式（含指纹与计划）＋ `retry --dry-run` | 低：只新增字段与只读命令 |
+| 1 | ✅ 已交付：`plan.conf`（指纹与计划）＋ `retry --dry-run` | 已实现 |
 | 2 | 按集合执行，复用成功节点（日志与时间戳单向指向父运行） | 中：改变执行语义 |
 | 3 | daemon 接管：身份校验通过则把父实例记录登记到新运行目录，标记来源 | 高：涉及进程所有权与 `stop` 边界 |
 
@@ -213,18 +217,22 @@ The run additionally records `bash` (absolute path plus version output), `projec
 
 ### 6. Data format
 
-A fresh format: `state.conf` is `version: 2`, and **reading accepts only `2`**; any other value fails with a clear error and no migration.
+**Corrected after implementation**: the original design stored the manifest inside `state.conf` and bumped it to `version: 2`. Implementation moved it to a **separate `plan.conf`** — the manifest is immutable input while `state.conf` is mutable execution state, so separating them means a state update cannot damage the evidence a retry depends on, and neither `Snapshot` nor `TaskState` has to change.
 
-| Scope | Field | Purpose |
-|-------|-------|---------|
-| Run | `version` | Fixed at `2` |
-| Run | `parentRunId` | Parent run for a retry; empty for a first execution |
-| Run | `bash` | Absolute path and version of the Bash used |
-| Run | `plan` | Normalized plan: each node's `name`, `fingerprint`, `needs` |
-| `tasks[]` | `fingerprint` | The fingerprint this node executed with |
-| `tasks[]` | `reusedFrom` | `"<parent run id>/<parent task id>"` when reused, otherwise empty |
+`<run>/plan.conf`, `version: 1`:
 
-`state.conf` is written **atomically** (temporary file in the same directory, then rename) so an interruption cannot leave a half-written record.
+| Field | Purpose |
+|-------|---------|
+| `version` | Fixed at `1` |
+| `runId` | Owning run |
+| `target`, `project`, `parallelism` | Where the run pointed and its concurrency |
+| `bash`, `toolVersion` | Execution environment |
+| `parentRunId` | Parent run for a retry |
+| `nodes[]` | Each node that actually ran: `name`, `fingerprint`, `needs` |
+
+`state.conf` stays at `version: 1`. Both files are written **atomically** by the existing `writeData` (temporary file in the same directory, `force`, then rename); that mechanism already existed and needed no new work.
+
+The manifest is written once when the run starts and never rewritten. `retry` reads it through `RunHistory.plan(runId)` and refuses with `13` when it is missing.
 
 ### 7. CLI contract
 
@@ -274,7 +282,7 @@ So **after changing source files, earlier successes may be stale**. Text mode pr
 
 | Stage | Content | Risk |
 |-------|---------|------|
-| 1 | Write the v2 format (fingerprints and plan) plus `retry --dry-run` | Low: new fields and a read-only command |
+| 1 | ✅ Delivered: `plan.conf` (fingerprints and plan) plus `retry --dry-run` | Implemented |
 | 2 | Execute by set and reuse successful nodes (logs and timestamps point one way at the parent) | Medium: changes execution semantics |
 | 3 | Daemon adoption: after identity verification, register the parent instance in the new run directory with its origin marked | High: process ownership and `stop` boundaries |
 

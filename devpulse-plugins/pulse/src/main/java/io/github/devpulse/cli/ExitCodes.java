@@ -26,6 +26,9 @@ public final class ExitCodes {
     /** A required external capability is missing, such as Bash. */
     public static final int ENVIRONMENT = 20;
 
+    /** The requested operation was refused while the state it needs is unavailable. */
+    public static final int RETRY_REFUSED = 13;
+
     /** At least one task ran and failed, or the run state is not success. */
     public static final int TASK_FAILED = 30;
 

@@ -16,6 +16,10 @@ import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueFactory;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagGraph;
+import io.github.devpulse.storage.JdbiRunStore;
+import io.github.devpulse.storage.RunRecord;
+import io.github.devpulse.storage.RunStore;
+import io.github.devpulse.storage.TaskRecord;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -30,16 +34,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 public final class RunHistory {
+    /** Immutable run inputs, written once at start; execution state lives in the run database. */
+    private static final String PLAN_FILE = "plan.conf";
+
     public enum State {
         PENDING,
         RUNNING,
@@ -107,6 +113,7 @@ public final class RunHistory {
 
     private final Path project;
     private final Path runs;
+    private RunStore store;
 
     public RunHistory(Path directory) throws IOException {
         project = directory.toAbsolutePath().normalize();
@@ -116,7 +123,29 @@ public final class RunHistory {
         runs = project.resolve(".devpulse").resolve("runs");
     }
 
+    /** Open the run store on first use, so read-only commands never create one. */
+    private synchronized RunStore store() throws IOException {
+        if (store == null) {
+            var opened = JdbiRunStore.open(project.resolve(".devpulse").resolve("state"));
+            opened.migrate();
+            store = opened;
+        }
+        return store;
+    }
+
     public Writer begin(String target, DagGraph graph, int parallelism) throws IOException {
+        return begin(target, graph, parallelism, null);
+    }
+
+    /**
+     * Start a run and record its immutable manifest.
+     *
+     * <p>The manifest is written once, before any task runs, so a later retry compares
+     * configuration fingerprints against a stable record instead of against mutable execution
+     * state.
+     */
+    public Writer begin(String target, DagGraph graph, int parallelism, PlanManifest manifest)
+            throws IOException {
         var id = UUID.randomUUID().toString();
         var directory = runs.resolve(id);
         Files.createDirectories(directory.resolve("logs"));
@@ -159,8 +188,17 @@ public final class RunHistory {
                             null,
                             State.RUNNING,
                             tasks);
-            var writer = new Writer(directory, channel, lock, snapshot);
-            writer.save();
+            var fingerprints = new HashMap<String, String>();
+            if (manifest != null) {
+                manifest.nodes()
+                        .forEach((name, node) -> fingerprints.put(name, node.fingerprint()));
+            }
+            var opened = store();
+            opened.begin(runRecord(snapshot, manifest), taskRecords(snapshot, manifest));
+            var writer = new Writer(directory, channel, lock, snapshot, opened, fingerprints);
+            if (manifest != null) {
+                writePlan(directory, id, manifest);
+            }
             return writer;
         } catch (IOException | RuntimeException exception) {
             channel.close();
@@ -170,34 +208,60 @@ public final class RunHistory {
 
     public List<Observation> list() throws IOException {
         var result = new ArrayList<Observation>();
-        if (!Files.exists(runs)) {
-            return List.of();
+        for (var run : store().runs(null, Integer.MAX_VALUE)) {
+            result.add(observe(run.id()));
         }
-        try (var directories = Files.newDirectoryStream(runs)) {
-            for (var directory : directories) {
-                if (Files.isDirectory(directory)
-                        && validId(directory.getFileName().toString())
-                        && Files.isRegularFile(directory.resolve("state.conf"))) {
-                    result.add(observe(directory));
-                }
-            }
-        }
-        result.sort(
-                Comparator.comparing((Observation item) -> item.snapshot().startedAt())
-                        .thenComparing(item -> item.snapshot().id())
-                        .reversed());
         return List.copyOf(result);
+    }
+
+    /**
+     * Read a run's immutable manifest.
+     *
+     * @throws IOException when the run has no manifest, which makes it ineligible for a retry
+     */
+    public PlanManifest plan(String id) throws IOException {
+        if (!validId(id)) {
+            throw new IOException("Invalid run ID: " + id);
+        }
+        var file = runs.resolve(id).resolve(PLAN_FILE);
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("Run " + id + " has no plan manifest and cannot be retried.");
+        }
+        try {
+            var config = readConfig(file);
+            if (config.getInt("version") != 1) {
+                throw new IOException("Unsupported plan manifest version in " + file);
+            }
+            var nodes = new LinkedHashMap<String, PlanManifest.Node>();
+            for (var item : config.getConfigList("nodes")) {
+                var name = item.getString("name");
+                nodes.put(
+                        name,
+                        new PlanManifest.Node(
+                                name, item.getString("fingerprint"), item.getStringList("needs")));
+            }
+            return new PlanManifest(
+                    config.getString("target"),
+                    config.getString("project"),
+                    config.getInt("parallelism"),
+                    config.hasPath("bash") ? config.getString("bash") : null,
+                    config.hasPath("toolVersion") ? config.getString("toolVersion") : null,
+                    config.hasPath("parentRunId") ? config.getString("parentRunId") : null,
+                    nodes);
+        } catch (ConfigException exception) {
+            throw new IOException(
+                    "Cannot read plan manifest " + file + ": " + exception.getMessage(), exception);
+        }
     }
 
     public Observation get(String id) throws IOException {
         if (!validId(id)) {
             throw new IOException("Invalid run ID: " + id);
         }
-        var directory = runs.resolve(id);
-        if (!Files.isRegularFile(directory.resolve("state.conf"))) {
+        if (store().run(id).isEmpty()) {
             throw new IOException("Run not found: " + id);
         }
-        return observe(directory);
+        return observe(id);
     }
 
     public Path logFile(Snapshot snapshot, TaskState task) {
@@ -208,8 +272,9 @@ public final class RunHistory {
         return runs.resolve(snapshot.id());
     }
 
-    private Observation observe(Path directory) throws IOException {
-        var snapshot = read(directory);
+    private Observation observe(String id) throws IOException {
+        var directory = runs.resolve(id);
+        var snapshot = read(id);
         if (snapshot.state() != State.RUNNING) {
             return new Observation(snapshot, null);
         }
@@ -223,7 +288,7 @@ public final class RunHistory {
                 if (lock == null) {
                     return new Observation(snapshot, null);
                 }
-                snapshot = read(directory);
+                snapshot = read(id);
                 if (snapshot.state() != State.RUNNING) {
                     return new Observation(snapshot, null);
                 }
@@ -241,7 +306,7 @@ public final class RunHistory {
                 }
                 var interrupted = finish(snapshot, State.INTERRUPTED);
                 recovering = true;
-                write(directory, interrupted);
+                persist(interrupted);
                 return new Observation(
                         interrupted, "Recovered an unfinished run after executor exit.");
             } catch (OverlappingFileLockException exception) {
@@ -259,6 +324,112 @@ public final class RunHistory {
             return new Observation(
                     snapshot, "Could not verify or recover this run: " + exception.getMessage());
         }
+    }
+
+    private static RunRecord runRecord(Snapshot snapshot, PlanManifest manifest) {
+        return new RunRecord(
+                snapshot.id(),
+                snapshot.project(),
+                snapshot.target(),
+                snapshot.parallelism(),
+                snapshot.state().name(),
+                snapshot.executorPid(),
+                snapshot.executorStartedAt(),
+                snapshot.startedAt(),
+                snapshot.finishedAt(),
+                manifest == null ? null : manifest.bash(),
+                manifest == null ? null : manifest.toolVersion(),
+                manifest == null ? null : manifest.parentRunId());
+    }
+
+    private static List<TaskRecord> taskRecords(Snapshot snapshot, PlanManifest manifest) {
+        var result = new ArrayList<TaskRecord>(snapshot.tasks().size());
+        for (var index = 0; index < snapshot.tasks().size(); index++) {
+            var task = snapshot.tasks().get(index);
+            var node = manifest == null ? null : manifest.nodes().get(task.name());
+            result.add(
+                    new TaskRecord(
+                            snapshot.id(),
+                            task.name(),
+                            task.id(),
+                            node == null ? null : node.fingerprint(),
+                            task.state().name(),
+                            task.exitCode(),
+                            task.error(),
+                            task.startedAt(),
+                            task.finishedAt(),
+                            task.logPath(),
+                            null,
+                            task.daemonHealth() == null ? null : task.daemonHealth().name(),
+                            task.daemonError(),
+                            task.daemonCheckedAt(),
+                            index,
+                            task.needs()));
+        }
+        return result;
+    }
+
+    private static TaskRecord taskRecord(
+            Snapshot snapshot, TaskState task, Map<String, String> fingerprints) {
+        return new TaskRecord(
+                snapshot.id(),
+                task.name(),
+                task.id(),
+                fingerprints.get(task.name()),
+                task.state().name(),
+                task.exitCode(),
+                task.error(),
+                task.startedAt(),
+                task.finishedAt(),
+                task.logPath(),
+                null,
+                task.daemonHealth() == null ? null : task.daemonHealth().name(),
+                task.daemonError(),
+                task.daemonCheckedAt(),
+                snapshot.tasks().indexOf(task),
+                task.needs());
+    }
+
+    /** Persist a whole snapshot, used when recovery rewrites several tasks at once. */
+    private void persist(Snapshot snapshot) throws IOException {
+        var opened = store();
+        opened.finishRun(snapshot.id(), snapshot.state().name(), snapshot.finishedAt());
+        for (var task : snapshot.tasks()) {
+            opened.updateTaskState(taskRecord(snapshot, task, Map.of()));
+        }
+    }
+
+    private Snapshot read(String id) throws IOException {
+        var run = store().run(id).orElseThrow(() -> new IOException("Run not found: " + id));
+        var tasks = new ArrayList<TaskState>();
+        for (var task : store().tasks(id)) {
+            tasks.add(
+                    new TaskState(
+                            task.taskId(),
+                            task.name(),
+                            task.needs(),
+                            State.valueOf(task.state()),
+                            task.startedAt(),
+                            task.finishedAt(),
+                            task.exitCode(),
+                            task.error(),
+                            task.daemonHealth() == null
+                                    ? null
+                                    : DagDaemon.Health.valueOf(task.daemonHealth()),
+                            task.daemonError(),
+                            task.daemonCheckedAt()));
+        }
+        return new Snapshot(
+                run.id(),
+                run.target(),
+                run.project(),
+                run.parallelism(),
+                run.executorPid(),
+                run.executorStartedAt(),
+                run.startedAt(),
+                run.finishedAt(),
+                State.valueOf(run.state()),
+                tasks);
     }
 
     private static Snapshot finish(Snapshot snapshot, State result) {
@@ -297,107 +468,27 @@ public final class RunHistory {
                 tasks);
     }
 
-    private static Snapshot read(Path directory) throws IOException {
-        var file = directory.resolve("state.conf");
-        try {
-            var config = readConfig(file);
-            if (config.getInt("version") != 1
-                    || !directory.getFileName().toString().equals(config.getString("id"))) {
-                throw new IOException("Invalid run state: " + file);
-            }
-            var tasks = new ArrayList<TaskState>();
-            for (var task : config.getConfigList("tasks")) {
-                var id = task.getString("id");
-                if (!validId(id) || !("logs/" + id + ".log").equals(task.getString("logPath"))) {
-                    throw new IOException("Invalid task log path: " + file);
-                }
-                tasks.add(
-                        new TaskState(
-                                id,
-                                task.getString("name"),
-                                task.getStringList("needs"),
-                                State.valueOf(task.getString("state")),
-                                time(task, "startedAt"),
-                                time(task, "finishedAt"),
-                                task.hasPath("exitCode") ? task.getInt("exitCode") : null,
-                                task.hasPath("error") ? task.getString("error") : null,
-                                task.hasPath("daemonHealth")
-                                        ? DagDaemon.Health.valueOf(task.getString("daemonHealth"))
-                                        : null,
-                                task.hasPath("daemonError") ? task.getString("daemonError") : null,
-                                time(task, "daemonCheckedAt")));
-            }
-            var pid = config.getLong("executorPid");
-            var parallelism = config.getInt("parallelism");
-            var state = State.valueOf(config.getString("state"));
-            var ended = time(config, "finishedAt");
-            if (pid <= 0
-                    || parallelism <= 0
-                    || state == State.PENDING
-                    || state == State.SKIPPED
-                    || state == State.READY
-                    || (state != State.RUNNING && ended == null)) {
-                throw new IOException("Invalid run metadata: " + file);
-            }
-            return new Snapshot(
-                    config.getString("id"),
-                    config.getString("target"),
-                    config.getString("project"),
-                    parallelism,
-                    pid,
-                    time(config, "executorStartedAt"),
-                    Instant.parse(config.getString("startedAt")),
-                    ended,
-                    state,
-                    tasks);
-        } catch (ConfigException | IllegalArgumentException | DateTimeException exception) {
-            throw new IOException(
-                    "Cannot read run state " + file + ": " + exception.getMessage(), exception);
-        }
-    }
-
-    private static Instant time(Config config, String key) {
-        return config.hasPath(key) ? Instant.parse(config.getString(key)) : null;
-    }
-
-    private static void write(Path directory, Snapshot snapshot) throws IOException {
+    private static void writePlan(Path directory, String runId, PlanManifest manifest)
+            throws IOException {
         var data = new LinkedHashMap<String, Object>();
         data.put("version", 1);
-        data.put("id", snapshot.id());
-        data.put("target", snapshot.target());
-        data.put("project", snapshot.project());
-        data.put("parallelism", snapshot.parallelism());
-        data.put("executorPid", snapshot.executorPid());
-        put(data, "executorStartedAt", snapshot.executorStartedAt());
-        data.put("startedAt", snapshot.startedAt().toString());
-        put(data, "finishedAt", snapshot.finishedAt());
-        data.put("state", snapshot.state().name());
-        data.put(
-                "tasks",
-                snapshot.tasks().stream()
-                        .map(task -> {
-                            var item = new LinkedHashMap<String, Object>();
-                            item.put("id", task.id());
-                            item.put("name", task.name());
-                            item.put("needs", task.needs());
-                            item.put("state", task.state().name());
-                            item.put("logPath", task.logPath());
-                            put(item, "startedAt", task.startedAt());
-                            put(item, "finishedAt", task.finishedAt());
-                            put(item, "exitCode", task.exitCode());
-                            put(item, "error", task.error());
-                            put(
-                                    item,
-                                    "daemonHealth",
-                                    task.daemonHealth() == null
-                                            ? null
-                                            : task.daemonHealth().name());
-                            put(item, "daemonError", task.daemonError());
-                            put(item, "daemonCheckedAt", task.daemonCheckedAt());
-                            return item;
-                        })
-                        .toList());
-        writeData(directory.resolve("state.conf"), data);
+        data.put("runId", runId);
+        data.put("target", manifest.target());
+        data.put("project", manifest.project());
+        data.put("parallelism", manifest.parallelism());
+        put(data, "bash", manifest.bash());
+        put(data, "toolVersion", manifest.toolVersion());
+        put(data, "parentRunId", manifest.parentRunId());
+        var nodes = new ArrayList<Map<String, Object>>();
+        for (var node : manifest.nodes().values()) {
+            var item = new LinkedHashMap<String, Object>();
+            item.put("name", node.name());
+            item.put("fingerprint", node.fingerprint());
+            item.put("needs", node.needs());
+            nodes.add(item);
+        }
+        data.put("nodes", nodes);
+        writeData(directory.resolve(PLAN_FILE), data);
     }
 
     static Config readConfig(Path file) throws IOException {
@@ -481,13 +572,23 @@ public final class RunHistory {
         private final Path directory;
         private final FileChannel channel;
         private final FileLock lock;
+        private final RunStore store;
+        private final Map<String, String> fingerprints;
         private Snapshot snapshot;
 
-        private Writer(Path directory, FileChannel channel, FileLock lock, Snapshot snapshot) {
+        private Writer(
+                Path directory,
+                FileChannel channel,
+                FileLock lock,
+                Snapshot snapshot,
+                RunStore store,
+                Map<String, String> fingerprints) {
             this.directory = directory;
             this.channel = channel;
             this.lock = lock;
             this.snapshot = snapshot;
+            this.store = store;
+            this.fingerprints = fingerprints;
         }
 
         public String id() {
@@ -523,7 +624,7 @@ public final class RunHistory {
                             task.daemonHealth(),
                             task.daemonError(),
                             task.daemonCheckedAt()));
-            save();
+            saveTask(name);
         }
 
         public synchronized BufferedWriter openLog(String name) throws IOException {
@@ -554,7 +655,7 @@ public final class RunHistory {
                                 task.daemonHealth(),
                                 task.daemonError(),
                                 task.daemonCheckedAt()));
-                save();
+                saveTask(name);
             }
         }
 
@@ -563,7 +664,7 @@ public final class RunHistory {
                 throws IOException {
             if (snapshot.state() == State.RUNNING) {
                 update(task(name).finish(state, time, exitCode, error));
-                save();
+                saveTask(name);
             }
         }
 
@@ -592,7 +693,7 @@ public final class RunHistory {
                                 health,
                                 error,
                                 time));
-                save();
+                saveTask(name);
             }
         }
 
@@ -623,8 +724,17 @@ public final class RunHistory {
                             tasks);
         }
 
+        /** Persist one task after a state change; the other tasks are untouched. */
+        private void saveTask(String name) throws IOException {
+            store.updateTaskState(taskRecord(snapshot, task(name), fingerprints));
+        }
+
+        /** Persist the whole snapshot, used once when the run ends and several tasks change. */
         private void save() throws IOException {
-            write(directory, snapshot);
+            store.finishRun(snapshot.id(), snapshot.state().name(), snapshot.finishedAt());
+            for (var task : snapshot.tasks()) {
+                store.updateTaskState(taskRecord(snapshot, task, fingerprints));
+            }
         }
 
         @Override

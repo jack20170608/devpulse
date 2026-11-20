@@ -2,16 +2,19 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.core.bash.BashTaskAdapter;
+import io.github.devpulse.core.bash.PlanManifest;
 import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.bash.WorkflowRun;
 import io.github.devpulse.core.environment.BashShell;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulsePlan;
+import io.github.devpulse.execution.TaskFingerprints;
 import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Writer;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -27,7 +30,8 @@ import picocli.CommandLine.Spec;
             InitCommand.class,
             ReviewCommand.class,
             StatusCommand.class,
-            StopCommand.class
+            StopCommand.class,
+            RetryCommand.class
         },
         description = "Run a local task or pipeline " + "according to its dependencies.")
 public final class PulseCommand implements Callable<Integer> {
@@ -168,7 +172,12 @@ public final class PulseCommand implements Callable<Integer> {
         }
 
         try (var history =
-                new RunHistory(config.directory()).begin(target, plan.graph(), concurrency)) {
+                new RunHistory(config.directory())
+                        .begin(
+                                target,
+                                plan.graph(),
+                                concurrency,
+                                manifest(target, config, plan, concurrency, shell))) {
             if (!json) {
                 out.println("Run ID: " + history.id());
                 out.flush();
@@ -224,6 +233,35 @@ public final class PulseCommand implements Callable<Integer> {
                     exception.getMessage(),
                     exception);
         }
+    }
+
+    /**
+     * Record the immutable inputs of this run: the selected nodes, their execution fingerprints,
+     * and the environment. A later retry compares a fresh configuration against this record, so the
+     * nodes that actually ran are the ones recorded, not every task in the file.
+     */
+    private static PlanManifest manifest(
+            String target,
+            PulseConfiguration config,
+            PulsePlan plan,
+            int concurrency,
+            BashShell shell) {
+        var fingerprints = TaskFingerprints.of(plan.tasks(), plan.daemonOptions());
+        var nodes = new LinkedHashMap<String, PlanManifest.Node>();
+        for (var task : plan.tasks()) {
+            nodes.put(
+                    task.name(),
+                    new PlanManifest.Node(
+                            task.name(), fingerprints.get(task.name()), task.needs()));
+        }
+        return new PlanManifest(
+                target,
+                config.directory().toString(),
+                concurrency,
+                shell.executable().toString(),
+                PulseCommand.class.getPackage().getImplementationVersion(),
+                null,
+                nodes);
     }
 
     /**
