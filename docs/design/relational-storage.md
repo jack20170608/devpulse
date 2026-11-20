@@ -17,7 +17,7 @@
 | 清单 | `plan.conf` | 保持 `plan.conf`（不可变输入，不是状态） |
 | 库位置 | 未指定 | `.devpulse/state.mv.db` |
 | schema | 4 张领域表 | 另加 `task_id`（日志/daemon 目录定位）、`executor_started_at`（中断恢复判定）；补三处外键 |
-| `daemon_instance` | 在范围内 | **未建**，`DaemonManager` 仍写文件（下一步） |
+| `daemon_instance` | 在范围内 | **已建**（`VERSION 2`）：元数据全部入库，磁盘只剩 `-ready.sh` / `-stop.sh` 脚本 |
 | 指纹写入 | — | 新增 `updateTaskState()`：只写执行状态，避免不知道指纹的调用方把它抹掉 |
 | 体积 | 预估 +2.5 MB | 实测 pulse jar **3.3 MB → 8.1 MB**（含 JDBI、commons-lang3、slf4j） |
 
@@ -175,7 +175,7 @@ This section records what was actually built; the body keeps the original design
 | Manifest | `plan.conf` | Kept as `plan.conf` (immutable input, not state) |
 | Database location | Unspecified | `.devpulse/state.mv.db` |
 | Schema | Four domain tables | Adds `task_id` (locating logs and daemon directories) and `executor_started_at` (interruption recovery); three foreign keys added |
-| `daemon_instance` | In scope | **Not created**; `DaemonManager` still writes files (next step) |
+| `daemon_instance` | In scope | **Created** (`VERSION 2`): all metadata is in the database; only the `-ready.sh` / `-stop.sh` scripts remain on disk |
 | Fingerprint writes | — | New `updateTaskState()` writes only execution state, so a caller that does not know the fingerprint cannot erase it |
 | Size | Estimated +2.5 MB | Measured pulse jar **3.3 MB → 8.1 MB** (JDBI, commons-lang3, slf4j) |
 

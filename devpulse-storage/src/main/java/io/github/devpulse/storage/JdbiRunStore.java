@@ -79,6 +79,26 @@ public final class JdbiRunStore implements RunStore {
             VALUES (:name, :fingerprint, :runId, :finishedAt)
             """;
 
+    private static final String MERGE_DAEMON =
+            """
+            MERGE INTO daemon_instance (
+                run_id, task_id, instance_id, attempt, name, project, bash,
+                pid, process_started_at, ready_command, stop_command, stop_timeout_nanos,
+                interval_nanos, timeout_nanos, check_timeout_nanos, ready_at, stopped_at)
+            KEY (run_id, task_id, instance_id)
+            VALUES (
+                :runId, :taskId, :instanceId, :attempt, :name, :project, :bash,
+                :pid, :processStartedAt, :readyCommand, :stopCommand, :stopTimeoutNanos,
+                :intervalNanos, :timeoutNanos, :checkTimeoutNanos, :readyAt, :stoppedAt)
+            """;
+
+    private static final String SELECT_DAEMONS =
+            """
+            SELECT * FROM daemon_instance
+            WHERE run_id = :runId AND task_id = :taskId
+            ORDER BY attempt, process_started_at, instance_id
+            """;
+
     private final Jdbi jdbi;
     private final RunDao runDao;
     private final TaskDao taskDao;
@@ -253,6 +273,49 @@ public final class JdbiRunStore implements RunStore {
     }
 
     @Override
+    public void recordDaemon(DaemonRecord record) throws IOException {
+        try {
+            jdbi.useHandle(handle -> {
+                var update = handle.createUpdate(MERGE_DAEMON);
+                text(update, "runId", record.runId());
+                text(update, "taskId", record.taskId());
+                text(update, "instanceId", record.instanceId());
+                number(update, "attempt", record.attempt());
+                text(update, "name", record.name());
+                text(update, "project", record.project());
+                text(update, "bash", record.bash());
+                update.bind("pid", record.pid());
+                instant(update, "processStartedAt", record.processStartedAt());
+                text(update, "readyCommand", record.readyCommand());
+                text(update, "stopCommand", record.stopCommand());
+                update.bind("stopTimeoutNanos", record.stopTimeoutNanos());
+                update.bind("intervalNanos", record.intervalNanos());
+                update.bind("timeoutNanos", record.timeoutNanos());
+                update.bind("checkTimeoutNanos", record.checkTimeoutNanos());
+                instant(update, "readyAt", record.readyAt());
+                instant(update, "stoppedAt", record.stoppedAt());
+                update.execute();
+            });
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public List<DaemonRecord> daemons(String runId, String taskId) throws IOException {
+        try {
+            return jdbi.withHandle(handle ->
+                    handle.createQuery(SELECT_DAEMONS)
+                            .bind("runId", runId)
+                            .bind("taskId", taskId)
+                            .map((result, context) -> daemonRecord(result))
+                            .list());
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
     public void close() {
         // JDBI opens a connection per call, so nothing is held open to release.
     }
@@ -301,6 +364,27 @@ public final class JdbiRunStore implements RunStore {
                 task.daemonCheckedAt(),
                 task.sortOrder(),
                 needs);
+    }
+
+    private static DaemonRecord daemonRecord(ResultSet result) throws SQLException {
+        return new DaemonRecord(
+                result.getString("run_id"),
+                result.getString("task_id"),
+                result.getString("instance_id"),
+                result.getInt("attempt"),
+                result.getString("name"),
+                result.getString("project"),
+                result.getString("bash"),
+                result.getLong("pid"),
+                instantValue(result, "process_started_at"),
+                result.getString("ready_command"),
+                result.getString("stop_command"),
+                result.getLong("stop_timeout_nanos"),
+                result.getLong("interval_nanos"),
+                result.getLong("timeout_nanos"),
+                result.getLong("check_timeout_nanos"),
+                instantValue(result, "ready_at"),
+                instantValue(result, "stopped_at"));
     }
 
     private static Instant instantValue(ResultSet result, String column) throws SQLException {

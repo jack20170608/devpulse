@@ -1,9 +1,11 @@
 package io.github.devpulse.core.bash;
 
-import com.typesafe.config.ConfigException;
 import io.github.devpulse.core.dag.DaemonOptions;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.storage.DaemonRecord;
+import io.github.devpulse.storage.JdbiRunStore;
+import io.github.devpulse.storage.RunStore;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
@@ -14,8 +16,6 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -319,17 +319,16 @@ public final class DaemonManager {
     private static void stop(Record selected) throws IOException, InterruptedException {
         var directory = selected.directory();
         var taskId = selected.taskId();
-        var path = file(directory, taskId, selected.instanceId());
+        var lockFile =
+                instanceDirectory(directory, taskId).resolve(selected.instanceId() + ".lock");
         try (var channel =
                         FileChannel.open(
-                                path.resolveSibling(selected.instanceId() + ".lock"),
-                                StandardOpenOption.CREATE,
-                                StandardOpenOption.WRITE);
+                                lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                 var lock = channel.tryLock()) {
             if (lock == null) {
                 throw new IOException("Daemon cleanup is already in progress.");
             }
-            var record = read(directory, taskId, selected.instanceId());
+            var record = find(directory, taskId, selected.instanceId());
             var identity = record.owner().identity();
             if (identity == Identity.UNKNOWN) {
                 throw new IOException("Refusing to stop an unconfirmed process identity.");
@@ -499,12 +498,9 @@ public final class DaemonManager {
         }
     }
 
-    private static Path file(Path directory, String taskId, String instanceId) {
+    private static Path instanceDirectory(Path directory, String taskId) {
         validateId(taskId);
-        validateId(instanceId);
-        return instanceId.equals(taskId)
-                ? directory.resolve("daemons").resolve(taskId + ".conf")
-                : directory.resolve("daemons").resolve(taskId).resolve(instanceId + ".conf");
+        return directory.resolve("daemons").resolve(taskId);
     }
 
     private static void validateId(String id) {
@@ -514,25 +510,76 @@ public final class DaemonManager {
     }
 
     private static List<Record> records(Path directory, String taskId) throws IOException {
+        var runId = directory.getFileName().toString();
         var result = new ArrayList<Record>();
-        var legacy = file(directory, taskId, taskId);
-        if (Files.isRegularFile(legacy)) {
-            result.add(read(directory, taskId, taskId));
+        for (var record : storeForRunDirectory(directory).daemons(runId, taskId)) {
+            result.add(toRecord(directory, record));
         }
-        var instances = directory.resolve("daemons").resolve(taskId);
-        if (Files.isDirectory(instances)) {
-            try (var files = Files.newDirectoryStream(instances, "*.conf")) {
-                for (var path : files) {
-                    var name = path.getFileName().toString();
-                    result.add(read(directory, taskId, name.substring(0, name.length() - 5)));
-                }
-            }
-        }
-        result.sort(
-                Comparator.comparingInt(Record::attempt)
-                        .thenComparing(record -> record.owner().startedAt())
-                        .thenComparing(Record::instanceId));
         return result;
+    }
+
+    /** Resolve the store from a run directory: {@code <project>/.devpulse/runs/<runId>}. */
+    private static RunStore storeForRunDirectory(Path directory) throws IOException {
+        return storeForProject(directory.getParent().getParent().getParent());
+    }
+
+    private static RunStore storeForProject(Path project) throws IOException {
+        var store = JdbiRunStore.open(project.resolve(".devpulse").resolve("state"));
+        store.migrate();
+        return store;
+    }
+
+    private static DaemonRecord toDaemonRecord(Record record) {
+        return new DaemonRecord(
+                record.runId(),
+                record.taskId(),
+                record.instanceId(),
+                record.attempt(),
+                record.name(),
+                record.project().toString(),
+                record.bash().toString(),
+                record.owner().pid(),
+                record.owner().startedAt(),
+                record.configuration().readyCommand(),
+                record.configuration().stopCommand(),
+                record.configuration().stopTimeout().toNanos(),
+                record.options().checkInterval().toNanos(),
+                record.options().readyTimeout().toNanos(),
+                record.options().checkTimeout().toNanos(),
+                record.readyAt(),
+                record.stoppedAt());
+    }
+
+    private static Record toRecord(Path directory, DaemonRecord record) {
+        return new Record(
+                directory,
+                record.runId(),
+                record.taskId(),
+                record.instanceId(),
+                record.attempt(),
+                record.name(),
+                Path.of(record.project()),
+                Path.of(record.bash()),
+                new Owner(record.pid(), record.processStartedAt()),
+                new BashTaskDefinition.Daemon(
+                        record.readyCommand(),
+                        record.stopCommand(),
+                        Duration.ofNanos(record.stopTimeoutNanos())),
+                new DaemonOptions(
+                        Duration.ofNanos(record.timeoutNanos()),
+                        Duration.ofNanos(record.intervalNanos()),
+                        Duration.ofNanos(record.checkTimeoutNanos())),
+                record.readyAt(),
+                record.stoppedAt());
+    }
+
+    private static Record find(Path directory, String taskId, String instanceId)
+            throws IOException {
+        return records(directory, taskId).stream()
+                .filter(value -> value.instanceId().equals(instanceId))
+                .findFirst()
+                .orElseThrow(
+                        () -> new IOException("Instance not found for this task: " + instanceId));
     }
 
     private static void script(Path file, String command) throws IOException {
@@ -545,86 +592,6 @@ public final class DaemonManager {
     }
 
     private static void save(Path directory, Record record) throws IOException {
-        var data = new LinkedHashMap<String, Object>();
-        data.put("version", 1);
-        data.put("runId", record.runId());
-        data.put("taskId", record.taskId());
-        data.put("instanceId", record.instanceId());
-        data.put("attempt", record.attempt());
-        data.put("name", record.name());
-        data.put("project", record.project().toString());
-        data.put("bash", record.bash().toString());
-        data.put("pid", record.owner().pid());
-        data.put("processStartedAt", record.owner().startedAt().toString());
-        data.put("readyCommand", record.configuration().readyCommand());
-        data.put("intervalNanos", record.options().checkInterval().toNanos());
-        data.put("timeoutNanos", record.options().readyTimeout().toNanos());
-        data.put("checkTimeoutNanos", record.options().checkTimeout().toNanos());
-        data.put("stopTimeoutNanos", record.configuration().stopTimeout().toNanos());
-        if (record.configuration().stopCommand() != null) {
-            data.put("stopCommand", record.configuration().stopCommand());
-        }
-        if (record.readyAt() != null) {
-            data.put("readyAt", record.readyAt().toString());
-        }
-        if (record.stoppedAt() != null) {
-            data.put("stoppedAt", record.stoppedAt().toString());
-        }
-        RunHistory.writeData(file(directory, record.taskId(), record.instanceId()), data);
-    }
-
-    private static Record read(Path directory, String taskId, String instanceId)
-            throws IOException {
-        var path = file(directory, taskId, instanceId);
-        try {
-            var config = RunHistory.readConfig(path);
-            if (config.getInt("version") != 1
-                    || !taskId.equals(config.getString("taskId"))
-                    || !instanceId.equals(
-                            config.hasPath("instanceId")
-                                    ? config.getString("instanceId")
-                                    : config.getString("taskId"))
-                    || !directory.getFileName().toString().equals(config.getString("runId"))
-                    || config.getLong("pid") <= 0) {
-                throw new IOException("Invalid daemon metadata: " + path);
-            }
-            var options =
-                    new DaemonOptions(
-                            Duration.ofNanos(config.getLong("timeoutNanos")),
-                            Duration.ofNanos(config.getLong("intervalNanos")),
-                            Duration.ofNanos(config.getLong("checkTimeoutNanos")));
-            var daemon =
-                    new BashTaskDefinition.Daemon(
-                            config.getString("readyCommand"),
-                            config.hasPath("stopCommand") ? config.getString("stopCommand") : null,
-                            Duration.ofNanos(config.getLong("stopTimeoutNanos")));
-            var attempt = config.hasPath("attempt") ? config.getInt("attempt") : 1;
-            if (attempt < 1 || daemon.stopTimeout().isNegative() || daemon.stopTimeout().isZero()) {
-                throw new IOException("Invalid daemon durations: " + path);
-            }
-            return new Record(
-                    directory,
-                    config.getString("runId"),
-                    taskId,
-                    instanceId,
-                    attempt,
-                    config.getString("name"),
-                    Path.of(config.getString("project")),
-                    Path.of(config.getString("bash")),
-                    new Owner(
-                            config.getLong("pid"),
-                            Instant.parse(config.getString("processStartedAt"))),
-                    daemon,
-                    options,
-                    config.hasPath("readyAt") ? Instant.parse(config.getString("readyAt")) : null,
-                    config.hasPath("stoppedAt")
-                            ? Instant.parse(config.getString("stoppedAt"))
-                            : null);
-        } catch (ConfigException
-                | IllegalArgumentException
-                | java.time.DateTimeException exception) {
-            throw new IOException(
-                    "Cannot read daemon state " + path + ": " + exception.getMessage(), exception);
-        }
+        storeForProject(record.project()).recordDaemon(toDaemonRecord(record));
     }
 }

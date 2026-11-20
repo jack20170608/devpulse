@@ -55,6 +55,12 @@ public interface RunStore extends AutoCloseable {
     /** Publish a finished result to the reuse index, replacing any earlier entry for the key. */
     void recordResult(TaskResult result) throws IOException;
 
+    /** Insert or replace one daemon instance record, keyed by run, task and instance. */
+    void recordDaemon(DaemonRecord record) throws IOException;
+
+    /** One run's daemon instances for a task, ordered by attempt and process start. */
+    List<DaemonRecord> daemons(String runId, String taskId) throws IOException;
+
     @Override
     void close() throws IOException;
 }
