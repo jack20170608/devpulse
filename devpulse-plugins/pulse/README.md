@@ -187,7 +187,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 
 ### `status`：查询运行状态和日志
 
-每次实际执行 `pulse` 都生成独立运行 ID，在项目的 `.devpulse\runs\<run-id>` 下保存 `state.conf`、运行锁和任务日志。`status` 默认查看开始时间最新的运行，显示整体及各任务的状态、退出码、错误、UTC 起止时间和耗时；长驻进程按实例展示 ID、尝试编号、PID 和实时状态，包含旧启动尝试，不覆盖历史工作流结果。
+每次实际执行 `pulse` 都生成独立运行 ID，运行与任务状态写入项目的 `.devpulse\state.mv.db`，运行锁、清单和任务日志保存在 `.devpulse\runs\<run-id>` 下。`status` 默认查看开始时间最新的运行，显示整体及各任务的状态、退出码、错误、UTC 起止时间和耗时；长驻进程按实例展示 ID、尝试编号、PID 和实时状态，包含旧启动尝试，不覆盖历史工作流结果。
 
 | 参数 | 作用 |
 |------|------|
@@ -453,7 +453,7 @@ Success returns `0`. Wholly invalid configuration returns `10`, dependency-graph
 
 ### `status`: query run status and logs
 
-Every actual `pulse` execution creates an independent run ID, storing `state.conf`, a run lock, and task logs under the project's `.devpulse\runs\<run-id>`. By default, `status` shows the run with the latest start time, including overall and task states, exit codes, errors, UTC start/finish times, and durations. Daemons are shown per instance with ID, attempt, PID, and live state, including earlier startups without overwriting historical workflow outcomes.
+Every actual `pulse` execution creates an independent run ID, storing run and task state in the project's `.devpulse\state.mv.db` and a run lock, manifest, and task logs under `.devpulse\runs\<run-id>`. By default, `status` shows the run with the latest start time, including overall and task states, exit codes, errors, UTC start/finish times, and durations. Daemons are shown per instance with ID, attempt, PID, and live state, including earlier startups without overwriting historical workflow outcomes.
 
 | Option | Effect |
 |--------|--------|

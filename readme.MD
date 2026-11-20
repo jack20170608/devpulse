@@ -39,6 +39,7 @@ java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 devpulse-dependencies/   外部依赖版本
 devpulse-bom/            内部产物版本
 devpulse-core/           DAG 执行引擎、Bash 与环境采集共享库
+devpulse-storage/        运行状态持久化（H2 + JDBI）、schema 迁移与复用索引
 devpulse-plugins/        插件聚合模块
   pulse/                 独立的 Pulse CLI
   gather/                独立的 Gather CLI
@@ -88,6 +89,7 @@ java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 devpulse-dependencies/   External dependency versions
 devpulse-bom/            Internal artifact versions
 devpulse-core/           DAG engine, shared Bash support, and environment collection
+devpulse-storage/        Run state persistence (H2 + JDBI), schema migrations, and the reuse index
 devpulse-plugins/        Plugin aggregator
   pulse/                 Standalone Pulse CLI
   gather/                Standalone Gather CLI

@@ -36,43 +36,43 @@
 
 `PlanningException` 与 `TaskDetails` 属于 Pulse，分别负责 YAML 字段错误定位与终端说明；核心图错误只提供相关任务及原因。默认 Bash Adapter 不要求历史 Writer，批任务仅输出控制台，Daemon 日志与手动停止元数据存放在 `.devpulse\daemons\<id>`，不自动删除或停止资源。
 
-**统一执行调度**：唯一调度器为 `DagRun`。`WorkflowRun` 接收装配完成的 `DagWorkflow`，只消费事件、记录历史并汇总结果，不建图或管理进程；通过显式生命周期识别 Daemon，不根据结果类型推断。`BashTaskAdapter` 管理批任务进程、输入输出、日志及中断回收，`DaemonManager` 提供长驻进程 Handle 与手动停止。取消和超时由 DAG 的协作式中断传递给 Adapter，不另设 Bash 取消调度器。单次 `execute()` 返回整体状态及成功、失败、跳过数量。调用方关闭历史 Writer 并管理 JVM 退出钩子；Pulse 将成功映射为 `0`，其他结果为 `1`，协调线程中断为 `130`。
+**统一执行调度**：唯一调度器为 `DagRun`。`WorkflowRun` 接收装配完成的 `DagWorkflow`，只消费事件、记录历史并汇总结果，不建图或管理进程；通过显式生命周期识别 Daemon，不根据结果类型推断。`BashTaskAdapter` 管理批任务进程、输入输出、日志及中断回收，`DaemonManager` 提供长驻进程 Handle 与手动停止。取消和超时由 DAG 的协作式中断传递给 Adapter，不另设 Bash 取消调度器。单次 `execute()` 返回整体状态及成功、失败、跳过数量。调用方关闭历史 Writer 并管理 JVM 退出钩子；Pulse 使用分类退出码（`0`、`2`、`10`、`11`、`12`、`13`、`20`、`30`、`31`、`32`、`40`、`130`），详见 [Pulse 使用说明](../../devpulse-plugins/pulse/README.md)。
 
-`RunHistory` 从同一 `DagGraph` 创建历史，使用版本 `1` HOCON，单独保存 Daemon 健康、错误和观测时间，不覆盖节点就绪结果。实际启动前由录制型 Adapter 持久化 `RUNNING`，协调线程事件记录开始、完成与健康变化。普通失败只影响后继；启动、日志与持久化基础设施故障通过 `TaskContext.failRun` 或监听器异常取消运行。直接嵌入可使用 DAG 重试与超时，录制型 Adapter 在显式重试时追加日志；YAML 暂不暴露批任务重试或超时。该模块不读取 YAML、不依赖 picocli 或 TUI，不提供任意 Java 结果的通用序列化与恢复。嵌入示例见 [模块使用说明](../../devpulse-core/README.md)。
+`RunHistory` 从同一 `DagGraph` 创建历史，状态写入项目内的关系型数据库（由 `devpulse-storage` 提供），单独保存 Daemon 健康、错误和观测时间，不覆盖节点就绪结果。实际启动前由录制型 Adapter 持久化 `RUNNING`，协调线程事件记录开始、完成与健康变化。普通失败只影响后继；启动、日志与持久化基础设施故障通过 `TaskContext.failRun` 或监听器异常取消运行。直接嵌入可使用 DAG 重试与超时，录制型 Adapter 在显式重试时追加日志；YAML 暂不暴露批任务重试或超时。该模块不读取 YAML、不依赖 picocli 或 TUI，不提供任意 Java 结果的通用序列化与恢复。嵌入示例见 [模块使用说明](../../devpulse-core/README.md)。
 
 ### 本地任务执行状态持久化（`RunHistory.java`）
 
-**方案**：采用项目内文件持久化，不引入数据库。`pulse` 在启动任务前保存计划，持续保存任务状态与日志，支持多个独立运行同时执行。
+**方案**：运行状态存放在项目内的关系型数据库中，由 `devpulse-storage` 提供（H2 + JDBI）。日志与 daemon 脚本仍是文件；不可变的运行清单 `plan.conf` 单独保存。
 
 ```text
 .devpulse\
+  state.mv.db                      运行、任务、依赖边、复用索引、daemon 实例
   runs\
     <run-id>\
-      state.conf
-      run.lock
+      plan.conf                    不可变清单：节点指纹与环境
+      run.lock                     执行者互斥
       logs\
         <task-id>.log
       daemons\
         <task-id>\
-          <instance-id>.conf
-          <instance-id>-start.sh
           <instance-id>-ready.sh
           <instance-id>-stop.sh
           <instance-id>.lock
 ```
 
-- **存储布局**：每次实际执行生成唯一 `run-id`，在项目配置所在目录的 `.devpulse\runs` 下创建独立运行目录，避免多次或并发运行相互覆盖。使用生成的 `task-id` 作为日志文件名，不直接将任务名作为路径。`--dry-run` 不创建运行记录。
-- **状态格式**：`state.conf` 使用 UTF-8 HOCON，复用 Typesafe Config 读写。记录格式版本、运行 ID、目标、项目目录、实际并发上限、运行状态与起止时间，以及各任务的 ID、名称、依赖、状态、起止时间、退出码、失败原因和相对日志路径。尚未产生的结束时间、退出码等字段不写入。
+- **存储布局**：每次实际执行生成唯一 `run-id`；运行与任务状态写入 `state.mv.db`，运行目录只保留清单、锁、日志与脚本。`--dry-run` 不创建运行记录。
+- **数据模型**：`run`；`task`（主键 `(run_id, name)`，另有每运行唯一的 `task_id` 用于日志与脚本路径）；`task_need`（依赖边独立成表，便于按图查询）；`daemon_instance`（主键 `(run_id, task_id, instance_id)`）；`task_result`（按 `(name, fingerprint)` 的跨运行复用索引）；`schema_version` 记录已应用的迁移。表结构由 `devpulse-storage` 的版本化迁移维护。
 - **状态语义**：任务状态区分 `PENDING`、`RUNNING`、`READY`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED`、`INTERRUPTED`；`READY` 记录长驻进程在该次执行中通过就绪检查，并非最终退出结果。正常失败为 `FAILED`，因失败策略未启动的任务为 `SKIPPED`，主动取消导致终止的批任务为 `CANCELLED`，执行器异常退出后无法确认结果的任务为 `INTERRUPTED`。整体运行状态表示流水线结果，与长驻进程后续的实时状态分开。
-- **写入时机与一致性**：执行前保存计划，启动前持久化 `RUNNING`，结束后保存结果，健康变化另行记录，最后写入整体结果；取消时尽力保存状态。同次运行串行写入同目录临时文件，再原子替换 `state.conf`，不退化为直接覆盖。初始化失败不启动任务；执行中持久化失败停止新调度、取消未完成任务并返回非零退出码。
-- **日志落盘**：普通任务持续读取合并后的标准输出和错误输出，在保留控制台日志的同时写入 UTF-8 日志；长驻进程直接重定向合并输出到文件，不依赖 CLI 的日志读取线程，也不实时转发到控制台。日志独立于状态快照写入，不因每行输出重写 `state.conf`；异常退出可能丢失尚未刷新的尾部，长驻程序本身需使用适当的输出编码和刷新策略。
+- **写入时机与一致性**：启动前持久化 `RUNNING`；每次任务状态变化只更新该任务一行，健康变化另行记录，结束时整体写入并保存运行结果；取消时尽力保存状态。运行与任务在同一数据库内，不存在"有任务没有运行"的中间态。初始化失败不启动任务；执行中持久化失败停止新调度、取消未完成任务并返回非零退出码。
+- **清单不可变**：`plan.conf` 在运行开始时写入一次，此后不再改写；重试与诊断比对的是这份稳定的输入指纹，状态更新不可能破坏它。
+- **日志落盘**：普通任务持续读取合并后的标准输出和错误输出，在保留控制台日志的同时写入 UTF-8 日志；长驻进程直接重定向合并输出到文件，不依赖 CLI 的日志读取线程，也不实时转发到控制台。日志不进入数据库，也不因每行输出触发状态写入；异常退出可能丢失尚未刷新的尾部，长驻程序本身需使用适当的输出编码和刷新策略。
 - **异常退出识别**：记录执行器 PID 和进程启动时间（可获取时），并在执行期间持有运行目录内的独占文件锁；PID 本身不足以确认进程身份。后续状态读取若发现未结束的运行，应先核验文件锁及执行器身份，不能将其他仍在执行的运行标为中断。确认原执行器已退出后，将遗留的 `RUNNING` 任务标记为 `INTERRUPTED`、尚未启动的任务标记为 `SKIPPED`，并保存运行中断状态；无法确认时保留原记录并提示状态不确定。
-- **并发读取**：先完整读取并关闭状态文件，再解析 HOCON。Windows 读取句柄可能短暂阻止替换，允许最多 200 ms 的原子替换重试；不降级为非原子写入，持续失败仍明确报错。
+- **并发读取**：读取走数据库事务，不再需要原子替换文件；同一项目的数据库文件由单写者打开，命令行进程之间以此互斥。
 - **查询方式**：`status` 默认查看开始时间最新的运行，显示整体状态、任务状态、退出码、失败原因，以及运行和每个任务的开始时间、结束时间与耗时；`--run <run-id>` 选择历史运行，`--list` 列出所有运行及其起止时间、耗时，`--log <任务名>` 读取选中运行的任务日志。按开始时间排序，不让较旧运行的晚完成覆盖较新记录；查询成功返回 `0`，不因历史任务失败而返回失败退出码。
 - **时间展示**：起止时间使用 UTC ISO 8601，仅显示到秒；持久化时间戳仍保留原始精度。耗时自动选择单位：小于 1 秒显示整数 `ms`，小于 1 分钟显示 `s`，小于 1 小时显示 `m`，其余显示 `h`；秒、分钟和小时最多保留两位小数并去除末尾零，例如 `303ms`、`2.76s`、`1.5m`、`27h`。运行中按查询时刻计算已耗时并标注 `(running)`；未启动任务的起止时间与耗时显示 `-`。取消或中断记录中的结束时间可能是取消或恢复时刻，不能视为实际进程退出时间，其耗时加 `~` 标记为估计值；缺少时间或系统时钟倒退导致无法计算时显示 `-`。耗时由现有时间戳计算，不额外持久化。
 - **环境检查**：`status --tools` 保留 Bash 和工具可用性检查，可配合 `--bash`；不执行版本命令或探测 Docker 等守护进程。所有模式支持 `--directory`。工具模式不能与运行查询参数混用。
-- **查询与恢复边界**：读取历史、列表和日志不要求 Bash 或项目配置仍然存在；长驻进程的实时就绪检查与自定义停止命令使用启动时保存的 Bash 和脚本，Bash 不可用时不能确认就绪。旧版本未保存的运行无法回填。状态文件不允许 include，也不从环境变量解析额外数据。不自动断点续跑、接管或重启遗留进程；手动清理仅处理已记录且身份可确认的实例。后续若增加恢复执行，需校验命令及依赖是否变化，并明确幂等性与重跑策略。
-- **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；大量历史检索或跨进程事务需求出现后再考虑 SQLite。
+- **查询与恢复边界**：读取历史、列表和日志不要求 Bash 或项目配置仍然存在；长驻进程的实时就绪检查与自定义停止命令使用启动时保存的 Bash 和脚本，Bash 不可用时不能确认就绪。旧版本以文件保存的运行不再被读取。运行记录不含配置 include，也不从环境变量解析额外数据。不自动断点续跑、接管或重启遗留进程；手动清理仅处理已记录且身份可确认的实例。后续若增加恢复执行，需校验命令及依赖是否变化，并明确幂等性与重跑策略。
+- **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；运行记录已存放在关系型数据库中，以支持跨进程读取与聚合查询。
 
 ### 本地长驻进程管理（`DaemonManager.java`、`StopCommand.java`）
 
@@ -116,43 +116,43 @@ Successful batch exit and daemon readiness release dependencies. Handles provide
 
 `PlanningException` and `TaskDetails` belong to Pulse, handling YAML field locations and terminal descriptions respectively; core graph errors only identify the affected task and reason. The default Bash Adapter needs no history Writer. Batches only print to the console; daemon logs and manual-stop metadata live under `.devpulse\daemons\<id>` without automatic file removal or resource stopping.
 
-**Unified execution scheduling**: `DagRun` is the only scheduler. `WorkflowRun` accepts an assembled `DagWorkflow`, consuming events, recording history, and summarizing results without constructing graphs or managing processes. Daemons are identified by explicit lifecycle rather than result types. `BashTaskAdapter` handles batch processes, input/output, logs, and interruption cleanup; `DaemonManager` provides daemon Handles and manual stopping. DAG cooperative interruption carries cancellation and timeouts to the Adapter without a separate Bash cancellation scheduler. Single-use `execute()` returns the overall state and succeeded, failed, and skipped counts. Callers close history Writers and manage JVM shutdown hooks. Pulse maps success to `0`, other results to `1`, and coordinator interruption to `130`.
+**Unified execution scheduling**: `DagRun` is the only scheduler. `WorkflowRun` accepts an assembled `DagWorkflow`, consuming events, recording history, and summarizing results without constructing graphs or managing processes. Daemons are identified by explicit lifecycle rather than result types. `BashTaskAdapter` handles batch processes, input/output, logs, and interruption cleanup; `DaemonManager` provides daemon Handles and manual stopping. DAG cooperative interruption carries cancellation and timeouts to the Adapter without a separate Bash cancellation scheduler. Single-use `execute()` returns the overall state and succeeded, failed, and skipped counts. Callers close history Writers and manage JVM shutdown hooks. Pulse uses categorized exit codes (`0`, `2`, `10`, `11`, `12`, `13`, `20`, `30`, `31`, `32`, `40`, `130`); see the [Pulse guide](../../devpulse-plugins/pulse/README.md).
 
-`RunHistory` creates history from the same `DagGraph`, using version `1` HOCON with separate daemon health/error/observation fields rather than overwriting readiness. A recording Adapter persists `RUNNING` before actual startup; coordinator events persist starts, completion, and health transitions. Ordinary faults affect descendants only; startup, logging, and persistence infrastructure faults cancel the run through `TaskContext.failRun` or listener exceptions. Embedded callers can use DAG retries/timeouts, with explicit retries appending logs; YAML does not yet expose batch retry/timeout settings. The module reads no YAML and depends on neither picocli nor the TUI, and offers no general Java result serialization or recovery. See the [module usage guide](../../devpulse-core/README.md) for examples.
+`RunHistory` creates history from the same `DagGraph` and writes state to the project's relational database (provided by `devpulse-storage`), with separate daemon health/error/observation fields rather than overwriting readiness. A recording Adapter persists `RUNNING` before actual startup; coordinator events persist starts, completion, and health transitions. Ordinary faults affect descendants only; startup, logging, and persistence infrastructure faults cancel the run through `TaskContext.failRun` or listener exceptions. Embedded callers can use DAG retries/timeouts, with explicit retries appending logs; YAML does not yet expose batch retry/timeout settings. The module reads no YAML and depends on neither picocli nor the TUI, and offers no general Java result serialization or recovery. See the [module usage guide](../../devpulse-core/README.md) for examples.
 
 ### Local task execution persistence (`RunHistory.java`)
 
-**Approach**: Persist files within the project without introducing a database. `pulse` saves the plan before launching tasks and continuously persists task states and logs. Multiple independent runs may execute concurrently.
+**Approach**: Run state lives in a relational database inside the project, provided by `devpulse-storage` (H2 + JDBI). Logs and daemon scripts remain files, and the immutable run manifest `plan.conf` is stored separately.
 
 ```text
 .devpulse\
+  state.mv.db                      runs, tasks, dependency edges, reuse index, daemon instances
   runs\
     <run-id>\
-      state.conf
-      run.lock
+      plan.conf                    immutable manifest: node fingerprints and environment
+      run.lock                     executor exclusion
       logs\
         <task-id>.log
       daemons\
         <task-id>\
-          <instance-id>.conf
-          <instance-id>-start.sh
           <instance-id>-ready.sh
           <instance-id>-stop.sh
           <instance-id>.lock
 ```
 
-- **Storage layout**: Generate a unique `run-id` for each actual execution and create a separate run directory under `.devpulse\runs` in the project configuration directory, preventing repeated or concurrent runs from overwriting each other. Use generated `task-id` values for log filenames rather than using task names as paths. `--dry-run` creates no run records.
-- **State format**: Use UTF-8 HOCON for `state.conf`, reusing Typesafe Config for reading and writing. Record the format version, run ID, target, project directory, effective concurrency limit, overall state and start/end times, plus each task's ID, name, dependencies, state, start/end times, exit code, failure reason, and relative log path. Omit fields such as end time and exit code until available.
+- **Storage layout**: Generate a unique `run-id` for each actual execution. Run and task state is written to `state.mv.db`; the run directory keeps only the manifest, lock, logs, and scripts. `--dry-run` creates no run records.
+- **Data model**: `run`; `task` (primary key `(run_id, name)`, plus a per-run unique `task_id` used for log and script paths); `task_need` (dependency edges as their own table so the graph stays queryable); `daemon_instance` (primary key `(run_id, task_id, instance_id)`); `task_result` (cross-run reuse index keyed by `(name, fingerprint)`); and `schema_version` recording applied migrations. `devpulse-storage` maintains the tables through versioned migrations.
 - **State semantics**: Distinguish task states `PENDING`, `RUNNING`, `READY`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. `READY` records daemon readiness during that execution, not its eventual exit. Ordinary failures are `FAILED`; unstarted tasks are `SKIPPED`; explicitly cancelled batches are `CANCELLED`; unconfirmed results after executor exit are `INTERRUPTED`. Overall pipeline outcome is separate from subsequent live daemon state.
-- **Write timing and consistency**: Persist the plan, `RUNNING` before startup, completion outcomes, separate health transitions, and the overall result. Attempt to persist cancellation. Serialize writes to same-directory temporary files and atomically replace `state.conf`; never fall back to overwrite. Initialization failure starts no tasks; execution-time persistence faults stop new scheduling, cancel unfinished tasks, and return a nonzero exit code.
-- **Log persistence**: Batch output is continuously read, printed, and saved as UTF-8. Daemon output is merged and redirected directly to a file without depending on CLI reader threads or live console forwarding. Logs are independent of snapshots rather than rewriting `state.conf` per line. Unexpected exits may lose buffered tails; daemon programs must select suitable output encoding and flushing.
+- **Write timing and consistency**: Persist `RUNNING` before startup; each task state change updates only that task's row; health transitions are recorded separately; completion writes the remaining state and the run result. Attempt to persist cancellation. Runs and tasks share one database, so no "run without tasks" state is observable. Initialization failure starts no tasks; execution-time persistence faults stop new scheduling, cancel unfinished tasks, and return a nonzero exit code.
+- **Immutable manifest**: `plan.conf` is written once when the run starts and never rewritten; retry and diagnostics compare against those stable input fingerprints, so a state update cannot damage them.
+- **Log persistence**: Batch output is continuously read, printed, and saved as UTF-8. Daemon output is merged and redirected directly to a file without depending on CLI reader threads or live console forwarding. Logs never enter the database and never trigger a state write per line. Unexpected exits may lose buffered tails; daemon programs must select suitable output encoding and flushing.
 - **Unexpected exit detection**: Record the executor PID and process start time when available, and hold an exclusive file lock in the run directory during execution; PID alone cannot establish process identity. When a later state read finds an unfinished run, check the file lock and executor identity before marking it interrupted, without modifying another live run. Once the original executor is confirmed to have exited, mark remaining `RUNNING` tasks as `INTERRUPTED`, unstarted tasks as `SKIPPED`, and persist the interrupted run state. If identity cannot be confirmed, retain the record and report uncertainty.
-- **Concurrent reads**: Read the complete state file and close it before parsing HOCON. Windows read handles can briefly block replacement; allow up to 200 ms of atomic replacement retries. Never fall back to non-atomic writes, and report persistent failures explicitly.
+- **Concurrent reads**: Reads run in database transactions, so no atomic file replacement is needed; the project's database file is opened by a single writer, which is how command-line processes exclude each other.
 - **Queries**: `status` defaults to the most recently started run and shows overall state, task states, exit codes, failure reasons, and start times, end times, and durations for both the run and every task. `--run <run-id>` selects a historical run, `--list` lists all runs with their start/end times and durations, and `--log <task-name>` reads a task log from the selected run. Sort by start time so an older run finishing later does not overwrite a newer record. Successful queries return `0`, even when the recorded execution failed.
 - **Timing display**: Use UTC ISO 8601 timestamps displayed to seconds, preserving the original precision in persisted timestamps. Select duration units automatically: integer `ms` below one second, `s` below one minute, `m` below one hour, and `h` otherwise. Seconds, minutes, and hours use at most two decimal places with trailing zeros removed, for example `303ms`, `2.76s`, `1.5m`, and `27h`. For running work, calculate elapsed time at query time and append `(running)`. Show `-` for all timing fields of unstarted tasks. Cancellation or interruption end times may represent cancellation or recovery rather than actual process exit; prefix their estimated durations with `~`. Show `-` when missing timestamps or backward system-clock changes prevent calculation. Derive durations from existing timestamps without persisting additional fields.
 - **Environment checks**: `status --tools` retains Bash and tool availability checks with optional `--bash`. Do not run version commands or probe daemons such as Docker. All modes support `--directory`; do not combine tool mode with run-query options.
-- **Query and recovery boundaries**: Reading history, lists, and logs needs no Bash or project configuration. Live daemon readiness and custom stopping use recorded Bash and scripts; missing Bash prevents confirming readiness. Older unrecorded runs cannot be backfilled. State files cannot include resources or resolve additional environment data. Do not resume, take over, or restart orphaned processes; manual cleanup targets only recorded, identity-confirmed instances. Future resumption must validate definitions and establish idempotency/retry policies.
-- **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; consider SQLite later if extensive historical queries or cross-process transactions become necessary.
+- **Query and recovery boundaries**: Reading history, lists, and logs needs no Bash or project configuration. Live daemon readiness and custom stopping use recorded Bash and scripts; missing Bash prevents confirming readiness. Older runs recorded as files are no longer read. Run records contain no configuration includes and resolve no additional environment data. Do not resume, take over, or restart orphaned processes; manual cleanup targets only recorded, identity-confirmed instances. Future resumption must validate definitions and establish idempotency/retry policies.
+- **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; run records already live in a relational database, which supports cross-process reads and aggregate queries.
 
 ### Local daemon management (`DaemonManager.java`, `StopCommand.java`)
 

@@ -67,6 +67,39 @@ class RunStoreTest {
                 needs);
     }
 
+    /** A task whose stored order is set explicitly, so name order cannot mask the contract. */
+    private static TaskRecord orderedTask(String runId, String name, int sortOrder) {
+        return new TaskRecord(
+                runId,
+                name,
+                name + "-id",
+                "fp-" + name,
+                "PENDING",
+                null,
+                null,
+                BASE,
+                null,
+                "logs/" + name + ".log",
+                null,
+                null,
+                null,
+                null,
+                sortOrder,
+                List.of());
+    }
+
+    @Test
+    void ordersTasksByRecordedSortOrderNotByName() throws IOException {
+        store.begin(
+                run("r1", "proj", BASE, "RUNNING"),
+                List.of(orderedTask("r1", "alpha", 1), orderedTask("r1", "zebra", 0)));
+
+        var tasks = store.tasks("r1");
+
+        assertThat(tasks).extracting(TaskRecord::name).containsExactly("zebra", "alpha");
+        assertThat(tasks.getFirst().sortOrder()).isZero();
+    }
+
     @Test
     void migratesAndReportsItsVersion() throws IOException {
         assertThat(store.schemaVersion()).isEqualTo(Schema.VERSION);
