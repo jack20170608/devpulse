@@ -595,6 +595,16 @@ public final class RunHistory {
             return snapshot.id();
         }
 
+        /** The store backing this run, so a caller can consult the cross-run reuse index. */
+        public RunStore store() {
+            return store;
+        }
+
+        /** The current in-memory state of the run. */
+        public Snapshot snapshot() {
+            return snapshot;
+        }
+
         public Path directory() {
             return directory;
         }

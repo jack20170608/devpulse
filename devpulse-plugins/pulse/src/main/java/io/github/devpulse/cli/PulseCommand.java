@@ -10,11 +10,13 @@ import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulsePlan;
 import io.github.devpulse.execution.TaskFingerprints;
 import io.github.devpulse.review.TaskDetails;
+import io.github.devpulse.storage.TaskResult;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Writer;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -132,6 +134,7 @@ public final class PulseCommand implements Callable<Integer> {
         }
 
         var concurrency = jobs == null ? config.parallelism() : jobs;
+        var fingerprints = TaskFingerprints.of(plan.tasks(), plan.daemonOptions());
         if (dryRun) {
             if (json) {
                 out.println(PulseJson.plan(target, config.directory(), concurrency, plan));
@@ -177,7 +180,7 @@ public final class PulseCommand implements Callable<Integer> {
                                 target,
                                 plan.graph(),
                                 concurrency,
-                                manifest(target, config, plan, concurrency, shell))) {
+                                manifest(target, config, plan, concurrency, shell, fingerprints))) {
             if (!json) {
                 out.println("Run ID: " + history.id());
                 out.flush();
@@ -189,6 +192,7 @@ public final class PulseCommand implements Callable<Integer> {
             Runtime.getRuntime().addShutdownHook(hook);
             try {
                 var result = run.execute();
+                recordReuse(history, fingerprints);
                 var ok = result.state() == RunHistory.State.SUCCESS;
                 if (json) {
                     out.println(
@@ -245,8 +249,8 @@ public final class PulseCommand implements Callable<Integer> {
             PulseConfiguration config,
             PulsePlan plan,
             int concurrency,
-            BashShell shell) {
-        var fingerprints = TaskFingerprints.of(plan.tasks(), plan.daemonOptions());
+            BashShell shell,
+            Map<String, String> fingerprints) {
         var nodes = new LinkedHashMap<String, PlanManifest.Node>();
         for (var task : plan.tasks()) {
             nodes.put(
@@ -262,6 +266,36 @@ public final class PulseCommand implements Callable<Integer> {
                 PulseCommand.class.getPackage().getImplementationVersion(),
                 null,
                 nodes);
+    }
+
+    /**
+     * Publish every successful node to the cross-run reuse index.
+     *
+     * <p>The index is an optimisation: if an entry cannot be written, a later cached run simply
+     * reruns that node, so a failure here must not turn a successful run into a failed one.
+     */
+    static void recordReuse(RunHistory.Writer history, Map<String, String> fingerprints) {
+        var snapshot = history.snapshot();
+        for (var task : snapshot.tasks()) {
+            if (task.state() != RunHistory.State.SUCCESS) {
+                continue;
+            }
+            var fingerprint = fingerprints.get(task.name());
+            if (fingerprint == null) {
+                continue;
+            }
+            try {
+                history.store()
+                        .recordResult(
+                                new TaskResult(
+                                        task.name(),
+                                        fingerprint,
+                                        snapshot.id(),
+                                        task.finishedAt()));
+            } catch (IOException ignored) {
+                // Losing an index entry only costs a future rerun.
+            }
+        }
     }
 
     /**
