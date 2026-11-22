@@ -208,9 +208,21 @@ public final class RunHistory {
     }
 
     public List<Observation> list() throws IOException {
-        var result = new ArrayList<Observation>();
-        for (var run : store().runs(null, Integer.MAX_VALUE)) {
-            result.add(observe(run.id()));
+        var runs = store().runs(null, Integer.MAX_VALUE);
+        if (runs.isEmpty()) {
+            return List.of();
+        }
+        var tasks = store().tasks(runs.stream().map(RunRecord::id).toList());
+        var result = new ArrayList<Observation>(runs.size());
+        for (var run : runs) {
+            if (State.valueOf(run.state()) == State.RUNNING) {
+                // A running record needs the executor-lock probe, which is per run.
+                result.add(observe(run.id()));
+            } else {
+                result.add(
+                        new Observation(
+                                snapshotOf(run, tasks.getOrDefault(run.id(), List.of())), null));
+            }
         }
         return List.copyOf(result);
     }
@@ -416,23 +428,13 @@ public final class RunHistory {
 
     private Snapshot read(String id) throws IOException {
         var run = store().run(id).orElseThrow(() -> new IOException("Run not found: " + id));
-        var tasks = new ArrayList<TaskState>();
-        for (var task : store().tasks(id)) {
-            tasks.add(
-                    new TaskState(
-                            task.taskId(),
-                            task.name(),
-                            task.needs(),
-                            State.valueOf(task.state()),
-                            task.startedAt(),
-                            task.finishedAt(),
-                            task.exitCode(),
-                            task.error(),
-                            task.daemonHealth() == null
-                                    ? null
-                                    : DagDaemon.Health.valueOf(task.daemonHealth()),
-                            task.daemonError(),
-                            task.daemonCheckedAt()));
+        return snapshotOf(run, store().tasks(id));
+    }
+
+    private static Snapshot snapshotOf(RunRecord run, List<TaskRecord> tasks) {
+        var states = new ArrayList<TaskState>(tasks.size());
+        for (var task : tasks) {
+            states.add(taskState(task));
         }
         return new Snapshot(
                 run.id(),
@@ -444,7 +446,22 @@ public final class RunHistory {
                 run.startedAt(),
                 run.finishedAt(),
                 State.valueOf(run.state()),
-                tasks);
+                states);
+    }
+
+    private static TaskState taskState(TaskRecord task) {
+        return new TaskState(
+                task.taskId(),
+                task.name(),
+                task.needs(),
+                State.valueOf(task.state()),
+                task.startedAt(),
+                task.finishedAt(),
+                task.exitCode(),
+                task.error(),
+                task.daemonHealth() == null ? null : DagDaemon.Health.valueOf(task.daemonHealth()),
+                task.daemonError(),
+                task.daemonCheckedAt());
     }
 
     private static Snapshot finish(Snapshot snapshot, State result) {

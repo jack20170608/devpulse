@@ -131,6 +131,26 @@ class RunStoreTest {
     }
 
     @Test
+    void listsTasksOfSeveralRunsInOneRead() throws IOException {
+        store.begin(
+                run("r1", "proj", BASE, "SUCCESS"),
+                List.of(
+                        task("r1", "build", "SUCCESS", List.of("prep")),
+                        task("r1", "test", "SUCCESS", List.of("build"))));
+        store.begin(
+                run("r2", "proj", BASE.plusSeconds(60), "FAILED"),
+                List.of(task("r2", "deploy", "FAILED", List.of("build"))));
+
+        var byRun = store.tasks(List.of("r1", "r2"));
+
+        assertThat(byRun).containsOnlyKeys("r1", "r2");
+        assertThat(byRun.get("r1")).extracting(TaskRecord::name).containsExactly("build", "test");
+        assertThat(byRun.get("r1").getFirst().needs()).containsExactly("prep");
+        assertThat(byRun.get("r2").getFirst().needs()).containsExactly("build");
+        assertThat(store.tasks(List.of())).isEmpty();
+    }
+
+    @Test
     void recordsARunWithItsTasksAndDependencies() throws IOException {
         store.begin(
                 run("r1", "proj", BASE, "RUNNING"),

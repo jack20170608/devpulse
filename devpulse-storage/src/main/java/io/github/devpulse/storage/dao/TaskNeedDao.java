@@ -36,6 +36,15 @@ public final class TaskNeedDao extends BaseDaoJdbiImpl<TaskNeedRecord, TaskNeedK
         return find(BY_RUN, Map.of("runId", runId), null);
     }
 
+    /** Every edge of several runs, ordered so they group back per run and task. */
+    public List<TaskNeedRecord> byRuns(List<String> runIds) {
+        return find(
+                "SELECT * FROM task_need WHERE run_id IN (<runIds>) "
+                        + "ORDER BY run_id, task_name, sort_order",
+                Map.of(),
+                Map.of("runIds", runIds));
+    }
+
     @Override
     protected void registerRowMappers(Jdbi jdbi) {
         jdbi.registerRowMapper(TaskNeedRecord.class, (result, context) -> map(result));

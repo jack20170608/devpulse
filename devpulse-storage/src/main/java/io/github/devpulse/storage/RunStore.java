@@ -3,6 +3,7 @@ package io.github.devpulse.storage;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -48,6 +49,14 @@ public interface RunStore extends AutoCloseable {
 
     /** One run's tasks in their recorded order. */
     List<TaskRecord> tasks(String runId) throws IOException;
+
+    /**
+     * Tasks of several runs, grouped by run id and ordered within each run.
+     *
+     * <p>Bulk counterpart of {@link #tasks(String)}: a caller that reads a whole history costs one
+     * query per table instead of one round for every run.
+     */
+    Map<String, List<TaskRecord>> tasks(List<String> runIds) throws IOException;
 
     /** The reuse index lookup: a finished result for this exact node definition. */
     Optional<TaskResult> successfulResult(String name, String fingerprint) throws IOException;

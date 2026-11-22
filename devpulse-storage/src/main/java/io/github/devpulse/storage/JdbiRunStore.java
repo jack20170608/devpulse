@@ -10,7 +10,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.JdbiException;
@@ -145,6 +147,38 @@ public final class JdbiRunStore implements RunStore {
                 result.add(withNeeds(task, needs.getOrDefault(task.name(), List.of())));
             }
             return List.copyOf(result);
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public Map<String, List<TaskRecord>> tasks(List<String> runIds) throws IOException {
+        if (runIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            var needsByRun = new HashMap<String, Map<String, List<String>>>();
+            for (var need : needDao.byRuns(runIds)) {
+                needsByRun
+                        .computeIfAbsent(need.runId(), id -> new HashMap<>())
+                        .computeIfAbsent(need.taskName(), name -> new ArrayList<>())
+                        .add(need.needName());
+            }
+            var grouped = new LinkedHashMap<String, List<TaskRecord>>();
+            for (var task : taskDao.listByRuns(runIds)) {
+                var needs =
+                        needsByRun
+                                .getOrDefault(task.runId(), Map.of())
+                                .getOrDefault(task.name(), List.of());
+                grouped.computeIfAbsent(task.runId(), id -> new ArrayList<>())
+                        .add(withNeeds(task, needs));
+            }
+            var result = new LinkedHashMap<String, List<TaskRecord>>();
+            for (var entry : grouped.entrySet()) {
+                result.put(entry.getKey(), List.copyOf(entry.getValue()));
+            }
+            return Map.copyOf(result);
         } catch (JdbiException exception) {
             throw wrap(exception);
         }

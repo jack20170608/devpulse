@@ -77,6 +77,15 @@ public final class TaskDao extends BaseDaoJdbiImpl<TaskRecord, TaskKey> {
                 null);
     }
 
+    /** Every task of several runs, ordered so each run reads back in its recorded order. */
+    public List<TaskRecord> listByRuns(List<String> runIds) {
+        return find(
+                "SELECT * FROM task WHERE run_id IN (<runIds>) "
+                        + "ORDER BY run_id, sort_order, name",
+                Map.of(),
+                Map.of("runIds", runIds));
+    }
+
     @Override
     protected void registerRowMappers(Jdbi jdbi) {
         jdbi.registerRowMapper(TaskRecord.class, (result, context) -> map(result));
