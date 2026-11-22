@@ -25,6 +25,17 @@ java -jar devpulse-cli\target\devpulse.jar --help
 
 组合入口生成 `devpulse-cli\target\devpulse.jar`，不进入单工具发行包。以下示例使用组合入口保持原有命令用法；单独运行 Pulse 请使用 `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`，相关命令通过 `pulse init|review|status|stop` 调用。模块组织见 [架构导航](../docs/architecture.md)，安装说明见 [发行与安装](../devpulse-dist/README.md)。Git Bash 中 `bash run.sh --help` 使用组合入口，`bash run-jira.sh --help` 只构建 Jira；脚本仅在其子进程中移除 `JAVA_TOOL_OPTIONS`。
 
+### 原生可执行文件（可选）
+
+除 JAR 之外，还可以用 GraalVM 的 `native-image` 构建单文件原生可执行程序，把 `--version`、`--help` 等短命令的启动耗时从约 200 ms 降到 10 ms 以内。它是额外的产物，JAR 仍是功能完整的兜底入口，两者并存。
+
+```bash
+GRAALVM_HOME=/path/to/graalvm bash native.sh            # 只构建
+GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # 构建并运行冒烟检查
+```
+
+产物为 `devpulse-cli/target/devpulse-native`，大小约 47 MB。`--verify` 覆盖版本、帮助、流水线执行、`status`、`review`、`gather`、长驻进程生命周期、`stop`，以及未知目标（`12`）和任务失败（`30`）两个分类退出码：原生镜像缺少反射配置时编译仍然成功，只有运行到该路径才报错，因此冒烟检查是这层产物的真正门禁。反射与资源元数据位于 `devpulse-cli/src/main/resources/META-INF/native-image/`，由 GraalVM agent 在 Linux x64 上录制；在其它平台构建时应先在目标平台重新录制。链接阶段需要系统的 zlib 开发库（如 Debian/Ubuntu 的 `zlib1g-dev`）。
+
 ### 命令概览与帮助
 
 | 命令 | 用途 | 当前状态 |
@@ -73,6 +84,17 @@ java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
 The combined entry point produces `devpulse-cli\target\devpulse.jar` and is not included in individual tool archives. The examples below use it to preserve existing command syntax. To run Pulse alone, use `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`; its related commands are `pulse init|review|status|stop`. See the [architecture index](../docs/architecture.md) for modules and [distribution and installation](../devpulse-dist/README.md) for installation. In Git Bash, `bash run.sh --help` launches the combined entry point, while `bash run-jira.sh --help` builds only Jira. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
+
+### Native executable (optional)
+
+Besides the JAR, GraalVM `native-image` can build a single-file native executable that starts short commands such as `--version` and `--help` in under 10 ms instead of roughly 200 ms. It is an additional artifact; the JAR stays the complete fallback, and the two coexist.
+
+```bash
+GRAALVM_HOME=/path/to/graalvm bash native.sh            # build only
+GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # build and run the smoke checks
+```
+
+The output is `devpulse-cli/target/devpulse-native`, about 47 MB. `--verify` covers version, help, pipeline execution, `status`, `review`, `gather`, a daemon lifecycle, `stop`, and the two classified exit codes for an unknown target (`12`) and a failing task (`30`). A native image whose reflection metadata is incomplete still compiles; it fails only when that path runs, so the smoke checks are the real gate for this artifact. The reflection and resource metadata lives in `devpulse-cli/src/main/resources/META-INF/native-image/` and was recorded by the GraalVM agent on Linux x64; record it again on any other target platform. Linking needs the system zlib development library (for example `zlib1g-dev` on Debian/Ubuntu).
 
 ### Command overview and help
 

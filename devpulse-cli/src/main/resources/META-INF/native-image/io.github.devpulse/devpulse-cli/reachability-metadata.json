@@ -1,0 +1,1045 @@
+{
+  "reflection": [
+    {
+      "type": "com.ibm.icu.text.Collator"
+    },
+    {
+      "type": "groovy.lang.Closure"
+    },
+    {
+      "type": "io.github.devpulse.cli.DevPulseCLI",
+      "fields": [
+        {
+          "name": "spec"
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.DevPulseCLI$VersionProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.GatherCLI$VersionProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.GatherCommand",
+      "fields": [
+        {
+          "name": "bash"
+        },
+        {
+          "name": "directory"
+        },
+        {
+          "name": "language"
+        },
+        {
+          "name": "noClipboard"
+        },
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.InitCommand",
+      "fields": [
+        {
+          "name": "directory"
+        },
+        {
+          "name": "force"
+        },
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.PulseCLI$VersionProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.PulseCommand",
+      "fields": [
+        {
+          "name": "bash"
+        },
+        {
+          "name": "directory"
+        },
+        {
+          "name": "dryRun"
+        },
+        {
+          "name": "format"
+        },
+        {
+          "name": "jobs"
+        },
+        {
+          "name": "spec"
+        },
+        {
+          "name": "target"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.RetryCommand",
+      "fields": [
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.ReviewCommand",
+      "fields": [
+        {
+          "name": "directory"
+        },
+        {
+          "name": "format"
+        },
+        {
+          "name": "jobs"
+        },
+        {
+          "name": "plain"
+        },
+        {
+          "name": "spec"
+        },
+        {
+          "name": "target"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.StatusCommand",
+      "fields": [
+        {
+          "name": "bash"
+        },
+        {
+          "name": "directory"
+        },
+        {
+          "name": "format"
+        },
+        {
+          "name": "grep"
+        },
+        {
+          "name": "list"
+        },
+        {
+          "name": "log"
+        },
+        {
+          "name": "run"
+        },
+        {
+          "name": "spec"
+        },
+        {
+          "name": "tail"
+        },
+        {
+          "name": "tools"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.StopCommand",
+      "fields": [
+        {
+          "name": "directory"
+        },
+        {
+          "name": "instance"
+        },
+        {
+          "name": "run"
+        },
+        {
+          "name": "spec"
+        },
+        {
+          "name": "task"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.storage.DaemonRecord"
+    },
+    {
+      "type": "io.github.devpulse.storage.RunKey",
+      "methods": [
+        {
+          "name": "hashCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "id",
+          "parameterTypes": []
+        },
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.storage.RunRecord",
+      "methods": [
+        {
+          "name": "bash",
+          "parameterTypes": []
+        },
+        {
+          "name": "executorPid",
+          "parameterTypes": []
+        },
+        {
+          "name": "executorStartedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "finishedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "hashCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "id",
+          "parameterTypes": []
+        },
+        {
+          "name": "parallelism",
+          "parameterTypes": []
+        },
+        {
+          "name": "parentRunId",
+          "parameterTypes": []
+        },
+        {
+          "name": "project",
+          "parameterTypes": []
+        },
+        {
+          "name": "startedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "state",
+          "parameterTypes": []
+        },
+        {
+          "name": "target",
+          "parameterTypes": []
+        },
+        {
+          "name": "toString",
+          "parameterTypes": []
+        },
+        {
+          "name": "toolVersion",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.storage.TaskNeedRecord",
+      "methods": [
+        {
+          "name": "hashCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "needName",
+          "parameterTypes": []
+        },
+        {
+          "name": "runId",
+          "parameterTypes": []
+        },
+        {
+          "name": "sortOrder",
+          "parameterTypes": []
+        },
+        {
+          "name": "taskName",
+          "parameterTypes": []
+        },
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.storage.TaskRecord",
+      "methods": [
+        {
+          "name": "daemonCheckedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "daemonError",
+          "parameterTypes": []
+        },
+        {
+          "name": "daemonHealth",
+          "parameterTypes": []
+        },
+        {
+          "name": "error",
+          "parameterTypes": []
+        },
+        {
+          "name": "exitCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "fingerprint",
+          "parameterTypes": []
+        },
+        {
+          "name": "finishedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "hashCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "logPath",
+          "parameterTypes": []
+        },
+        {
+          "name": "name",
+          "parameterTypes": []
+        },
+        {
+          "name": "needs",
+          "parameterTypes": []
+        },
+        {
+          "name": "reusedFrom",
+          "parameterTypes": []
+        },
+        {
+          "name": "runId",
+          "parameterTypes": []
+        },
+        {
+          "name": "sortOrder",
+          "parameterTypes": []
+        },
+        {
+          "name": "startedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "state",
+          "parameterTypes": []
+        },
+        {
+          "name": "taskId",
+          "parameterTypes": []
+        },
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.storage.TaskResult"
+    },
+    {
+      "type": "java.awt.GraphicsEnvironment",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "isHeadless",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object",
+      "methods": [
+        {
+          "name": "getClass",
+          "parameterTypes": []
+        },
+        {
+          "name": "notify",
+          "parameterTypes": []
+        },
+        {
+          "name": "notifyAll",
+          "parameterTypes": []
+        },
+        {
+          "name": "wait",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.ProcessBuilder$RedirectPipeImpl",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "fd"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.System",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "load",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.nio.file.Path"
+    },
+    {
+      "type": "java.nio.file.Paths",
+      "methods": [
+        {
+          "name": "get",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.sql.Connection"
+    },
+    {
+      "type": "java.sql.Date"
+    },
+    {
+      "type": "java.sql.Driver"
+    },
+    {
+      "type": "java.sql.DriverManager"
+    },
+    {
+      "type": "java.sql.SQLException"
+    },
+    {
+      "type": "java.sql.Time"
+    },
+    {
+      "type": "java.sql.Timestamp"
+    },
+    {
+      "type": "java.time.Duration"
+    },
+    {
+      "type": "java.time.Instant"
+    },
+    {
+      "type": "java.time.LocalDate"
+    },
+    {
+      "type": "java.time.LocalDateTime"
+    },
+    {
+      "type": "java.time.LocalTime"
+    },
+    {
+      "type": "java.time.MonthDay"
+    },
+    {
+      "type": "java.time.OffsetDateTime"
+    },
+    {
+      "type": "java.time.OffsetTime"
+    },
+    {
+      "type": "java.time.Period"
+    },
+    {
+      "type": "java.time.Year"
+    },
+    {
+      "type": "java.time.YearMonth"
+    },
+    {
+      "type": "java.time.ZoneId"
+    },
+    {
+      "type": "java.time.ZoneOffset"
+    },
+    {
+      "type": "java.time.ZonedDateTime"
+    },
+    {
+      "type": "java.util.stream.Collectors",
+      "methods": [
+        {
+          "name": "toUnmodifiableSet",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "jdk.jfr.FlightRecorder",
+      "methods": [
+        {
+          "name": "isAvailable",
+          "parameterTypes": []
+        },
+        {
+          "name": "register",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.h2.Driver"
+    },
+    {
+      "type": "org.h2.mvstore.MVStore$TxCounter"
+    },
+    {
+      "type": "org.h2.mvstore.Page"
+    },
+    {
+      "type": "org.h2.mvstore.Page$PageReference",
+      "fields": [
+        {
+          "name": "page"
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.db.LobStorageMap$BlobMeta$Type",
+      "fields": [
+        {
+          "name": "INSTANCE"
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.db.LobStorageMap$BlobReference$Type",
+      "fields": [
+        {
+          "name": "INSTANCE"
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.db.NullValueDataType",
+      "fields": [
+        {
+          "name": "INSTANCE"
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.db.RowDataType$Factory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.tx.VersionedValueType$Factory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.type.ByteArrayDataType",
+      "fields": [
+        {
+          "name": "INSTANCE"
+        }
+      ]
+    },
+    {
+      "type": "org.h2.mvstore.type.LongDataType",
+      "fields": [
+        {
+          "name": "INSTANCE"
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.async.FilePathAsync",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.mem.FilePathMem",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.mem.FilePathMemLZF",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.niomapped.FilePathNioMapped",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.niomem.FilePathNioMem",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.niomem.FilePathNioMemLZF",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.retry.FilePathRetryOnInterrupt",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.split.FilePathSplit",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.h2.store.fs.zip.FilePathZip",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.Handles",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.argument.Arguments",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "org.jdbi.v3.core.config.ConfigRegistry"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.argument.ObjectArgument"
+    },
+    {
+      "type": "org.jdbi.v3.core.argument.internal.strategies.LoggableBinderArgument"
+    },
+    {
+      "type": "org.jdbi.v3.core.array.SqlArrayTypes",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.collector.JdbiCollectors",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.config.internal.ConfigCaches",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.internal.CopyOnWriteHashMap"
+    },
+    {
+      "type": "org.jdbi.v3.core.mapper.ColumnMappers",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.mapper.Mappers",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.mapper.RowMappers",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.mapper.reflect.internal.PojoTypes",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.qualifier.Qualifiers",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.core.statement.SqlStatements",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jdbi.v3.meta.Legacy"
+    },
+    {
+      "type": "org.jline.nativ.CLibrary",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TCSADRAIN"
+        },
+        {
+          "name": "TCSAFLUSH"
+        },
+        {
+          "name": "TCSANOW"
+        },
+        {
+          "name": "TIOCGWINSZ"
+        },
+        {
+          "name": "TIOCSWINSZ"
+        }
+      ]
+    },
+    {
+      "type": "org.jline.terminal.impl.exec.ExecTerminalProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jline.terminal.impl.ffm.FfmTerminalProvider"
+    },
+    {
+      "type": "org.jline.terminal.impl.jansi.JansiTerminalProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jline.terminal.impl.jna.JnaTerminalProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.jline.terminal.impl.jni.JniTerminalProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.locationtech.jts.geom.Geometry"
+    },
+    {
+      "type": "org.slf4j.nop.NOPServiceProvider"
+    },
+    {
+      "type": "picocli.CommandLine$AutoHelpMixin",
+      "fields": [
+        {
+          "name": "helpRequested"
+        },
+        {
+          "name": "versionRequested"
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA2$SHA256",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.BreakIteratorInfo"
+    },
+    {
+      "type": "sun.text.resources.BreakIteratorResources"
+    },
+    {
+      "type": "sun.text.resources.BreakIteratorResources_en"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": {
+        "proxy": [
+          "org.jdbi.v3.meta.Legacy"
+        ]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "glob": "META-INF/maven/org.jline/jline-native/pom.properties"
+    },
+    {
+      "glob": "META-INF/services/java.sql.Driver"
+    },
+    {
+      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
+      "glob": "META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+    },
+    {
+      "glob": "META-INF/services/org/jline/terminal/provider/exec"
+    },
+    {
+      "glob": "META-INF/services/org/jline/terminal/provider/ffm"
+    },
+    {
+      "glob": "META-INF/services/org/jline/terminal/provider/jansi"
+    },
+    {
+      "glob": "META-INF/services/org/jline/terminal/provider/jna"
+    },
+    {
+      "glob": "META-INF/services/org/jline/terminal/provider/jni"
+    },
+    {
+      "glob": "org/h2/util/data.zip"
+    },
+    {
+      "glob": "org/jline/nativ/Linux/x86_64/libjlinenative.so"
+    },
+    {
+      "glob": "org/jline/utils/capabilities.txt"
+    },
+    {
+      "glob": "org/jline/utils/dumb.caps"
+    },
+    {
+      "module": "java.base",
+      "glob": "sun/text/resources/LineBreakIteratorData"
+    },
+    {
+      "module": "java.desktop",
+      "glob": "sun/awt/resources/awt_en.properties"
+    },
+    {
+      "module": "jdk.jfr",
+      "glob": "jdk/jfr/internal/types/metadata.bin"
+    },
+    {
+      "bundle": "sun.awt.resources.awt"
+    }
+  ]
+}
