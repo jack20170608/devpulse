@@ -1,8 +1,46 @@
-* text eol=lf
+# ============================================================
+# 默认：所有文本文件在仓库内规范化为 LF，检出一律 LF
+# ============================================================
+* text=auto eol=lf
 
-*.sh text eol=lf
+# ---------- 可执行脚本：必须 LF，否则 shebang/bad interpreter ----------
+*.sh            text eol=lf
+*.bash          text eol=lf
 
-*.js linguist-language=Java
-*.css linguist-language=Java
-*.html linguist-language=Java
-*.ftl linguist-language=Java
+# ---------- 配置文件与文档：统一 LF ----------
+*.java          text eol=lf
+*.xml           text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.conf          text eol=lf
+*.json          text eol=lf
+*.http          text eol=lf
+*.ftl           text eol=lf
+*.txt           text eol=lf
+*.md            text eol=lf
+*.MD            text eol=lf
+*.wiki          text eol=lf
+.editorconfig   text eol=lf
+
+# ---------- Windows 批处理：必须 CRLF（当前无此类文件，预防未来） ----------
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# ---------- 二进制：禁止 EOL 转换，禁止文本 diff ----------
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.jar           binary
+*.zip           binary
+*.gz            binary
+*.class         binary
+*.mv.db         binary
+
+# ---------- GitHub linguist 统计（保留你原有意图） ----------
+*.js            linguist-language=Java
+*.css           linguist-language=Java
+*.html          linguist-language=Java
+*.ftl           linguist-language=Java

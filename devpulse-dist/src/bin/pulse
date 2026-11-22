@@ -12,17 +12,17 @@ if [[ -n "${JAVA_HOME:-}" ]]; then
 else
     java_cmd="$(command -v java || true)"
     if [[ -z "$java_cmd" ]]; then
-        echo "pulse: Java not found. Please install JDK 25+ or set JAVA_HOME" >&2
+        echo "pulse: Java not found. Please install JDK 21+ or set JAVA_HOME" >&2
         exit 1
     fi
 fi
 
-# 2. 检查 Java 版本（最低要求 JDK 25）
+# 2. 检查 Java 版本（最低要求 JDK 21）
 java_version_output=$("$java_cmd" -version 2>&1 | head -n 1)
 if [[ "$java_version_output" =~ \"([0-9]+) ]]; then
-    major_version="${BASH_REMATCH}"
-    if (( major_version < 25 )); then
-        echo "pulse: JDK 25 or higher is required (found version $major_version via $java_cmd)" >&2
+    major_version="${BASH_REMATCH[1]}"
+    if (( major_version < 21 )); then
+        echo "pulse: JDK 21 or higher is required (found version $major_version via $java_cmd)" >&2
         exit 1
     fi
 else
@@ -31,7 +31,7 @@ else
 fi
 
 # 3. 定位并启动目标 JAR 包
-bin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE}")" && pwd -P)"
+bin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 prefix="$(cd -- "$bin_dir/.." && pwd -P)"
 
 if [[ -f "$prefix/devpulse-pulse.jar" ]]; then
