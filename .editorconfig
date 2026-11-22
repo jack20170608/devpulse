@@ -29,7 +29,10 @@ max_line_length = 160
 indent_size = 4
 max_line_length = 100
 
-[*.md]
+# Markdown / reStructuredText keep trailing whitespace: two spaces mean a hard
+# line break. Case variants are listed explicitly because EditorConfig pattern
+# matching is case-sensitive (readme.MD is tracked in this repo).
+[*.{md,MD,rst}]
 max_line_length = 160
 trim_trailing_whitespace = false
 
@@ -41,28 +44,21 @@ indent_style = tab
 [COMMIT_EDITMSG]
 max_line_length = 160
 
-[**.{md,rst}]
-trim_trailing_whitespace = false
+# Git plumbing files align attribute columns with spaces, never tabs
+[{.gitattributes,.gitignore,.gitmodules}]
+indent_size = 4
+indent_style = space
 
-[.git*]
+# Shell scripts, including the extensionless launchers under
+# devpulse-dist/src/bin (jira, pulse)
+[*.{sh,bash}]
 indent_size = tab
 indent_style = tab
 
-[{**.*sh,test/run,**.bats}]
+[devpulse-dist/src/bin/*]
 indent_size = tab
 indent_style = tab
 
-shell_variant      = bash
-binary_next_line   = true  # like -bn
-switch_case_indent = true  # like -ci
-space_redirects    = true  # like -sr
-keep_padding       = false # like -kp
-end_of_line        = lf
-charset            = utf-8
-trim_trailing_whitespace = true
-insert_final_newline = true
-
-[**.bats]
+[*.bats]
 indent_size = tab
 indent_style = tab
-shell_variant	= bats
