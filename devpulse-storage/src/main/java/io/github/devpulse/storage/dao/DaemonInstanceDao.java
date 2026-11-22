@@ -1,6 +1,6 @@
 package io.github.devpulse.storage.dao;
 
-import io.github.devpulse.storage.DaemonKey;
+import io.github.devpulse.storage.domain.DaemonKey;
 import io.github.devpulse.storage.DaemonRecord;
 import io.github.devpulse.storage.jdbi.Bindings;
 import io.github.devpulse.storage.jdbi.TableDescription;
