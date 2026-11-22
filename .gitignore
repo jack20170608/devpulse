@@ -1,6 +1,7 @@
 ## Github worktree
 .worktree/
 .claude/
+.devpulse/
 
 ## The jira
 .jira/
