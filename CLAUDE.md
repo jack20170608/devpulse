@@ -1,0 +1,90 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repository is
+
+devpulse is a local DevOps toolbox built on Java 21 and Maven. It ships independent CLIs:
+
+- **Pulse** — runs tasks/pipelines defined in `.devpulse.yaml` through Bash, with a DAG scheduler, run history, and local daemons.
+- **Gather** — inventories the local environment and generates an AI prompt for writing task config.
+- **Jira** — standalone Jira REST client (issue create/view/update/transition, comments, attachments).
+- **Depmap** — dependency/plugin inventory using an embedded Maven API.
+- **`devpulse`** — combined compatibility CLI that dispatches to Pulse/Gather commands (`init`, `gather`, `pulse`, `review`, `status`, `stop`).
+
+Java 21+ is required to build and run. Actual Bash execution (Pulse, Gather, `status --tools`) also requires Bash; on Windows use Git Bash, never CMD/PowerShell/WSL as a substitute. `init`, `review`, `--dry-run`, history queries, and Jira/Depmap do not need Bash.
+
+## Commands
+
+```bash
+bash build.sh                 # build all modules
+bash build.sh pulse|gather|jira|depmap|cli|dist [--clean] [--quiet]
+bash run.sh --help            # rebuild combined CLI, then run it
+
+bash verify.sh                # THE machine gate: Spotless check + full compile + all tests + SpotBugs
+bash verify.sh --clean        # mandatory after changing compiler settings or dependency versions
+mvn spotless:apply            # apply google-java-format instead of hand-formatting
+```
+
+Build outputs:
+- Combined CLI: `devpulse-cli/target/devpulse.jar`
+- Standalone tools: `devpulse-plugins/{pulse,gather,jira,depmap}/target/devpulse-{pulse,gather,jira,depmap}.jar`
+- Release archives: `devpulse-dist/target/` (Pulse and Jira only)
+
+Run a single test (artifact ID `pulse`/`jira`/`depmap` is unprefixed; keep `-am` so reactor dependencies build):
+
+```bash
+mvn --batch-mode -pl :devpulse-storage -am test -Dtest=RunStoreTest -Dsurefire.failIfNoSpecifiedTests=false
+mvn --batch-mode -pl :devpulse-core -am test -Dtest=DagWorkFlowTest -Dsurefire.failIfNoSpecifiedTests=false
+mvn --batch-mode -pl :pulse -am test -Dtest=PulseConfigurationTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+Integration scripts: `integration-test/jira/run-jira.sh` runs the built Jira JAR. `integration-test/jira/jira-creation-test.bash` performs live Jira reads/writes with an installed `jira` CLI — never run it without explicit authorization and a configured Jira instance. Neither is part of `verify.sh`. CI (`.github/workflows/verify.yml`) runs `bash verify.sh` on JDK 21 and 25.
+
+## Architecture
+
+### Reactor layout
+
+The root `pom.xml` is the only place the project version is defined (`<revision>`); child `<parent><version>` uses `${revision}`, and internal dependencies use `${project.version}`. `devpulse-dependencies` manages external dependency versions, `devpulse-bom` manages consumable internal versions. The Flatten plugin (`resolveCiFriendliesOnly`) keeps installed POMs free of unresolved `${revision}`.
+
+Dependency direction:
+- Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection).
+- `devpulse-plugins` aggregates `pulse`, `gather`, `jira`, `depmap`. Tools may depend on shared libraries but **never on each other**. Pulse and Gather depend on core; Jira and Depmap are standalone.
+- Libraries register no CLI commands and there is no dynamic plugin loading.
+- `devpulse-cli` is the compatibility entry point wrapping Pulse/Gather only. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.
+
+Core does not read Pulse YAML. Pulse owns YAML config, plan assembly, CLI commands, and presentation; core owns graph planning, scheduling, process execution, and persistence.
+
+### Pulse execution flow
+
+`.devpulse.yaml` (strict YAML 1.2, single mapping document) → `PulseConfiguration` parses with SnakeYAML Engine and converts the AST into Typesafe Config for typed reads/validation → `PulsePlan` resolves the target and delegates dependency closure, cycle detection, and validation to core's `DagGraph` (iterative Kahn) → `DagWorkflow` binds sealed `DagTask`/`DagDaemon` actions supplied by `BashTaskAdapter` → `DagRun` schedules virtual threads from a ready queue using dependency counters and cooperative cancellation → `WorkflowRun` consumes events, records history, and summarizes results.
+
+Failure semantics: a failed batch task skips its descendants while independent branches continue; a daemon's readiness releases its startup slot, but later health loss cancels its active dependents and skips unstarted ones. Do not infer daemons from result types; the lifecycle is explicit. Pulse maps results to categorized exit codes (0, 2, 10–13, 20, 30–32, 40, 130) documented in `devpulse-plugins/pulse/README.md`.
+
+### Runtime state and storage
+
+Run state lives in `.devpulse/state.mv.db` (H2 via JDBI); `.devpulse/runs/<run-id>/` keeps the immutable `plan.conf`, the executor lock, task logs, and daemon scripts. `.devpulse/` is generated and gitignored. `--dry-run` creates no run record.
+
+`devpulse-storage` exposes `RunStore` plus record types, implemented by `JdbiRunStore`. Schema changes are versioned in `Schema.java`: append a new numbered migration and bump `VERSION`; never edit SQL that has already shipped, or existing stores silently corrupt. The DAO layer (`dao/*Dao`, `BaseDao`/`BaseDaoJdbiImpl`) derives snake_case columns from record components via `TableDescription`; a key record's component names must match the configured ID fields, and non-column components are excluded with `withoutField`.
+
+### Bash runtime boundaries
+
+`BashShell` locates/validates Bash and executes via `bash --noprofile --norc -s --` with the script on stdin. It never falls back to `sh`, CMD, PowerShell, or WSL, strips `BASH_ENV`, `ENV`, and `BASH_FUNC_*`, and supports no interactive input. Daemons require a `ready.cmd`; identity uses PID plus process start time; readiness is not a cross-process checkpoint; daemons are never auto-stopped (users run `stop`), and liveness checks are on demand, not a background scheduler.
+
+### Tool-specific notes
+
+- **Jira**: connection config is HOCON, selected whole-file from `--config`, `./.jira/local_jira_config.conf`, or `~/.jira/local_jira_config.conf` (no merging). Only `JIRA_API_TOKEN` comes from the environment. Cloud defaults to REST v3 (ADF descriptions), Data Center to v2; Markdown conversion is covered by golden-file tests.
+- **Depmap**: uses the embedded Maven 3.9.14 Java API; it does not spawn `mvn` or run the target project's lifecycle.
+- **Gather**: reuses `core.environment.EnvironmentGatherer`; the module only adds prompt assembly and clipboard output.
+
+## Conventions
+
+The canonical repository rules are in `.github/copilot-instructions.md`. Key points:
+
+- **Java 21 only**: `release=21` is enforced. Do not use Java 22+ syntax/APIs (unnamed variables `_`, `Stream.gather`, `ScopedValue`, ClassFile API). Prefer records, sealed types/pattern matching/switch expressions, text blocks for prompts, virtual threads for blocking waits, and try-with-resources.
+- **Libraries**: picocli (`@Command`) for CLIs; Typesafe Config for HOCON; SnakeYAML Engine for task YAML. Do not introduce Jackson for configuration mapping.
+- **Formatting**: Spotless with google-java-format AOSP style (4-space) runs at `verify`; fix with `mvn spotless:apply`. Do not hand-adjust wrapping/indentation.
+- **Static analysis**: SpotBugs runs at `verify`. Lines prefixed `[ERROR]` in its output are report content, not build failures; judge the gate only by `verify.sh`'s exit code and `BUILD SUCCESS`. Do not suppress warnings to clean the report.
+- **Tests**: test-on-touch — add the smallest test for each change; no repo-wide backfill. Keep test files under 150 lines and put large expected output in `src/test/resources` golden files. Never delete tests, weaken assertions, or add `@Disabled`/`assumeTrue` to make the build green.
+- **Documentation**: all docs are bilingual — Chinese first, English second, with `[中文](#中文) | [English](#english)` navigation at the top; keep both in sync. Usage guides live in module-root `README.md`; architecture lives in `docs/<module path>/architecture.md`; root `readme.MD` stays short and `docs/architecture.md` is only an index. Storage design details are in `docs/design/relational-storage.md`.
+- **Build hygiene**: modules with internal code dependencies must build through the root reactor (`--also-make`); do not add the internal BOM as a runtime dependency. `.worktree/` contains separate git worktrees — do not edit it, and ignore generated `target/`.
