@@ -17,7 +17,7 @@ bash integration-test/run-jira.sh --help
 java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 ```
 
-`build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|gather|jira|depmap|cli|dist` 按需构建，`--clean` 可清理所选模块的旧产物；`dist` 目标始终先清理再打包。`run.sh` 保留组合式 CLI 兼容入口；`run-jira.sh` 只构建和运行 Jira。两个启动脚本都复用 `build.sh`，不会修改父终端的环境变量。可选安装与发行包见 [发行与安装](devpulse-dist/README.md)。运行 JAR 需要 Java 21 或更高版本；实际执行 `pulse`、`gather` 和 `status --tools` 还需要 Bash。
+`build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|gather|jira|cli|dist` 按需构建，`--clean` 可清理所选模块的旧产物；`dist` 目标始终先清理再打包。`run.sh` 保留组合式 CLI 兼容入口；`run-jira.sh` 只构建和运行 Jira。两个启动脚本都复用 `build.sh`，不会修改父终端的环境变量。可选安装与发行包见 [发行与安装](devpulse-dist/README.md)。运行 JAR 需要 Java 21 或更高版本；实际执行 `pulse`、`gather` 和 `status --tools` 还需要 Bash。
 
 ### 产品定位
 
@@ -33,7 +33,6 @@ devpulse 面向"**本地、无容器、Bash 原生、有状态**"的任务编排
 | [兼容 CLI 使用说明](devpulse-cli/README.md) | 组合式入口与命令导航 |
 | [发行与安装](devpulse-dist/README.md) | 本地构建安装、升级与卸载 |
 | [Jira 使用说明](devpulse-plugins/jira/README.md) | 连接配置、Issue 操作与 Markdown 边界 |
-| [Depmap 使用说明](devpulse-plugins/depmap/README.md) | 项目及插件依赖树与 JSON 导出 |
 | [模块架构导航](docs/architecture.md) | 按 Maven 模块组织的架构设计 |
 | [产品定位与竞品分析](docs/design/positioning.md) | 与 shell 的边界、竞品对比与产品设计准则 |
 | [Copilot 仓库指令](.github/copilot-instructions.md) | 技术栈、编码、文档及构建规范 |
@@ -49,7 +48,6 @@ devpulse-plugins/        插件聚合模块
   pulse/                 独立的 Pulse CLI
   gather/                独立的 Gather CLI
   jira/                  独立的 Jira CLI
-  depmap/                独立的 Maven 依赖盘点 CLI
 devpulse-cli/            组合式 CLI 兼容入口
 devpulse-dist/           可选工具发行包
 ```
@@ -71,8 +69,8 @@ bash integration-test/run-jira.sh --help
 java -jar devpulse-plugins/pulse/target/devpulse-pulse.jar --help
 ```
 
-`build.sh` builds every module by default, or use `bash build.sh pulse|gather|gatherer|jira|depmap|cli|dist` to build a selected target; `--clean` removes its previous output. `run.sh` preserves the combined CLI for compatibility, while `integration-test/jira/run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. Run [integration tests](integration-test/README.md) with `bash integration-test/run.sh jira`; they are offline by default and require explicit authorization for live Jira writes. See [distribution and installation](devpulse-dist/README.md) for selective installation. Running the JARs requires Java 21 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
-`build.sh` builds every module by default, or use `bash build.sh pulse|gather|jira|depmap|cli|dist` to build a selected target; `--clean` removes its previous output, while `dist` always cleans before packaging. `run.sh` preserves the combined CLI for compatibility, while `run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. See [distribution and installation](devpulse-dist/README.md) for selective installation. Running the JARs requires Java 21 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
+`build.sh` builds every module by default, or use `bash build.sh pulse|gather|gatherer|jira|cli|dist` to build a selected target; `--clean` removes its previous output. `run.sh` preserves the combined CLI for compatibility, while `integration-test/jira/run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. Run [integration tests](integration-test/README.md) with `bash integration-test/run.sh jira`; they are offline by default and require explicit authorization for live Jira writes. See [distribution and installation](devpulse-dist/README.md) for selective installation. Running the JARs requires Java 21 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
+`build.sh` builds every module by default, or use `bash build.sh pulse|gather|jira|cli|dist` to build a selected target; `--clean` removes its previous output, while `dist` always cleans before packaging. `run.sh` preserves the combined CLI for compatibility, while `run-jira.sh` builds and launches only Jira. Both launchers use `build.sh` and do not change the parent shell's environment. See [distribution and installation](devpulse-dist/README.md) for selective installation. Running the JARs requires Java 21 or later; actual `pulse` execution, `gather`, and `status --tools` also require Bash.
 
 ### Positioning
 
@@ -88,7 +86,6 @@ devpulse targets task orchestration that is **local, container-free, native to B
 | [Compatibility CLI guide](devpulse-cli/README.md) | Combined entry point and command navigation |
 | [Distribution and installation](devpulse-dist/README.md) | Local build installation, upgrades, and removal |
 | [Jira guide](devpulse-plugins/jira/README.md) | Connection configuration, issue operations, and Markdown boundaries |
-| [Depmap guide](devpulse-plugins/depmap/README.md) | Project/plugin dependency trees and JSON export |
 | [Module architecture index](docs/architecture.md) | Architecture organized by Maven module |
 | [Product positioning](docs/design/positioning.md) | Shell boundaries, competitors, and product design rules |
 | [Copilot repository instructions](.github/copilot-instructions.md) | Technology stack, coding, documentation, and build conventions |
@@ -104,7 +101,6 @@ devpulse-plugins/        Plugin aggregator
   pulse/                 Standalone Pulse CLI
   gather/                Standalone Gather CLI
   jira/                  Standalone Jira CLI
-  depmap/                Standalone Maven dependency inventory CLI
 devpulse-cli/            Combined compatibility CLI
 devpulse-dist/           Selective tool archives
 ```

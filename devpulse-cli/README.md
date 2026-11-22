@@ -58,7 +58,7 @@ java -jar devpulse-cli\target\devpulse.jar gather --help
 
 ### 各命令使用说明
 
-工作流命令与 YAML 配置见 [Pulse](../devpulse-plugins/pulse/README.md)，环境盘点与 AI 提示词见 [Gather](../devpulse-plugins/gather/README.md)。Jira 与 Depmap 不属于组合入口，请分别参阅 [Jira](../devpulse-plugins/jira/README.md) 和 [Depmap](../devpulse-plugins/depmap/README.md)。
+工作流命令与 YAML 配置见 [Pulse](../devpulse-plugins/pulse/README.md)，环境盘点与 AI 提示词见 [Gather](../devpulse-plugins/gather/README.md)。Jira 不属于组合入口，请参阅 [Jira](../devpulse-plugins/jira/README.md)。
 
 [架构设计](../docs/devpulse-cli/architecture.md)
 
@@ -118,6 +118,6 @@ java -jar devpulse-cli\target\devpulse.jar gather --help
 
 ### Command guides
 
-See [Pulse](../devpulse-plugins/pulse/README.md) for workflow commands and YAML configuration, and [Gather](../devpulse-plugins/gather/README.md) for inventory and AI prompts. Jira and Depmap are not part of the combined entry point; see [Jira](../devpulse-plugins/jira/README.md) and [Depmap](../devpulse-plugins/depmap/README.md) separately.
+See [Pulse](../devpulse-plugins/pulse/README.md) for workflow commands and YAML configuration, and [Gather](../devpulse-plugins/gather/README.md) for inventory and AI prompts. Jira is not part of the combined entry point; see [Jira](../devpulse-plugins/jira/README.md).
 
 [Architecture](../docs/devpulse-cli/architecture.md)

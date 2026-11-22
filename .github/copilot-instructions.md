@@ -57,7 +57,7 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 ### 测试
 
-- 测试是可信度门禁的一部分，不是可选项。现状：`jira` 与 `core` 有测试，`pulse`、`depmap`、`gather` 没有。
+- 测试是可信度门禁的一部分，不是可选项。现状：`jira` 与 `core` 有测试，`pulse`、`gather` 没有。
 - 采用 **test-on-touch**：修改哪个模块，就为该次改动补最小测试；不要求为全仓补齐测试。优先覆盖纯函数、边界条件和错误路径，而不是输出字符串。
 - 控制测试体积：单个测试文件不超过 150 行；大段期望输出放到 `src/test/resources` 下的黄金文件，不要内联为 Java 文本块。
 - 禁止快照膨胀：不要新增「用一个巨大文本块断言整个输出」的测试，改用黄金文件用例。
@@ -126,7 +126,7 @@ In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash buil
 
 ### Testing
 
-- Tests are part of the trust gate, not optional. Current state: `jira` and `core` have tests, while `pulse`, `depmap`, and `gather` have none.
+- Tests are part of the trust gate, not optional. Current state: `jira` and `core` have tests, while `pulse` and `gather` have none.
 - Use **test-on-touch**: when you change a module, add the smallest test for that change; do not backfill tests across the whole repository. Prefer pure functions, boundary conditions, and error paths over rendered output strings.
 - Keep tests small: a test file stays under 150 lines; put large expected output in golden files under `src/test/resources` instead of inline Java text blocks.
 - No snapshot bloat: do not add a test that asserts an entire output with one huge text block; add a golden-file case instead.

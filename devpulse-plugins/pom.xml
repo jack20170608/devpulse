@@ -17,7 +17,6 @@
         <module>pulse</module>
         <module>gather</module>
         <module>jira</module>
-        <module>depmap</module>
     </modules>
 
     <dependencies>

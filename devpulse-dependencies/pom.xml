@@ -27,8 +27,6 @@
         <mockito.version>5.5.0</mockito.version>
         <assertj.version>3.24.2</assertj.version>
         <commons3.version>3.22.0</commons3.version>
-        <maven-embedded.version>3.9.14</maven-embedded.version>
-        <maven-resolver.version>1.9.27</maven-resolver.version>
         <jdbi3.version>3.53.0</jdbi3.version>
         <hikariCP.version>7.0.2</hikariCP.version>
         <slf4j.version>1.7.36</slf4j.version>
@@ -52,26 +50,6 @@
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-lang3</artifactId>
                 <version>${commons3.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.maven</groupId>
-                <artifactId>maven-embedder</artifactId>
-                <version>${maven-embedded.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.maven.resolver</groupId>
-                <artifactId>maven-resolver-connector-basic</artifactId>
-                <version>${maven-resolver.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.maven.resolver</groupId>
-                <artifactId>maven-resolver-transport-file</artifactId>
-                <version>${maven-resolver.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.maven.resolver</groupId>
-                <artifactId>maven-resolver-transport-http</artifactId>
-                <version>${maven-resolver.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
