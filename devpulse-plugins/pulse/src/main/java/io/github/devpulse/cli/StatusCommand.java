@@ -4,12 +4,12 @@ import io.github.devpulse.core.bash.DaemonManager;
 import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.environment.EnvironmentGatherer;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Callable;
@@ -135,30 +135,11 @@ public final class StatusCommand implements Callable<Integer> {
             if (run != null) {
                 return display(history, history.get(run), json, filter);
             }
-            var records = history.list();
-            if (records.isEmpty()) {
-                if (log != null) {
-                    // Asking for a log implies a run exists; reporting a list view would answer a
-                    // question that was not asked.
-                    return CommandOutput.fail(
-                            json,
-                            out,
-                            err,
-                            "status",
-                            ExitCodes.TARGET_INVALID,
-                            "TARGET_INVALID",
-                            "No pulse executions recorded; nothing to read a log from.",
-                            null);
-                }
-                if (json) {
-                    out.println(StatusJson.list(records, Instant.now()));
-                    out.flush();
-                    return ExitCodes.OK;
-                }
-                out.println("No pulse executions recorded. Run pulse first.");
-                return ExitCodes.OK;
-            }
             if (list) {
+                var records = history.list();
+                if (records.isEmpty()) {
+                    return noRuns(json, out, err, log);
+                }
                 var now = Instant.now();
                 if (json) {
                     out.println(StatusJson.list(records, now));
@@ -191,7 +172,11 @@ public final class StatusCommand implements Callable<Integer> {
                 }
                 return ExitCodes.OK;
             }
-            return display(history, records.getFirst(), json, filter);
+            var latest = history.latest();
+            if (latest.isEmpty()) {
+                return noRuns(json, out, err, log);
+            }
+            return display(history, latest.get(), json, filter);
         } catch (IOException exception) {
             // RunHistory reports an unusable --run with these two messages; everything else is a
             // failure to read local infrastructure.
@@ -210,6 +195,32 @@ public final class StatusCommand implements Callable<Integer> {
         } catch (InterruptedException exception) {
             return CommandOutput.interrupted(json, out, err, "status", "interrupted.");
         }
+    }
+
+    /**
+     * Report that the project has no recorded run. Asking for a log implies a run exists, so that
+     * case fails instead of describing an empty history.
+     */
+    private static int noRuns(boolean json, PrintWriter out, PrintWriter err, String log)
+            throws IOException {
+        if (log != null) {
+            return CommandOutput.fail(
+                    json,
+                    out,
+                    err,
+                    "status",
+                    ExitCodes.TARGET_INVALID,
+                    "TARGET_INVALID",
+                    "No pulse executions recorded; nothing to read a log from.",
+                    null);
+        }
+        if (json) {
+            out.println(StatusJson.list(List.of(), Instant.now()));
+            out.flush();
+            return ExitCodes.OK;
+        }
+        out.println("No pulse executions recorded. Run pulse first.");
+        return ExitCodes.OK;
     }
 
     private int display(
@@ -290,12 +301,9 @@ public final class StatusCommand implements Callable<Integer> {
             return ExitCodes.OK;
         }
         var runDirectory = history.runDirectory(snapshot);
-        var daemons = new LinkedHashMap<String, List<DaemonManager.Instance>>();
-        for (var task : snapshot.tasks()) {
-            if (DaemonManager.recorded(runDirectory, task.id())) {
-                daemons.put(task.id(), DaemonManager.instances(runDirectory, task.id()));
-            }
-        }
+        var daemons =
+                DaemonManager.instances(
+                        runDirectory, snapshot.tasks().stream().map(task -> task.id()).toList());
         var now = Instant.now();
         if (json) {
             out.println(StatusJson.run(snapshot, daemons, item.warning(), now));

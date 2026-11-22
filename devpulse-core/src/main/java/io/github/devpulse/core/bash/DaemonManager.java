@@ -16,7 +16,10 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -232,6 +235,36 @@ public final class DaemonManager {
             result.add(new Instance(record.instanceId(), record.attempt(), observe(record)));
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Every recorded daemon instance of one run, grouped by task id.
+     *
+     * <p>A per-task lookup opens and migrates the run store each time, so asking for several tasks
+     * meant paying that cost repeatedly. This reads the store once, which keeps the cost of {@code
+     * status} from growing with the number of daemon tasks.
+     */
+    public static Map<String, List<Instance>> instances(Path directory, Collection<String> taskIds)
+            throws IOException, InterruptedException {
+        var runId = directory.getFileName().toString();
+        var grouped = new LinkedHashMap<String, List<Instance>>();
+        try (var store = storeForRunDirectory(directory)) {
+            for (var taskId : taskIds) {
+                var found = new ArrayList<Instance>();
+                for (var record : store.daemons(runId, taskId)) {
+                    var converted = toRecord(directory, record);
+                    found.add(
+                            new Instance(
+                                    converted.instanceId(),
+                                    converted.attempt(),
+                                    observe(converted)));
+                }
+                if (!found.isEmpty()) {
+                    grouped.put(taskId, List.copyOf(found));
+                }
+            }
+        }
+        return grouped;
     }
 
     private static Observation observe(Record record) throws InterruptedException {

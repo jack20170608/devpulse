@@ -131,8 +131,20 @@ final class Schema {
 
     private Schema() {}
 
-    /** Apply every migration the store is missing, in one transaction. */
+    /**
+     * Apply every migration the store is missing, in one transaction.
+     *
+     * <p>A store already at {@link #VERSION} is left untouched: migrating it again would commit an
+     * empty DDL transaction on every open, which costs more than the read the open exists for.
+     */
     static void migrate(Jdbi jdbi) throws IOException {
+        try {
+            if (jdbi.withHandle(Schema::isCurrent)) {
+                return;
+            }
+        } catch (JdbiException ignored) {
+            // No readable schema_version yet: the full migration below creates it.
+        }
         try {
             jdbi.useTransaction(handle -> {
                 handle.execute(
@@ -167,6 +179,23 @@ final class Schema {
             throw new IOException(
                     "Cannot migrate the run store: " + exception.getMessage(), exception);
         }
+    }
+
+    /**
+     * Whether the store already carries the version this build expects.
+     *
+     * <p>H2 stores unquoted identifiers uppercase, so the table lookup asks for {@code
+     * SCHEMA_VERSION}. A version above {@link #VERSION} is not current: the full migration reports
+     * it instead of silently ignoring a newer store.
+     */
+    private static boolean isCurrent(Handle handle) {
+        var present =
+                handle.createQuery(
+                                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+                                        + "WHERE TABLE_NAME = 'SCHEMA_VERSION'")
+                        .mapTo(Integer.class)
+                        .one();
+        return present > 0 && currentVersion(handle) == VERSION;
     }
 
     static int currentVersion(Jdbi jdbi) throws IOException {

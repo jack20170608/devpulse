@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 public final class RunHistory {
@@ -212,6 +213,20 @@ public final class RunHistory {
             result.add(observe(run.id()));
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * The newest recorded run, or empty when the project has none.
+     *
+     * <p>Callers that show only the latest run must use this instead of {@link #list()}: the full
+     * list observes every recorded run, so its cost grows with the history, while this reads one.
+     */
+    public Optional<Observation> latest() throws IOException {
+        var newest = store().runs(null, 1);
+        if (newest.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(observe(newest.getFirst().id()));
     }
 
     /**

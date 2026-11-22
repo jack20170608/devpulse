@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,10 +22,12 @@ class RunStoreTest {
     private static final Instant BASE = Instant.parse("2026-11-20T00:00:00Z");
 
     private RunStore store;
+    private String url;
 
     @BeforeEach
     void open() throws IOException {
-        store = JdbiRunStore.open("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
+        url = "jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
+        store = JdbiRunStore.open(url);
         store.migrate();
     }
 
@@ -105,6 +110,24 @@ class RunStoreTest {
         assertThat(store.schemaVersion()).isEqualTo(Schema.VERSION);
         store.migrate();
         assertThat(store.schemaVersion()).isEqualTo(Schema.VERSION);
+    }
+
+    /**
+     * The version shortcut must not hide a store written by a newer build: skipping the migration
+     * there would let this build read a schema it does not understand.
+     */
+    @Test
+    void stillRejectsAStoreNewerThanThisBuild() throws IOException {
+        try (var handle = Jdbi.create(url, "sa", "").open()) {
+            handle.execute(
+                    "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+                    Schema.VERSION + 1,
+                    OffsetDateTime.now(ZoneOffset.UTC));
+        }
+
+        assertThatThrownBy(() -> store.migrate())
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("newer");
     }
 
     @Test
