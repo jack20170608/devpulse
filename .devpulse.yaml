@@ -7,7 +7,7 @@ tasks:
   build:
     cmd: "mvn package"
   help:
-    cmd: 'java -jar "devpulse-cli\target\devpulse.jar" --help'
+    cmd: 'java -jar "devpulse-cli/target/devpulse.jar" --help'
     needs: [build]
 
 pipelines:
