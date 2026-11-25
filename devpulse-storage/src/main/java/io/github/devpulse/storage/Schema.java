@@ -1,133 +1,34 @@
 package io.github.devpulse.storage;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.JdbiException;
 
 /**
- * Schema definition and ordered migrations, executed through JDBI.
+ * Applies the ordered schema migrations kept under {@code db/}.
  *
- * <p>Every schema change is a new numbered step in {@link #VERSION_1}; applied versions are
- * recorded in {@code schema_version}. Editing an existing step instead of adding one would silently
- * corrupt stores created by an earlier build.
+ * <p>The SQL lives in resources, not in this class: a migration is a file, and its number is the
+ * schema version it produces. Applied versions are recorded in {@code schema_version}. Never edit a
+ * shipped migration; add the next numbered file and bump {@link #VERSION}, or stores created by an
+ * earlier build silently diverge.
  */
 final class Schema {
     /** The version this build expects after migration. */
     static final int VERSION = 2;
 
-    private static final List<String> VERSION_1 =
-            List.of(
-                    """
-                    CREATE TABLE IF NOT EXISTS run (
-                        id VARCHAR(64) NOT NULL PRIMARY KEY,
-                        project VARCHAR(1024) NOT NULL,
-                        target VARCHAR(256) NOT NULL,
-                        parallelism INT NOT NULL,
-                        state VARCHAR(32) NOT NULL,
-                        executor_pid BIGINT NOT NULL,
-                        executor_started_at TIMESTAMP WITH TIME ZONE,
-                        started_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                        finished_at TIMESTAMP WITH TIME ZONE,
-                        bash VARCHAR(1024),
-                        tool_version VARCHAR(128),
-                        parent_run_id VARCHAR(64)
-                    )
-                    """,
-                    """
-                    CREATE INDEX IF NOT EXISTS run_project_started
-                        ON run (project, started_at)
-                    """,
-                    """
-                    CREATE TABLE IF NOT EXISTS task (
-                        run_id VARCHAR(64) NOT NULL,
-                        name VARCHAR(256) NOT NULL,
-                        task_id VARCHAR(64) NOT NULL,
-                        fingerprint VARCHAR(128),
-                        state VARCHAR(32) NOT NULL,
-                        exit_code INT,
-                        error VARCHAR(4096),
-                        started_at TIMESTAMP WITH TIME ZONE,
-                        finished_at TIMESTAMP WITH TIME ZONE,
-                        log_path VARCHAR(1024),
-                        reused_from VARCHAR(64),
-                        daemon_health VARCHAR(32),
-                        daemon_error VARCHAR(4096),
-                        daemon_checked_at TIMESTAMP WITH TIME ZONE,
-                        sort_order INT NOT NULL,
-                        PRIMARY KEY (run_id, name),
-                        CONSTRAINT task_run FOREIGN KEY (run_id) REFERENCES run (id)
-                            ON DELETE CASCADE,
-                        CONSTRAINT task_id_unique UNIQUE (run_id, task_id)
-                    )
-                    """,
-                    """
-                    CREATE TABLE IF NOT EXISTS task_need (
-                        run_id VARCHAR(64) NOT NULL,
-                        task_name VARCHAR(256) NOT NULL,
-                        need_name VARCHAR(256) NOT NULL,
-                        sort_order INT NOT NULL,
-                        PRIMARY KEY (run_id, task_name, need_name),
-                        CONSTRAINT need_task FOREIGN KEY (run_id, task_name)
-                            REFERENCES task (run_id, name) ON DELETE CASCADE
-                    )
-                    """,
-                    """
-                    CREATE TABLE IF NOT EXISTS task_result (
-                        name VARCHAR(256) NOT NULL,
-                        fingerprint VARCHAR(128) NOT NULL,
-                        run_id VARCHAR(64),
-                        finished_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                        PRIMARY KEY (name, fingerprint),
-                        CONSTRAINT result_run FOREIGN KEY (run_id) REFERENCES run (id)
-                            ON DELETE SET NULL
-                    )
-                    """,
-                    """
-                    CREATE INDEX IF NOT EXISTS task_result_name ON task_result (name)
-                    """);
+    /** Applied before the numbered steps, because they record themselves in this table. */
+    private static final String BOOTSTRAP = "db/bootstrap/schema-version.sql";
 
-    /**
-     * Daemon instances move out of per-instance files and into the store.
-     *
-     * <p>{@code task_id} is the per-run node id, so an instance stays addressable by the same value
-     * the run's tasks use for their logs.
-     */
-    private static final List<String> VERSION_2 =
-            List.of(
-                    """
-                    CREATE TABLE IF NOT EXISTS daemon_instance (
-                        run_id VARCHAR(64) NOT NULL,
-                        task_id VARCHAR(64) NOT NULL,
-                        instance_id VARCHAR(64) NOT NULL,
-                        attempt INT NOT NULL,
-                        name VARCHAR(256) NOT NULL,
-                        project VARCHAR(1024) NOT NULL,
-                        bash VARCHAR(1024) NOT NULL,
-                        pid BIGINT NOT NULL,
-                        process_started_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                        ready_command VARCHAR(4096) NOT NULL,
-                        stop_command VARCHAR(4096),
-                        stop_timeout_nanos BIGINT NOT NULL,
-                        interval_nanos BIGINT NOT NULL,
-                        timeout_nanos BIGINT NOT NULL,
-                        check_timeout_nanos BIGINT NOT NULL,
-                        ready_at TIMESTAMP WITH TIME ZONE,
-                        stopped_at TIMESTAMP WITH TIME ZONE,
-                        PRIMARY KEY (run_id, task_id, instance_id),
-                        CONSTRAINT daemon_run FOREIGN KEY (run_id) REFERENCES run (id)
-                            ON DELETE CASCADE,
-                        CONSTRAINT daemon_instance_unique UNIQUE (run_id, instance_id)
-                    )
-                    """,
-                    """
-                    CREATE INDEX IF NOT EXISTS daemon_task ON daemon_instance (run_id, task_id)
-                    """);
-
-    private static final List<List<String>> MIGRATIONS = List.of(VERSION_1, VERSION_2);
+    /** One resource per version: entry {@code i} produces version {@code i + 1}. */
+    static final List<String> MIGRATIONS =
+            List.of("db/migration/V1__run-and-task.sql", "db/migration/V2__daemon-instance.sql");
 
     private Schema() {}
 
@@ -147,13 +48,7 @@ final class Schema {
         }
         try {
             jdbi.useTransaction(handle -> {
-                handle.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS schema_version (
-                            version INT NOT NULL PRIMARY KEY,
-                            applied_at TIMESTAMP WITH TIME ZONE NOT NULL
-                        )
-                        """);
+                execute(handle, BOOTSTRAP);
                 var current = currentVersion(handle);
                 if (current > VERSION) {
                     throw new IllegalStateException(
@@ -164,9 +59,7 @@ final class Schema {
                                     + ").");
                 }
                 for (var version = current + 1; version <= VERSION; version++) {
-                    for (var sql : MIGRATIONS.get(version - 1)) {
-                        handle.execute(sql);
-                    }
+                    execute(handle, MIGRATIONS.get(version - 1));
                     handle.createUpdate(
                                     "INSERT INTO schema_version (version, applied_at) "
                                             + "VALUES (:version, :appliedAt)")
@@ -179,6 +72,71 @@ final class Schema {
             throw new IOException(
                     "Cannot migrate the run store: " + exception.getMessage(), exception);
         }
+    }
+
+    private static void execute(Handle handle, String resource) {
+        for (var statement : statements(read(resource))) {
+            handle.execute(statement);
+        }
+    }
+
+    /**
+     * Read one SQL resource from the classpath.
+     *
+     * <p>A missing resource is a packaging error rather than an I/O failure: the migrations ship in
+     * the same artifact as this class.
+     */
+    private static String read(String resource) {
+        try (InputStream stream = Schema.class.getClassLoader().getResourceAsStream(resource)) {
+            if (stream == null) {
+                throw new IllegalStateException("Missing schema resource: " + resource);
+            }
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot read schema resource: " + resource, exception);
+        }
+    }
+
+    /**
+     * Split a migration file into the statements JDBI executes one at a time.
+     *
+     * <p>Semicolons separate statements; line comments are dropped; a semicolon inside a quoted
+     * literal does not split, so a default value or a command containing one stays intact.
+     */
+    static List<String> statements(String sql) {
+        var statements = new ArrayList<String>();
+        var current = new StringBuilder();
+        var quoted = false;
+        for (var index = 0; index < sql.length(); index++) {
+            var character = sql.charAt(index);
+            if (!quoted
+                    && character == '-'
+                    && index + 1 < sql.length()
+                    && sql.charAt(index + 1) == '-') {
+                while (index < sql.length() && sql.charAt(index) != '\n') {
+                    index++;
+                }
+                continue;
+            }
+            if (character == '\'') {
+                quoted = !quoted;
+            }
+            if (character == ';' && !quoted) {
+                add(statements, current);
+                continue;
+            }
+            current.append(character);
+        }
+        add(statements, current);
+        return List.copyOf(statements);
+    }
+
+    private static void add(List<String> statements, StringBuilder current) {
+        var statement = current.toString().strip();
+        if (!statement.isEmpty()) {
+            statements.add(statement);
+        }
+        current.setLength(0);
     }
 
     /**

@@ -1040,6 +1040,9 @@
     },
     {
       "bundle": "sun.awt.resources.awt"
+    },
+    {
+      "glob": "db/**"
     }
   ]
 }
