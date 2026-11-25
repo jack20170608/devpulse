@@ -1,5 +1,7 @@
 package io.github.devpulse.storage;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import io.github.devpulse.storage.dao.DaemonInstanceDao;
 import io.github.devpulse.storage.dao.RunDao;
 import io.github.devpulse.storage.dao.TaskDao;
@@ -33,7 +35,15 @@ public final class JdbiRunStore implements RunStore {
     private final TaskResultDao resultDao;
     private final DaemonInstanceDao daemonDao;
 
+    /** Set when this store owns a connection pool that {@link #close()} must release. */
+    private final AutoCloseable closeable;
+
     private JdbiRunStore(Jdbi jdbi) {
+        this(jdbi, null);
+    }
+
+    private JdbiRunStore(Jdbi jdbi, AutoCloseable closeable) {
+        this.closeable = closeable;
         this.jdbi = jdbi;
         this.runDao = new RunDao(jdbi);
         this.taskDao = new TaskDao(jdbi);
@@ -58,6 +68,34 @@ public final class JdbiRunStore implements RunStore {
         return new JdbiRunStore(Jdbi.create(jdbcUrl, "sa", ""));
     }
 
+    /** Connections the pool keeps for a long-running caller. */
+    private static final int POOL_SIZE = 4;
+
+    /**
+     * Open a store behind a small connection pool.
+     *
+     * <p>A CLI command opens the store once and exits, so a pool would only add threads it never
+     * uses. A server does the opposite: without a pool every query opens a new H2 connection, which
+     * serialises badly under concurrent requests. Callers of this factory must close the store to
+     * release the pool.
+     */
+    public static JdbiRunStore pooled(String jdbcUrl) {
+        var config = new HikariConfig();
+        config.setJdbcUrl(jdbcUrl);
+        config.setUsername("sa");
+        config.setPassword("");
+        config.setMaximumPoolSize(POOL_SIZE);
+        config.setPoolName("devpulse-store");
+        var dataSource = new HikariDataSource(config);
+        return new JdbiRunStore(Jdbi.create(dataSource), dataSource);
+    }
+
+    /** Pooled variant of {@link #open(Path)}. */
+    public static JdbiRunStore pooled(Path file) {
+        var path = file.toAbsolutePath().toString().replace('\\', '/');
+        return pooled("jdbc:h2:file:" + path);
+    }
+
     @Override
     public void migrate() throws IOException {
         Schema.migrate(jdbi);
@@ -66,6 +104,16 @@ public final class JdbiRunStore implements RunStore {
     @Override
     public int schemaVersion() throws IOException {
         return Schema.currentVersion(jdbi);
+    }
+
+    /**
+     * The read side for listings and dashboards.
+     *
+     * <p>Shares this store's connections but not its types: {@link RunQueries} returns {@link
+     * RunSummary}, so a list column never forces a change to {@link RunRecord}.
+     */
+    public RunQueries queries() {
+        return new JdbiRunQueries(jdbi);
     }
 
     @Override
@@ -222,8 +270,17 @@ public final class JdbiRunStore implements RunStore {
     }
 
     @Override
-    public void close() {
-        // JDBI holds no connection of its own; each call opens and closes one.
+    public void close() throws IOException {
+        if (closeable == null) {
+            // JDBI holds no connection of its own; each call opens and closes one.
+            return;
+        }
+        try {
+            closeable.close();
+        } catch (Exception exception) {
+            throw new IOException(
+                    "Cannot close the run store: " + exception.getMessage(), exception);
+        }
     }
 
     private static TaskRecord withNeeds(TaskRecord task, List<String> needs) {

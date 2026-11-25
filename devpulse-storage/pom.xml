@@ -25,6 +25,11 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
         </dependency>
+        <!-- The server path opens the store behind a pool; CLI paths still open it directly. -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
         <!--
             JDBI logs through slf4j-api 2.x; the shared management pins slf4j-nop to the 1.7 line for
             the other tools, so this module names the matching 2.x binding explicitly. Without a

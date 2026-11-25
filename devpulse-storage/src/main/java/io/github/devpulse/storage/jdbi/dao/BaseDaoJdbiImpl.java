@@ -1,14 +1,9 @@
 package io.github.devpulse.storage.jdbi.dao;
 
-import io.github.devpulse.storage.jdbi.SearchCriteria;
 import io.github.devpulse.storage.jdbi.SqlGenerator;
 import io.github.devpulse.storage.jdbi.TableDescription;
-import io.github.devpulse.storage.jdbi.page.Page;
-import io.github.devpulse.storage.jdbi.page.Pageable;
-import io.github.devpulse.storage.jdbi.page.impl.PageImpl;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -20,7 +15,6 @@ import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.result.ResultIterable;
 import org.jdbi.v3.core.statement.Query;
 import org.jdbi.v3.core.statement.SqlStatement;
-import org.jdbi.v3.core.statement.Update;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,30 +88,6 @@ public abstract class BaseDaoJdbiImpl<T, K> implements BaseDao<T, K> {
     }
 
     @Override
-    public int update(String sql, Map<String, Object> params) {
-        return update(sql, params, null);
-    }
-
-    @Override
-    public int update(String sql, Map<String, Object> params, Map<String, ?> listParam) {
-        return update(sql, params, listParam, null);
-    }
-
-    @Override
-    public int update(
-            String sql,
-            Map<String, Object> params,
-            Map<String, ?> listParam,
-            Map<String, Object> beanParam) {
-        LOGGER.debug("Update sql=[{}].", sql);
-        return jdbi.withHandle(handle -> {
-            var update = handle.createUpdate(sql);
-            bindParamsForUpdate(update, params, listParam, beanParam);
-            return update.execute();
-        });
-    }
-
-    @Override
     public Optional<T> findOne(K key) {
         var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.selectByKey);
         LOGGER.debug("FindOne SQL=[{}].", sql);
@@ -144,87 +114,15 @@ public abstract class BaseDaoJdbiImpl<T, K> implements BaseDao<T, K> {
     }
 
     @Override
-    public List<T> find(SearchCriteria searchCriteria) {
-        return find(
-                sqlGenerator.select(table, searchCriteria),
-                searchCriteria.normalParams(),
-                searchCriteria.listParam());
-    }
-
-    @Override
-    public Page<T> find(SearchCriteria searchCriteria, Pageable pageable) {
-        int total = count(searchCriteria);
-        var rows =
-                find(
-                        sqlGenerator.select(table, searchCriteria, pageable),
-                        searchCriteria.normalParams(),
-                        searchCriteria.listParam());
-        return new PageImpl<>(rows, pageable, total);
-    }
-
-    @Override
-    public int count(SearchCriteria searchCriteria) {
-        return count(
-                sqlGenerator.count(table, searchCriteria),
-                searchCriteria.normalParams(),
-                searchCriteria.listParam());
-    }
-
-    @Override
-    public int count(String sql, Map<String, Object> params, Map<String, ?> listParam) {
-        LOGGER.debug("Count sql=[{}].", sql);
-        return jdbi.withHandle(handle -> {
-            var query = handle.createQuery(sql);
-            bindParamsForQuery(query, params, listParam);
-            return query.mapTo(Integer.class).one();
-        });
-    }
-
-    @Override
     public List<T> findAll() {
         var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.selectAll);
         return jdbi.withHandle(handle -> mapped(handle.createQuery(sql)).list());
     }
 
     @Override
-    public Page<T> findAll(Pageable pageable) {
-        SearchCriteria all = () -> "";
-        var rows =
-                find(
-                        sqlGenerator.select(table, all, pageable),
-                        all.normalParams(),
-                        all.listParam());
-        return new PageImpl<>(rows, pageable, (int) countAll());
-    }
-
-    @Override
-    public List<T> findAllByKeys(List<K> keys) {
-        var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.selectByKey);
-        return jdbi.inTransaction(handle -> {
-            var found = new ArrayList<T>(keys.size());
-            for (var key : keys) {
-                var query = handle.createQuery(sql);
-                bindKey(query, key);
-                mapped(query).findOne().ifPresent(found::add);
-            }
-            return List.copyOf(found);
-        });
-    }
-
-    @Override
     public long countAll() {
         var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.countAll);
         return jdbi.withHandle(handle -> handle.createQuery(sql).mapTo(Long.class).one());
-    }
-
-    @Override
-    public int delete(K key) {
-        var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.deleteByKey);
-        return jdbi.withHandle(handle -> {
-            var update = handle.createUpdate(sql);
-            bindKey(update, key);
-            return update.execute();
-        });
     }
 
     @Override
@@ -242,23 +140,20 @@ public abstract class BaseDaoJdbiImpl<T, K> implements BaseDao<T, K> {
     }
 
     @Override
-    public int delete(String sql, Map<String, Object> params, Map<String, ?> listParam) {
-        return update(sql, params, listParam);
+    public int delete(K key) {
+        var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.deleteByKey);
+        return jdbi.withHandle(handle -> {
+            var update = handle.createUpdate(sql);
+            bindKey(update, key);
+            return update.execute();
+        });
     }
 
-    @Override
-    public void deleteAll() {
-        var sql = getCachedSql(SqlGenerator.SQL_STATEMENT.deleteAll);
-        jdbi.useHandle(handle -> handle.createUpdate(sql).execute());
-    }
-
-    @Override
-    public String getCachedSql(SqlGenerator.SQL_STATEMENT sqlStatementType) {
+    private String getCachedSql(SqlGenerator.SQL_STATEMENT sqlStatementType) {
         return sqlCache.computeIfAbsent(
                 sqlStatementType,
                 key ->
                         switch (key) {
-                            case deleteAll -> sqlGenerator.deleteAll(table);
                             case deleteByKey -> sqlGenerator.deleteByKey(table);
                             case selectAll -> sqlGenerator.selectAll(table);
                             case selectByKey -> sqlGenerator.selectByKey(table);
@@ -290,24 +185,6 @@ public abstract class BaseDaoJdbiImpl<T, K> implements BaseDao<T, K> {
     @SuppressWarnings("unchecked")
     private K generatedKey(Long value) {
         return (K) value;
-    }
-
-    private void bindParamsForUpdate(
-            Update update,
-            Map<String, Object> params,
-            Map<String, ?> listParam,
-            Map<String, Object> beanParam) {
-        if (Objects.nonNull(listParam) && !listParam.isEmpty()) {
-            for (var entry : listParam.entrySet()) {
-                update.bindList(entry.getKey(), (List<?>) entry.getValue());
-            }
-        }
-        if (Objects.nonNull(params) && !params.isEmpty()) {
-            params.forEach(update::bind);
-        }
-        if (Objects.nonNull(beanParam) && !beanParam.isEmpty()) {
-            beanParam.forEach(update::bindBean);
-        }
     }
 
     private void bindParamsForQuery(

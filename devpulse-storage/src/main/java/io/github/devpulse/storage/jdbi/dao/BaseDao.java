@@ -1,9 +1,5 @@
 package io.github.devpulse.storage.jdbi.dao;
 
-import io.github.devpulse.storage.jdbi.SearchCriteria;
-import io.github.devpulse.storage.jdbi.SqlGenerator;
-import io.github.devpulse.storage.jdbi.page.Page;
-import io.github.devpulse.storage.jdbi.page.Pageable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,12 +12,14 @@ import org.jdbi.v3.core.HandleCallback;
  * composite one ({@code record TaskKey(String runId, String name)}). Its component names must match
  * the description's id fields, because keys bind as a bean named {@code k}.
  *
+ * <p>Deliberately narrow: the store reads with explicit SQL through {@link #find}, so the generic
+ * layer only owns statement generation for whole-entity CRUD. Queries with filtering, ordering or
+ * paging belong to the caller, where the SQL stays visible.
+ *
  * @param <T> entity type
  * @param <K> key type, matching the table description's id fields
  */
 public interface BaseDao<T, K> {
-
-    String getCachedSql(SqlGenerator.SQL_STATEMENT sqlStatementType);
 
     /** Insert one entity and return its key. */
     K create(T entity);
@@ -37,36 +35,14 @@ public interface BaseDao<T, K> {
     /** Update every non-key field of the entity identified by {@code key}. */
     int update(K key, T entity);
 
-    int update(String sql, Map<String, Object> params);
-
-    int update(String sql, Map<String, Object> params, Map<String, ?> listParam);
-
-    int update(
-            String sql,
-            Map<String, Object> params,
-            Map<String, ?> listParam,
-            Map<String, Object> beanParam);
-
     Optional<T> findOne(K key);
 
     boolean exists(K key);
 
-    List<T> find(SearchCriteria searchCriteria);
-
-    Page<T> find(SearchCriteria searchCriteria, Pageable pageable);
-
+    /** Run an explicit query, binding named parameters and named list parameters. */
     List<T> find(String sql, Map<String, Object> params, Map<String, ?> listParam);
 
-    int count(SearchCriteria searchCriteria);
-
-    int count(String sql, Map<String, Object> params, Map<String, ?> listParam);
-
     List<T> findAll();
-
-    Page<T> findAll(Pageable pageable);
-
-    /** Every entity matching one of the keys, in key order. */
-    List<T> findAllByKeys(List<K> keys);
 
     long countAll();
 
@@ -74,8 +50,4 @@ public interface BaseDao<T, K> {
 
     /** Delete by key, one statement per key, all in one transaction. */
     int delete(List<K> keys);
-
-    int delete(String sql, Map<String, Object> params, Map<String, ?> listParam);
-
-    void deleteAll();
 }
