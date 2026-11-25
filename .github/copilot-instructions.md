@@ -65,8 +65,10 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 
 ### 提交权限
 
-- 所有代码改动由使用者负责 review、`git add` 和提交。代理只修改工作区文件，不执行 `git add`、`git commit`、`git commit --amend` 或任何改写历史的命令。
-- 改动完成后，代理说明改了哪些文件、跑了哪些验证（如 `bash verify.sh`、原生冒烟），由使用者决定是否入库以及提交信息。
+- 代理**可以**执行 `git add` 与 `git commit`，但**每一次执行前都必须取得使用者确认**，不得先提交再报告。
+- 请求确认时需一次给全：要暂存/提交的文件清单、提交信息草稿、已通过的验证（如 `bash verify.sh`、原生冒烟）。
+- 未获确认时改动只留在工作区；不得自行决定提交范围或提交信息，也不得把未确认的改动夹带进已确认的提交。
+- 不得用 `git commit --amend`、`git reset`、`git rebase` 等命令改写历史，除非使用者明确要求。
 
 ### 完成定义
 
@@ -139,8 +141,10 @@ In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash buil
 
 ### Commit ownership
 
-- The user owns review, `git add`, and commits for every code change. Agents only modify working-tree files and never run `git add`, `git commit`, `git commit --amend`, or any command that rewrites history.
-- When a change is ready, the agent reports which files changed and which checks ran (`bash verify.sh`, the native smoke suite) and leaves the commit decision and message to the user.
+- Agents **may** run `git add` and `git commit`, but **every invocation needs the user's confirmation first**; never commit first and report afterwards.
+- The confirmation request must include, in one message: the files to stage or commit, a draft commit message, and the checks that passed (`bash verify.sh`, the native smoke suite).
+- Without that confirmation the change stays in the working tree. Never decide the commit scope or message unilaterally, and never fold unconfirmed changes into an approved commit.
+- Never rewrite history with `git commit --amend`, `git reset`, or `git rebase` unless the user explicitly asks.
 
 ### Definition of done
 
