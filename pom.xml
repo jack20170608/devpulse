@@ -22,6 +22,7 @@
         <module>devpulse-common</module>
         <module>devpulse-storage</module>
         <module>devpulse-core</module>
+        <module>devpulse-execution</module>
         <module>devpulse-plugins</module>
         <module>devpulse-cli</module>
         <module>devpulse-dist</module>

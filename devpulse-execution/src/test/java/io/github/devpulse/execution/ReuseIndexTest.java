@@ -1,4 +1,4 @@
-package io.github.devpulse.cli;
+package io.github.devpulse.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,7 +34,7 @@ class ReuseIndexTest {
             history.completed("build", RunHistory.State.SUCCESS, 0, null, Instant.now());
             history.ended(RunHistory.State.SUCCESS);
 
-            PulseCommand.recordReuse(history, Map.of("build", "fp-build"));
+            RunService.recordReuse(history, Map.of("build", "fp-build"));
 
             var found = history.store().successfulResult("build", "fp-build").orElseThrow();
             assertThat(found.runId()).isEqualTo(history.id());
@@ -48,7 +48,7 @@ class ReuseIndexTest {
             history.completed("build", RunHistory.State.FAILED, 3, "boom", Instant.now());
             history.ended(RunHistory.State.FAILED);
 
-            PulseCommand.recordReuse(history, Map.of("build", "fp-build"));
+            RunService.recordReuse(history, Map.of("build", "fp-build"));
 
             assertThat(history.store().successfulResult("build", "fp-build")).isEmpty();
         }
@@ -61,7 +61,7 @@ class ReuseIndexTest {
             history.completed("build", RunHistory.State.SUCCESS, 0, null, Instant.now());
             history.ended(RunHistory.State.SUCCESS);
 
-            PulseCommand.recordReuse(history, Map.of());
+            RunService.recordReuse(history, Map.of());
 
             assertThat(history.store().successfulResult("build", "fp-build")).isEmpty();
         }

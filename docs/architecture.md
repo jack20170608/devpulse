@@ -15,6 +15,7 @@
 | [`devpulse-common`](devpulse-common/architecture.md) | 跨模块共享通用代码 |
 | [`devpulse-core`](devpulse-core/architecture.md) | Java DAG、Bash 计划与运行时、历史、长驻进程及环境采集 |
 | [`devpulse-storage`](relational-storage.md) | 运行状态的关系型存储、schema 迁移与复用索引 |
+| [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹与运行编排 |
 | [`devpulse-plugins/pulse`](devpulse-plugins/pulse/architecture.md) | YAML 配置、任务命令与静态审阅 |
 | [`devpulse-plugins/gather`](devpulse-plugins/gather/architecture.md) | 环境提示词与剪贴板输出 |
 | [`devpulse-plugins/jira`](devpulse-plugins/jira/architecture.md) | Jira REST、连接配置与内容转换 |
@@ -43,6 +44,7 @@ The former monolithic architecture document has been split by Maven module; this
 | [`devpulse-common`](devpulse-common/architecture.md) | Shared common code |
 | [`devpulse-core`](devpulse-core/architecture.md) | Java DAG, Bash planning/runtime, history, daemons, and environment collection |
 | [`devpulse-storage`](relational-storage.md) | Relational run state, schema migrations, and the reuse index |
+| [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, and run orchestration |
 | [`devpulse-plugins/pulse`](devpulse-plugins/pulse/architecture.md) | YAML configuration, workflow commands, and static review |
 | [`devpulse-plugins/gather`](devpulse-plugins/gather/architecture.md) | Environment prompts and clipboard output |
 | [`devpulse-plugins/jira`](devpulse-plugins/jira/architecture.md) | Jira REST, connection configuration, and content conversion |
