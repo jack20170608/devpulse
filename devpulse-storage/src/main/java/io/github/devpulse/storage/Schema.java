@@ -21,14 +21,17 @@ import org.jdbi.v3.core.JdbiException;
  */
 final class Schema {
     /** The version this build expects after migration. */
-    static final int VERSION = 2;
+    static final int VERSION = 3;
 
     /** Applied before the numbered steps, because they record themselves in this table. */
     private static final String BOOTSTRAP = "db/bootstrap/schema-version.sql";
 
     /** One resource per version: entry {@code i} produces version {@code i + 1}. */
     static final List<String> MIGRATIONS =
-            List.of("db/migration/V1__run-and-task.sql", "db/migration/V2__daemon-instance.sql");
+            List.of(
+                    "db/migration/V1__run-and-task.sql",
+                    "db/migration/V2__daemon-instance.sql",
+                    "db/migration/V3__central-store.sql");
 
     private Schema() {}
 
@@ -59,6 +62,9 @@ final class Schema {
                                     + ").");
                 }
                 for (var version = current + 1; version <= VERSION; version++) {
+                    if (version == 3) {
+                        requireEmptyLegacyStore(handle);
+                    }
                     execute(handle, MIGRATIONS.get(version - 1));
                     handle.createUpdate(
                                     "INSERT INTO schema_version (version, applied_at) "
@@ -74,6 +80,32 @@ final class Schema {
         }
     }
 
+    /**
+     * Version 3 rebuilds the store from scratch, so it has no room for rows written by the
+     * per-project layout. Refusing here keeps an old store intact instead of silently dropping its
+     * history; the caller moves it aside or imports it.
+     */
+    private static void requireEmptyLegacyStore(Handle handle) {
+        var present =
+                handle.createQuery(
+                                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+                                        + "WHERE TABLE_NAME = 'RUN'")
+                        .mapTo(Integer.class)
+                        .one();
+        if (present == 0) {
+            return;
+        }
+        var rows = handle.createQuery("SELECT COUNT(*) FROM run").mapTo(Long.class).one();
+        if (rows > 0) {
+            throw new IllegalStateException(
+                    "This store holds "
+                            + rows
+                            + " run(s) recorded by the per-project layout, and version 3 rebuilds"
+                            + " it for a single central database. Move the .devpulse directory"
+                            + " aside and run again; existing history then needs the import tool.");
+        }
+    }
+
     private static void execute(Handle handle, String resource) {
         for (var statement : statements(read(resource))) {
             handle.execute(statement);
@@ -86,7 +118,7 @@ final class Schema {
      * <p>A missing resource is a packaging error rather than an I/O failure: the migrations ship in
      * the same artifact as this class.
      */
-    private static String read(String resource) {
+    static String read(String resource) {
         try (InputStream stream = Schema.class.getClassLoader().getResourceAsStream(resource)) {
             if (stream == null) {
                 throw new IllegalStateException("Missing schema resource: " + resource);

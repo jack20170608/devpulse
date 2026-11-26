@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 class RunQueriesTest {
 
     private static final Instant BASE = Instant.parse("2026-11-25T00:00:00Z");
+    private static final ProjectRecord PROJECT =
+            new ProjectRecord("proj", "/proj", "proj", BASE, BASE);
 
     @Test
     void listsRunsNewestFirstWithTaskTallies() throws IOException {
@@ -69,25 +71,30 @@ class RunQueriesTest {
 
     private static void seed(RunStore store) throws IOException {
         store.begin(
+                PROJECT,
                 run("r1", BASE, "SUCCESS"),
                 List.of(task("r1", "build", "SUCCESS"), task("r1", "test", "SUCCESS")));
         store.begin(
+                PROJECT,
                 run("r2", BASE.plusSeconds(60), "FAILED"),
                 List.of(task("r2", "build", "SUCCESS"), task("r2", "deploy", "FAILED")));
-        store.begin(run("r3", BASE.plusSeconds(120), "SUCCESS"), List.of());
+        store.begin(PROJECT, run("r3", BASE.plusSeconds(120), "SUCCESS"), List.of());
     }
 
     private static RunRecord run(String id, Instant startedAt, String state) {
         return new RunRecord(
                 id,
-                "/tmp/project",
+                PROJECT.id(),
                 "dev",
                 1,
                 state,
-                1L,
+                null,
                 startedAt,
                 startedAt,
                 startedAt.plusSeconds(1),
+                1L,
+                startedAt,
+                null,
                 "/bin/bash",
                 "0.1.5",
                 null);
@@ -98,18 +105,16 @@ class RunQueriesTest {
                 runId,
                 name,
                 name + "-id",
+                0,
                 "fp-" + name,
                 state,
                 0,
+                null,
                 null,
                 BASE,
                 BASE.plusSeconds(1),
                 "logs/" + name + ".log",
                 null,
-                null,
-                null,
-                null,
-                0,
                 List.of());
     }
 }

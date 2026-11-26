@@ -3,6 +3,7 @@ package io.github.devpulse.core.bash;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.devpulse.storage.JdbiRunStore;
+import io.github.devpulse.storage.ProjectRecord;
 import io.github.devpulse.storage.RunRecord;
 import io.github.devpulse.storage.TaskRecord;
 import java.io.IOException;
@@ -45,14 +46,16 @@ class RunHistoryTest {
                 project,
                 "newer",
                 BASE.plusSeconds(60),
-                List.of(task("newer", "test", List.of("build"))));
+                List.of(
+                        task("newer", "build", List.of()),
+                        task("newer", "test", List.of("build"))));
 
         var list = new RunHistory(project).list();
 
         assertThat(list).extracting(item -> item.snapshot().id()).containsExactly("newer", "older");
         assertThat(list.getFirst().snapshot().tasks())
-                .singleElement()
-                .satisfies(state -> assertThat(state.needs()).containsExactly("build"));
+                .anySatisfy(state -> assertThat(state.needs()).containsExactly("build"));
+        assertThat(list.getFirst().snapshot().tasks()).hasSize(2);
     }
 
     private static TaskRecord task(String runId, String name, List<String> needs) {
@@ -60,18 +63,16 @@ class RunHistoryTest {
                 runId,
                 name,
                 name + "-id",
+                0,
                 "fp-" + name,
                 "SUCCESS",
                 0,
+                null,
                 null,
                 BASE,
                 BASE.plusSeconds(1),
                 "logs/" + name + ".log",
                 null,
-                null,
-                null,
-                null,
-                0,
                 needs);
     }
 
@@ -81,16 +82,20 @@ class RunHistoryTest {
         try (var store = JdbiRunStore.open(project.resolve(".devpulse").resolve("state"))) {
             store.migrate();
             store.begin(
+                    new ProjectRecord("proj", project.toString(), "project", startedAt, startedAt),
                     new RunRecord(
                             id,
-                            project.toString(),
+                            "proj",
                             "dev",
                             1,
                             "SUCCESS",
-                            1234L,
+                            null,
                             startedAt,
                             startedAt,
                             startedAt.plusSeconds(1),
+                            1234L,
+                            startedAt,
+                            null,
                             "/bin/bash",
                             "0.1.5",
                             null),

@@ -16,7 +16,9 @@ import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueFactory;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagGraph;
+import io.github.devpulse.storage.DaemonRecord;
 import io.github.devpulse.storage.JdbiRunStore;
+import io.github.devpulse.storage.ProjectRecord;
 import io.github.devpulse.storage.RunRecord;
 import io.github.devpulse.storage.RunStore;
 import io.github.devpulse.storage.TaskRecord;
@@ -114,6 +116,7 @@ public final class RunHistory {
 
     private final Path project;
     private final Path runs;
+    private final String projectId;
     private RunStore store;
 
     public RunHistory(Path directory) throws IOException {
@@ -122,6 +125,14 @@ public final class RunHistory {
             throw new IOException("Project directory does not exist: " + project);
         }
         runs = project.resolve(".devpulse").resolve("runs");
+        projectId =
+                UUID.nameUUIDFromBytes(project.toString().getBytes(StandardCharsets.UTF_8))
+                        .toString();
+    }
+
+    /** The store identity of this project, derived from its canonical path. */
+    public String projectId() {
+        return projectId;
     }
 
     /** Open the run store on first use, so read-only commands never create one. */
@@ -195,8 +206,12 @@ public final class RunHistory {
                         .forEach((name, node) -> fingerprints.put(name, node.fingerprint()));
             }
             var opened = store();
-            opened.begin(runRecord(snapshot, manifest), taskRecords(snapshot, manifest));
-            var writer = new Writer(directory, channel, lock, snapshot, opened, fingerprints);
+            opened.begin(
+                    projectRecord(),
+                    runRecord(snapshot, manifest),
+                    taskRecords(snapshot, manifest));
+            var writer =
+                    new Writer(directory, channel, lock, snapshot, opened, fingerprints, projectId);
             if (manifest != null) {
                 writePlan(directory, id, manifest);
             }
@@ -353,17 +368,29 @@ public final class RunHistory {
         }
     }
 
-    private static RunRecord runRecord(Snapshot snapshot, PlanManifest manifest) {
+    private ProjectRecord projectRecord() {
+        var now = Instant.now();
+        var name =
+                project.getFileName() == null
+                        ? project.toString()
+                        : project.getFileName().toString();
+        return new ProjectRecord(projectId, project.toString(), name, now, now);
+    }
+
+    private RunRecord runRecord(Snapshot snapshot, PlanManifest manifest) {
         return new RunRecord(
                 snapshot.id(),
-                snapshot.project(),
+                projectId,
                 snapshot.target(),
                 snapshot.parallelism(),
                 snapshot.state().name(),
-                snapshot.executorPid(),
-                snapshot.executorStartedAt(),
+                null,
+                snapshot.startedAt(),
                 snapshot.startedAt(),
                 snapshot.finishedAt(),
+                snapshot.executorPid(),
+                snapshot.executorStartedAt(),
+                null,
                 manifest == null ? null : manifest.bash(),
                 manifest == null ? null : manifest.toolVersion(),
                 manifest == null ? null : manifest.parentRunId());
@@ -379,18 +406,16 @@ public final class RunHistory {
                             snapshot.id(),
                             task.name(),
                             task.id(),
+                            index,
                             node == null ? null : node.fingerprint(),
                             task.state().name(),
                             task.exitCode(),
                             task.error(),
+                            null,
                             task.startedAt(),
                             task.finishedAt(),
                             task.logPath(),
                             null,
-                            task.daemonHealth() == null ? null : task.daemonHealth().name(),
-                            task.daemonError(),
-                            task.daemonCheckedAt(),
-                            index,
                             task.needs()));
         }
         return result;
@@ -402,18 +427,16 @@ public final class RunHistory {
                 snapshot.id(),
                 task.name(),
                 task.id(),
+                snapshot.tasks().indexOf(task),
                 fingerprints.get(task.name()),
                 task.state().name(),
                 task.exitCode(),
                 task.error(),
+                null,
                 task.startedAt(),
                 task.finishedAt(),
                 task.logPath(),
                 null,
-                task.daemonHealth() == null ? null : task.daemonHealth().name(),
-                task.daemonError(),
-                task.daemonCheckedAt(),
-                snapshot.tasks().indexOf(task),
                 task.needs());
     }
 
@@ -428,28 +451,34 @@ public final class RunHistory {
 
     private Snapshot read(String id) throws IOException {
         var run = store().run(id).orElseThrow(() -> new IOException("Run not found: " + id));
-        return snapshotOf(run, store().tasks(id));
+        return snapshotOf(run, store().tasks(id), store().daemons(id));
     }
 
-    private static Snapshot snapshotOf(RunRecord run, List<TaskRecord> tasks) {
+    private Snapshot snapshotOf(RunRecord run, List<TaskRecord> tasks) {
+        return snapshotOf(run, tasks, Map.of());
+    }
+
+    private Snapshot snapshotOf(
+            RunRecord run, List<TaskRecord> tasks, Map<String, List<DaemonRecord>> daemons) {
         var states = new ArrayList<TaskState>(tasks.size());
         for (var task : tasks) {
-            states.add(taskState(task));
+            states.add(taskState(task, daemons.getOrDefault(task.taskId(), List.of())));
         }
         return new Snapshot(
                 run.id(),
                 run.target(),
-                run.project(),
+                project.toString(),
                 run.parallelism(),
-                run.executorPid(),
-                run.executorStartedAt(),
-                run.startedAt(),
+                run.workerPid() == null ? 0L : run.workerPid(),
+                run.workerStartedAt(),
+                run.startedAt() == null ? run.queuedAt() : run.startedAt(),
                 run.finishedAt(),
                 State.valueOf(run.state()),
                 states);
     }
 
-    private static TaskState taskState(TaskRecord task) {
+    private static TaskState taskState(TaskRecord task, List<DaemonRecord> instances) {
+        var latest = instances.isEmpty() ? null : instances.getLast();
         return new TaskState(
                 task.taskId(),
                 task.name(),
@@ -459,9 +488,11 @@ public final class RunHistory {
                 task.finishedAt(),
                 task.exitCode(),
                 task.error(),
-                task.daemonHealth() == null ? null : DagDaemon.Health.valueOf(task.daemonHealth()),
-                task.daemonError(),
-                task.daemonCheckedAt());
+                latest == null || latest.health() == null
+                        ? null
+                        : DagDaemon.Health.valueOf(latest.health()),
+                latest == null ? null : latest.healthError(),
+                latest == null ? null : latest.checkedAt());
     }
 
     private static Snapshot finish(Snapshot snapshot, State result) {
@@ -606,6 +637,7 @@ public final class RunHistory {
         private final FileLock lock;
         private final RunStore store;
         private final Map<String, String> fingerprints;
+        private final String projectId;
         private Snapshot snapshot;
 
         private Writer(
@@ -614,17 +646,24 @@ public final class RunHistory {
                 FileLock lock,
                 Snapshot snapshot,
                 RunStore store,
-                Map<String, String> fingerprints) {
+                Map<String, String> fingerprints,
+                String projectId) {
             this.directory = directory;
             this.channel = channel;
             this.lock = lock;
             this.snapshot = snapshot;
             this.store = store;
             this.fingerprints = fingerprints;
+            this.projectId = projectId;
         }
 
         public String id() {
             return snapshot.id();
+        }
+
+        /** The store identity of the project this run belongs to. */
+        public String projectId() {
+            return projectId;
         }
 
         /** The store backing this run, so a caller can consult the cross-run reuse index. */
@@ -736,6 +775,7 @@ public final class RunHistory {
                                 error,
                                 time));
                 saveTask(name);
+                store.recordDaemonHealth(snapshot.id(), task.id(), health.name(), error, time);
             }
         }
 

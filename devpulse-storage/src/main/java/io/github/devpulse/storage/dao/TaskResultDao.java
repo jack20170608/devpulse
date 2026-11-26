@@ -14,34 +14,37 @@ import org.jdbi.v3.core.Jdbi;
 /**
  * DAO for the {@code task_result} table, the cross-run reuse index.
  *
- * <p>Publishing a result is an upsert because one key keeps only its latest success, which the
- * generic CRUD base cannot express; the SQL lives here rather than in the caller.
+ * <p>The key includes the project: the same task name and fingerprint mean different things in
+ * different projects, so reuse must never cross that boundary.
  */
 public final class TaskResultDao extends BaseDaoJdbiImpl<TaskResult, TaskResultKey> {
+
     private static final String MERGE =
             """
-            MERGE INTO task_result (name, fingerprint, run_id, finished_at)
-            KEY (name, fingerprint)
-            VALUES (:name, :fingerprint, :runId, :finishedAt)
+            MERGE INTO task_result (project_id, name, fingerprint, run_id, finished_at)
+            KEY (project_id, name, fingerprint)
+            VALUES (:projectId, :name, :fingerprint, :runId, :finishedAt)
             """;
 
     private static final String SELECT_KEY =
             """
-            SELECT * FROM task_result WHERE name = :name AND fingerprint = :fingerprint
+            SELECT * FROM task_result
+            WHERE project_id = :projectId AND name = :name AND fingerprint = :fingerprint
             """;
 
     public TaskResultDao(Jdbi jdbi) {
         super(
                 description(),
                 jdbi,
-                result -> new TaskResultKey(result.name(), result.fingerprint()));
+                result ->
+                        new TaskResultKey(result.projectId(), result.name(), result.fingerprint()));
     }
 
     private static TableDescription description() {
         return TableDescription.builder()
                 .withName("task_result")
                 .withEntityClass(TaskResult.class)
-                .withIdFields(List.of("name", "fingerprint"))
+                .withIdFields(List.of("projectId", "name", "fingerprint"))
                 .build();
     }
 
@@ -49,6 +52,7 @@ public final class TaskResultDao extends BaseDaoJdbiImpl<TaskResult, TaskResultK
     public void merge(TaskResult result) {
         jdbi.useHandle(handle -> {
             var update = handle.createUpdate(MERGE);
+            Bindings.text(update, "projectId", result.projectId());
             Bindings.text(update, "name", result.name());
             Bindings.text(update, "fingerprint", result.fingerprint());
             Bindings.text(update, "runId", result.runId());
@@ -58,9 +62,10 @@ public final class TaskResultDao extends BaseDaoJdbiImpl<TaskResult, TaskResultK
     }
 
     /** The recorded success for this key, if any. */
-    public Optional<TaskResult> successful(String name, String fingerprint) {
+    public Optional<TaskResult> successful(String projectId, String name, String fingerprint) {
         return jdbi.withHandle(handle ->
                 handle.createQuery(SELECT_KEY)
+                        .bind("projectId", projectId)
                         .bind("name", name)
                         .bind("fingerprint", fingerprint)
                         .mapTo(TaskResult.class)
@@ -74,6 +79,7 @@ public final class TaskResultDao extends BaseDaoJdbiImpl<TaskResult, TaskResultK
 
     private static TaskResult map(ResultSet result) throws SQLException {
         return new TaskResult(
+                result.getString("project_id"),
                 result.getString("name"),
                 result.getString("fingerprint"),
                 result.getString("run_id"),

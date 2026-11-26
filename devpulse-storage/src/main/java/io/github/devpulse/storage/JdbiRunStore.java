@@ -3,9 +3,10 @@ package io.github.devpulse.storage;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.github.devpulse.storage.dao.DaemonInstanceDao;
+import io.github.devpulse.storage.dao.ProjectDao;
 import io.github.devpulse.storage.dao.RunDao;
 import io.github.devpulse.storage.dao.TaskDao;
-import io.github.devpulse.storage.dao.TaskNeedDao;
+import io.github.devpulse.storage.dao.TaskEdgeDao;
 import io.github.devpulse.storage.dao.TaskResultDao;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -20,18 +21,20 @@ import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.JdbiException;
 
 /**
- * A {@link RunStore} that composes one DAO per table.
+ * The {@link RunStore} implementation: one database, one DAO per table.
  *
  * <p>Every statement lives with the table it belongs to; this class only orders the calls and
- * translates JDBI failures into {@link IOException}. The one thing worth reading here is {@link
- * #begin}, which inserts a run, its tasks and their dependency edges in a single transaction so a
- * failed start leaves no row behind.
+ * translates JDBI failures into {@link IOException}. The method worth reading is {@link #begin},
+ * which writes the project, the run, its tasks and their edges in one transaction so a failed start
+ * leaves no row behind.
  */
 public final class JdbiRunStore implements RunStore {
+
     private final Jdbi jdbi;
+    private final ProjectDao projectDao;
     private final RunDao runDao;
     private final TaskDao taskDao;
-    private final TaskNeedDao needDao;
+    private final TaskEdgeDao edgeDao;
     private final TaskResultDao resultDao;
     private final DaemonInstanceDao daemonDao;
 
@@ -43,19 +46,19 @@ public final class JdbiRunStore implements RunStore {
     }
 
     private JdbiRunStore(Jdbi jdbi, AutoCloseable closeable) {
-        this.closeable = closeable;
         this.jdbi = jdbi;
+        this.closeable = closeable;
+        this.projectDao = new ProjectDao(jdbi);
         this.runDao = new RunDao(jdbi);
         this.taskDao = new TaskDao(jdbi);
-        this.needDao = new TaskNeedDao(jdbi);
+        this.edgeDao = new TaskEdgeDao(jdbi);
         this.resultDao = new TaskResultDao(jdbi);
         this.daemonDao = new DaemonInstanceDao(jdbi);
     }
 
     /** Open or create a store backed by one H2 file. */
     public static JdbiRunStore open(Path file) throws IOException {
-        var path = file.toAbsolutePath().toString().replace('\\', '/');
-        return open("jdbc:h2:file:" + path);
+        return open("jdbc:h2:file:" + file.toAbsolutePath().toString().replace('\\', '/'));
     }
 
     /**
@@ -92,18 +95,7 @@ public final class JdbiRunStore implements RunStore {
 
     /** Pooled variant of {@link #open(Path)}. */
     public static JdbiRunStore pooled(Path file) {
-        var path = file.toAbsolutePath().toString().replace('\\', '/');
-        return pooled("jdbc:h2:file:" + path);
-    }
-
-    @Override
-    public void migrate() throws IOException {
-        Schema.migrate(jdbi);
-    }
-
-    @Override
-    public int schemaVersion() throws IOException {
-        return Schema.currentVersion(jdbi);
+        return pooled("jdbc:h2:file:" + file.toAbsolutePath().toString().replace('\\', '/'));
     }
 
     /**
@@ -117,16 +109,31 @@ public final class JdbiRunStore implements RunStore {
     }
 
     @Override
-    public void begin(RunRecord run, List<TaskRecord> tasks) throws IOException {
+    public void migrate() throws IOException {
+        Schema.migrate(jdbi);
+    }
+
+    @Override
+    public int schemaVersion() throws IOException {
+        return Schema.currentVersion(jdbi);
+    }
+
+    @Override
+    public void begin(ProjectRecord project, RunRecord run, List<TaskRecord> tasks)
+            throws IOException {
         try {
             jdbi.useTransaction(handle -> {
+                projectDao.upsert(handle, project);
                 runDao.invokeCreate(run).withHandle(handle);
                 for (var task : tasks) {
                     taskDao.invokeCreate(task).withHandle(handle);
+                }
+                // Edges last: both endpoints must exist, and the table enforces that.
+                for (var task : tasks) {
                     var needs = task.needs();
                     for (var index = 0; index < needs.size(); index++) {
-                        needDao.invokeCreate(
-                                        new TaskNeedRecord(
+                        edgeDao.invokeCreate(
+                                        new TaskEdgeRecord(
                                                 task.runId(), task.name(), needs.get(index), index))
                                 .withHandle(handle);
                     }
@@ -174,9 +181,18 @@ public final class JdbiRunStore implements RunStore {
     }
 
     @Override
-    public List<RunRecord> runs(String project, int limit) throws IOException {
+    public List<RunRecord> runs(String projectId, int limit) throws IOException {
         try {
-            return runDao.list(project, limit);
+            return runDao.list(projectId, limit);
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public Optional<ProjectRecord> project(String id) throws IOException {
+        try {
+            return projectDao.find(id);
         } catch (JdbiException exception) {
             throw wrap(exception);
         }
@@ -185,11 +201,7 @@ public final class JdbiRunStore implements RunStore {
     @Override
     public List<TaskRecord> tasks(String runId) throws IOException {
         try {
-            var needs = new HashMap<String, List<String>>();
-            for (var need : needDao.byRun(runId)) {
-                needs.computeIfAbsent(need.taskName(), name -> new ArrayList<>())
-                        .add(need.needName());
-            }
+            var needs = needsByTask(edgeDao.byRun(runId));
             var result = new ArrayList<TaskRecord>();
             for (var task : taskDao.listByRun(runId)) {
                 result.add(withNeeds(task, needs.getOrDefault(task.name(), List.of())));
@@ -207,11 +219,11 @@ public final class JdbiRunStore implements RunStore {
         }
         try {
             var needsByRun = new HashMap<String, Map<String, List<String>>>();
-            for (var need : needDao.byRuns(runIds)) {
+            for (var edge : edgeDao.byRuns(runIds)) {
                 needsByRun
-                        .computeIfAbsent(need.runId(), id -> new HashMap<>())
-                        .computeIfAbsent(need.taskName(), name -> new ArrayList<>())
-                        .add(need.needName());
+                        .computeIfAbsent(edge.runId(), id -> new HashMap<>())
+                        .computeIfAbsent(edge.dependentName(), name -> new ArrayList<>())
+                        .add(edge.prerequisiteName());
             }
             var grouped = new LinkedHashMap<String, List<TaskRecord>>();
             for (var task : taskDao.listByRuns(runIds)) {
@@ -233,10 +245,10 @@ public final class JdbiRunStore implements RunStore {
     }
 
     @Override
-    public Optional<TaskResult> successfulResult(String name, String fingerprint)
+    public Optional<TaskResult> successfulResult(String projectId, String name, String fingerprint)
             throws IOException {
         try {
-            return resultDao.successful(name, fingerprint);
+            return resultDao.successful(projectId, name, fingerprint);
         } catch (JdbiException exception) {
             throw wrap(exception);
         }
@@ -270,6 +282,26 @@ public final class JdbiRunStore implements RunStore {
     }
 
     @Override
+    public Map<String, List<DaemonRecord>> daemons(String runId) throws IOException {
+        try {
+            return daemonDao.byRun(runId);
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public void recordDaemonHealth(
+            String runId, String taskId, String health, String error, Instant checkedAt)
+            throws IOException {
+        try {
+            daemonDao.updateHealth(runId, taskId, health, error, checkedAt);
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
     public void close() throws IOException {
         if (closeable == null) {
             // JDBI holds no connection of its own; each call opens and closes one.
@@ -283,23 +315,30 @@ public final class JdbiRunStore implements RunStore {
         }
     }
 
+    private static Map<String, List<String>> needsByTask(List<TaskEdgeRecord> edges) {
+        var needs = new HashMap<String, List<String>>();
+        for (var edge : edges) {
+            needs.computeIfAbsent(edge.dependentName(), name -> new ArrayList<>())
+                    .add(edge.prerequisiteName());
+        }
+        return needs;
+    }
+
     private static TaskRecord withNeeds(TaskRecord task, List<String> needs) {
         return new TaskRecord(
                 task.runId(),
                 task.name(),
                 task.taskId(),
+                task.seq(),
                 task.fingerprint(),
                 task.state(),
                 task.exitCode(),
                 task.error(),
+                task.errorKind(),
                 task.startedAt(),
                 task.finishedAt(),
                 task.logPath(),
                 task.reusedFrom(),
-                task.daemonHealth(),
-                task.daemonError(),
-                task.daemonCheckedAt(),
-                task.sortOrder(),
                 needs);
     }
 

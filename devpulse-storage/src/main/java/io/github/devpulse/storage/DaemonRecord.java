@@ -10,8 +10,11 @@ import java.time.Instant;
  *
  * @param taskId the per-run node id that owns this instance
  * @param processStartedAt start time of the process, used to tell a live process from a reused pid
+ * @param health the last recorded readiness state, or {@code null} if never checked
+ * @param healthError why the last check failed, or {@code null}
  * @param readyAt when readiness was first observed, or {@code null} if it never was
  * @param stoppedAt when a stop was observed, or {@code null} if it never was
+ * @param serverBootId the server boot that started this process, or null for a local run
  */
 public record DaemonRecord(
         String runId,
@@ -19,7 +22,6 @@ public record DaemonRecord(
         String instanceId,
         int attempt,
         String name,
-        String project,
         String bash,
         long pid,
         Instant processStartedAt,
@@ -29,5 +31,9 @@ public record DaemonRecord(
         long intervalNanos,
         long timeoutNanos,
         long checkTimeoutNanos,
+        String health,
+        String healthError,
+        Instant checkedAt,
         Instant readyAt,
-        Instant stoppedAt) {}
+        Instant stoppedAt,
+        String serverBootId) {}

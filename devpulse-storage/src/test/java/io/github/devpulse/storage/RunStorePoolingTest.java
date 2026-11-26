@@ -16,12 +16,15 @@ import org.junit.jupiter.api.Test;
  * them, which the direct (CLI) path never does.
  */
 class RunStorePoolingTest {
+    private static final Instant BASE = Instant.parse("2026-11-25T00:00:00Z");
+    private static final ProjectRecord PROJECT =
+            new ProjectRecord("proj", "/proj", "proj", BASE, BASE);
 
     @Test
     void pooledStoreReadsAndWritesLikeTheDirectOne() throws IOException {
         try (var store = JdbiRunStore.pooled(memoryUrl())) {
             store.migrate();
-            store.begin(run("r1"), List.of());
+            store.begin(PROJECT, run("r1"), List.of());
 
             assertThat(store.schemaVersion()).isEqualTo(Schema.VERSION);
             assertThat(store.run("r1")).isPresent();
@@ -34,7 +37,7 @@ class RunStorePoolingTest {
         try (var store = JdbiRunStore.pooled(memoryUrl());
                 var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             store.migrate();
-            store.begin(run("r1"), List.of());
+            store.begin(PROJECT, run("r1"), List.of());
 
             List<Callable<Integer>> reads =
                     IntStream.range(0, 16)
@@ -55,14 +58,17 @@ class RunStorePoolingTest {
         var started = Instant.parse("2026-11-25T00:00:00Z");
         return new RunRecord(
                 id,
-                "/tmp/project",
+                PROJECT.id(),
                 "dev",
                 1,
                 "SUCCESS",
-                1L,
+                null,
                 started,
                 started,
                 started.plusSeconds(1),
+                1L,
+                started,
+                null,
                 "/bin/bash",
                 "0.1.5",
                 null);

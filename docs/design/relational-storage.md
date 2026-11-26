@@ -64,38 +64,51 @@
 
 **约束**：引擎选择必须可替换。`RunStore` 是不可变接口，SQL 只出现在实现类与迁移脚本中。
 
-### 5. 数据模型
+### 5. 数据模型（v3，单库）
 
 ```text
-run(id PK, project, target, parallelism, state, executor_pid,
-    started_at, finished_at, bash, tool_version, parent_run_id)
+project(id PK, path UNIQUE, name, created_at, last_seen_at)
 
-task(run_id FK, name, fingerprint, state, exit_code, error,
-     started_at, finished_at, log_path, reused_from,
-     daemon_health, daemon_error, daemon_checked_at,
-     PRIMARY KEY (run_id, name))
+run(id PK, project_id FK, target, parallelism, state,
+    requested_by, queued_at, started_at, finished_at,
+    worker_pid, worker_started_at, server_boot_id,
+    bash, tool_version, parent_run_id)
 
-task_need(run_id, task_name, need_name,
-          PRIMARY KEY (run_id, task_name, need_name))
+task(run_id FK, name, task_id, seq, fingerprint, state, exit_code,
+     error, error_kind, started_at, finished_at, log_path, reused_from,
+     PRIMARY KEY (run_id, name), UNIQUE (run_id, task_id))
 
-daemon_instance(run_id, task_name, instance_id, attempt, pid, pid_started_at,
-                started_at, ready_at, stopped_at, stop_command,
-                PRIMARY KEY (run_id, task_name, instance_id))
+task_edge(run_id, dependent_name FK, prerequisite_name FK, seq,
+          PRIMARY KEY (run_id, dependent_name, prerequisite_name))
 
-task_result(name, fingerprint, run_id, finished_at,
-            PRIMARY KEY (name, fingerprint))
+daemon_instance(run_id, task_id FK, instance_id, attempt, name, bash, pid,
+                process_started_at, ready_command, stop_command,
+                stop_timeout_nanos, interval_nanos, timeout_nanos,
+                check_timeout_nanos, health, health_error, checked_at,
+                ready_at, stopped_at, server_boot_id,
+                PRIMARY KEY (run_id, task_id, instance_id),
+                UNIQUE (run_id, instance_id))
+
+task_result(project_id FK, name, fingerprint, run_id, finished_at,
+            PRIMARY KEY (project_id, name, fingerprint))
+
+run_event(run_id, seq, type, payload, at,
+          PRIMARY KEY (run_id, seq))
 
 schema_version(version, applied_at)
 ```
 
 设计要点：
 
-- **`task_need` 独立成表**，而不是把依赖序列化进 `task.needs`：web 端要按依赖关系查询与渲染，序列化字段查不了。
-- **`task_result` 是跨运行复用索引**，也是 retry 的替代品：键存在且成功即可跳过。它按 `(name, fingerprint)` 唯一，不绑定父运行。
+- **`project` 是一等实体**，路径（`toRealPath()`）唯一。字符串路径不是身份：软链与 Windows 大小写会把同一目录拆成两个项目。
+- **`task_edge` 独立成表**，而不是把依赖序列化进 `task.needs`：web 端要按依赖关系查询与渲染，序列化字段查不了。列名写出方向（dependent 依赖 prerequisite），两侧都有外键——v2 只约束了依赖方。
+- **`task_result` 是跨运行复用索引**，键为 `(project_id, name, fingerprint)`。项目必须进主键：同名同指纹的任务在不同项目里语义不同，跨项目复用必须禁止。
+- **daemon 健康从 `task` 移到 `daemon_instance`**：一张表不再承载两个实体。检查按任务发生、健康按实例存储，写入时由 store 解析"该任务的最新实例"。
+- **`run_event` 为断线重连预留**：`seq` 即 SSE 的 `Last-Event-ID`。本版本只建表，事件写入属于 server 阶段。
 - **日志正文不入库**，`log_path` 只存相对路径。日志是流式、可能很大、且需要 `tail` 语义，放文件更合适。
-- **`daemon_instance` 保留 `pid` + `pid_started_at`**：进程身份校验靠这两个字段，和现有 `Owner` 逻辑一致。
+- **`daemon_instance` 保留 `pid` + `process_started_at`**：进程身份校验靠这两个字段，和 `Owner` 逻辑一致。
 
-索引：`run(project, started_at DESC)`、`task(run_id)`、`task_result(name)`。
+索引：`run(project_id, started_at)`、`task(run_id, seq)`、`task_result(project_id, name)`、`run_event(at)`。
 
 ### 6. 并发与一致性
 
@@ -106,7 +119,7 @@ schema_version(version, applied_at)
 
 ### 7. 旧数据
 
-**不做迁移。** 现有 `.devpulse/runs/` 目录保留但不再被读取；文档说明可安全删除。理由是当前只有一个使用者，而迁移代码本身会成为需要长期维护的兼容负担。
+**不做迁移。** v3 迁移会检测旧 `run` 表是否仍有记录：有则拒绝执行并提示移走 `.devpulse` 目录，而不是静默丢数据。现有 `.devpulse/runs/` 目录保留但不再被读取；文档说明可安全删除。理由是当前只有一个使用者，而迁移代码本身会成为需要长期维护的兼容负担。
 
 ### 8. 对 retry 的影响
 
@@ -222,38 +235,51 @@ The engine keeps its role while storage becomes a reusable, independently testab
 
 **Constraint**: the engine must stay replaceable. `RunStore` is a stable interface, and SQL appears only in implementations and migration scripts.
 
-### 5. Data model
+### 5. Data model (v3, one database)
 
 ```text
-run(id PK, project, target, parallelism, state, executor_pid,
-    started_at, finished_at, bash, tool_version, parent_run_id)
+project(id PK, path UNIQUE, name, created_at, last_seen_at)
 
-task(run_id FK, name, fingerprint, state, exit_code, error,
-     started_at, finished_at, log_path, reused_from,
-     daemon_health, daemon_error, daemon_checked_at,
-     PRIMARY KEY (run_id, name))
+run(id PK, project_id FK, target, parallelism, state,
+    requested_by, queued_at, started_at, finished_at,
+    worker_pid, worker_started_at, server_boot_id,
+    bash, tool_version, parent_run_id)
 
-task_need(run_id, task_name, need_name,
-          PRIMARY KEY (run_id, task_name, need_name))
+task(run_id FK, name, task_id, seq, fingerprint, state, exit_code,
+     error, error_kind, started_at, finished_at, log_path, reused_from,
+     PRIMARY KEY (run_id, name), UNIQUE (run_id, task_id))
 
-daemon_instance(run_id, task_name, instance_id, attempt, pid, pid_started_at,
-                started_at, ready_at, stopped_at, stop_command,
-                PRIMARY KEY (run_id, task_name, instance_id))
+task_edge(run_id, dependent_name FK, prerequisite_name FK, seq,
+          PRIMARY KEY (run_id, dependent_name, prerequisite_name))
 
-task_result(name, fingerprint, run_id, finished_at,
-            PRIMARY KEY (name, fingerprint))
+daemon_instance(run_id, task_id FK, instance_id, attempt, name, bash, pid,
+                process_started_at, ready_command, stop_command,
+                stop_timeout_nanos, interval_nanos, timeout_nanos,
+                check_timeout_nanos, health, health_error, checked_at,
+                ready_at, stopped_at, server_boot_id,
+                PRIMARY KEY (run_id, task_id, instance_id),
+                UNIQUE (run_id, instance_id))
+
+task_result(project_id FK, name, fingerprint, run_id, finished_at,
+            PRIMARY KEY (project_id, name, fingerprint))
+
+run_event(run_id, seq, type, payload, at,
+          PRIMARY KEY (run_id, seq))
 
 schema_version(version, applied_at)
 ```
 
 Design notes:
 
-- **`task_need` is its own table** rather than a serialized column: a web client must query and render dependencies, and a serialized field cannot be queried.
-- **`task_result` is the cross-run reuse index** and the replacement for retry: a key that exists with a successful result can be skipped. It is keyed by `(name, fingerprint)` and bound to no parent run.
+- **`project` is a first-class entity**, unique by path from `toRealPath()`. A path string is not an identity: symlinks and Windows case folding split one directory into two projects.
+- **`task_edge` is its own table** rather than a serialized column: a web client must query and render dependencies, and a serialized field cannot be queried. The column names carry the direction, and both sides have foreign keys — v2 constrained only the dependent.
+- **`task_result` is the cross-run reuse index**, keyed by `(project_id, name, fingerprint)`. The project belongs in the key: the same task name and fingerprint mean different things in different projects, so reuse must never cross that boundary.
+- **Daemon health moved from `task` to `daemon_instance`**: one table no longer carries two entities. Checks happen per task while health is stored per instance, so the store resolves "the task's latest instance" on write.
+- **`run_event` is reserved for reconnects**: `seq` is SSE's `Last-Event-ID`. This version only creates the table; writing events belongs to the server stage.
 - **Log bodies stay out of the database**; `log_path` stores a relative path. Logs are streaming, potentially large, and need tail semantics.
-- **`daemon_instance` keeps `pid` and `pid_started_at`**: process identity verification uses exactly these two fields, matching the current `Owner` logic.
+- **`daemon_instance` keeps `pid` and `process_started_at`**: process identity verification uses exactly these two fields, matching the `Owner` logic.
 
-Indexes: `run(project, started_at DESC)`, `task(run_id)`, `task_result(name)`.
+Indexes: `run(project_id, started_at)`, `task(run_id, seq)`, `task_result(project_id, name)`, `run_event(at)`.
 
 ### 6. Concurrency and consistency
 
@@ -264,7 +290,7 @@ Indexes: `run(project, started_at DESC)`, `task(run_id)`, `task_result(name)`.
 
 ### 7. Legacy data
 
-**No migration.** The existing `.devpulse/runs/` directory is left in place but no longer read, and the documentation says it can be deleted. There is a single user today, and migration code would itself become a long-lived compatibility burden.
+**No migration.** The v3 migration checks whether the old `run` table still holds rows and refuses to run if it does, telling the user to move `.devpulse` aside instead of dropping data silently. The existing `.devpulse/runs/` directory is left in place but no longer read. There is a single user today, and migration code would itself become a long-lived compatibility burden.
 
 ### 8. Effect on retry
 

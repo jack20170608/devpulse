@@ -49,6 +49,12 @@ public final class Bindings {
     }
 
     /** Read a nullable integer column. */
+    /** A nullable BIGINT column, so a NULL pid does not read back as zero. */
+    public static Long longValue(ResultSet result, String column) throws SQLException {
+        var value = result.getLong(column);
+        return result.wasNull() ? null : value;
+    }
+
     public static Integer integer(ResultSet result, String column) throws SQLException {
         var value = result.getInt(column);
         return result.wasNull() ? null : value;

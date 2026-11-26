@@ -1,6 +1,6 @@
 # 客户端 / 服务端模型与 v3 存储设计 / Client-server model and v3 storage design
 
-**状态 / Status**：提案，未实现 / Proposal, not implemented
+**状态 / Status**：v3 数据模型已实现；服务端与客户端接口未实现 / v3 data model implemented; server and client surface not implemented
 
 [项目首页](../../readme.MD) | [中文](#中文) | [English](#english)
 

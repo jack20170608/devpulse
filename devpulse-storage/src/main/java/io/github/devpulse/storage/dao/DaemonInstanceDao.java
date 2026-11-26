@@ -8,22 +8,24 @@ import io.github.devpulse.storage.jdbi.dao.BaseDaoJdbiImpl;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
 import org.jdbi.v3.core.Jdbi;
 
-/** DAO for the {@code daemon_instance} table. */
+/** DAO for the {@code daemon_instance} table: one row per started daemon process. */
 public final class DaemonInstanceDao extends BaseDaoJdbiImpl<DaemonRecord, DaemonKey> {
+
     private static final String MERGE =
             """
             MERGE INTO daemon_instance (
-                run_id, task_id, instance_id, attempt, name, project, bash,
+                run_id, task_id, instance_id, attempt, name, bash,
                 pid, process_started_at, ready_command, stop_command, stop_timeout_nanos,
-                interval_nanos, timeout_nanos, check_timeout_nanos, ready_at, stopped_at)
+                interval_nanos, timeout_nanos, check_timeout_nanos,
+                health, health_error, checked_at, ready_at, stopped_at, server_boot_id)
             KEY (run_id, task_id, instance_id)
             VALUES (
-                :runId, :taskId, :instanceId, :attempt, :name, :project, :bash,
+                :runId, :taskId, :instanceId, :attempt, :name, :bash,
                 :pid, :processStartedAt, :readyCommand, :stopCommand, :stopTimeoutNanos,
-                :intervalNanos, :timeoutNanos, :checkTimeoutNanos, :readyAt, :stoppedAt)
+                :intervalNanos, :timeoutNanos, :checkTimeoutNanos,
+                :health, :healthError, :checkedAt, :readyAt, :stoppedAt, :serverBootId)
             """;
 
     private static final String BY_TASK =
@@ -58,7 +60,6 @@ public final class DaemonInstanceDao extends BaseDaoJdbiImpl<DaemonRecord, Daemo
             Bindings.text(update, "instanceId", record.instanceId());
             Bindings.number(update, "attempt", record.attempt());
             Bindings.text(update, "name", record.name());
-            Bindings.text(update, "project", record.project());
             Bindings.text(update, "bash", record.bash());
             update.bind("pid", record.pid());
             Bindings.instant(update, "processStartedAt", record.processStartedAt());
@@ -68,15 +69,72 @@ public final class DaemonInstanceDao extends BaseDaoJdbiImpl<DaemonRecord, Daemo
             update.bind("intervalNanos", record.intervalNanos());
             update.bind("timeoutNanos", record.timeoutNanos());
             update.bind("checkTimeoutNanos", record.checkTimeoutNanos());
+            Bindings.text(update, "health", record.health());
+            Bindings.text(update, "healthError", record.healthError());
+            Bindings.instant(update, "checkedAt", record.checkedAt());
             Bindings.instant(update, "readyAt", record.readyAt());
             Bindings.instant(update, "stoppedAt", record.stoppedAt());
+            Bindings.text(update, "serverBootId", record.serverBootId());
             update.execute();
         });
     }
 
-    /** One run's instances of a task, oldest attempt first. */
+    /** One run's instances for a task, ordered by attempt and process start. */
+    private static final String BY_RUN =
+            """
+            SELECT * FROM daemon_instance
+            WHERE run_id = :runId
+            ORDER BY task_id, attempt, process_started_at, instance_id
+            """;
+
+    private static final String UPDATE_HEALTH =
+            """
+            UPDATE daemon_instance
+               SET health = :health, health_error = :healthError, checked_at = :checkedAt
+             WHERE run_id = :runId
+               AND task_id = :taskId
+               AND instance_id = (
+                   SELECT instance_id FROM daemon_instance
+                    WHERE run_id = :runId AND task_id = :taskId
+                    ORDER BY attempt DESC, process_started_at DESC, instance_id DESC
+                    LIMIT 1)
+            """;
+
+    /** Every instance of one run, grouped by task id. */
+    public java.util.Map<String, List<DaemonRecord>> byRun(String runId) {
+        var grouped = new java.util.LinkedHashMap<String, List<DaemonRecord>>();
+        for (var record :
+                jdbi.withHandle(handle ->
+                        handle.createQuery(BY_RUN)
+                                .bind("runId", runId)
+                                .mapTo(DaemonRecord.class)
+                                .list())) {
+            grouped.computeIfAbsent(record.taskId(), id -> new java.util.ArrayList<>()).add(record);
+        }
+        return java.util.Map.copyOf(grouped);
+    }
+
+    /** Record a readiness observation on the task's latest instance. */
+    public void updateHealth(
+            String runId, String taskId, String health, String error, java.time.Instant checkedAt) {
+        jdbi.useHandle(handle -> {
+            var update = handle.createUpdate(UPDATE_HEALTH);
+            Bindings.text(update, "runId", runId);
+            Bindings.text(update, "taskId", taskId);
+            Bindings.text(update, "health", health);
+            Bindings.text(update, "healthError", error);
+            Bindings.instant(update, "checkedAt", checkedAt);
+            update.execute();
+        });
+    }
+
     public List<DaemonRecord> byTask(String runId, String taskId) {
-        return find(BY_TASK, Map.of("runId", runId, "taskId", taskId), null);
+        return jdbi.withHandle(handle ->
+                handle.createQuery(BY_TASK)
+                        .bind("runId", runId)
+                        .bind("taskId", taskId)
+                        .mapTo(DaemonRecord.class)
+                        .list());
     }
 
     @Override
@@ -91,7 +149,6 @@ public final class DaemonInstanceDao extends BaseDaoJdbiImpl<DaemonRecord, Daemo
                 result.getString("instance_id"),
                 result.getInt("attempt"),
                 result.getString("name"),
-                result.getString("project"),
                 result.getString("bash"),
                 result.getLong("pid"),
                 Bindings.instant(result, "process_started_at"),
@@ -101,7 +158,11 @@ public final class DaemonInstanceDao extends BaseDaoJdbiImpl<DaemonRecord, Daemo
                 result.getLong("interval_nanos"),
                 result.getLong("timeout_nanos"),
                 result.getLong("check_timeout_nanos"),
+                result.getString("health"),
+                result.getString("health_error"),
+                Bindings.instant(result, "checked_at"),
                 Bindings.instant(result, "ready_at"),
-                Bindings.instant(result, "stopped_at"));
+                Bindings.instant(result, "stopped_at"),
+                result.getString("server_boot_id"));
     }
 }

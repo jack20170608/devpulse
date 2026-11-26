@@ -8,6 +8,7 @@ import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagGraph;
 import io.github.devpulse.core.dag.TaskKey;
+import io.github.devpulse.storage.DaemonRecord;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -63,6 +64,34 @@ class RunDetailEndToEndTest {
             }
             writer.completed("build", RunHistory.State.SUCCESS, 0, null, Instant.now());
             writer.started("server");
+            var serverTask =
+                    writer.snapshot().tasks().stream()
+                            .filter(task -> task.name().equals("server"))
+                            .findFirst()
+                            .orElseThrow();
+            writer.store()
+                    .recordDaemon(
+                            new DaemonRecord(
+                                    writer.id(),
+                                    serverTask.id(),
+                                    "instance-1",
+                                    1,
+                                    "server",
+                                    "bash",
+                                    4242L,
+                                    Instant.now(),
+                                    "true",
+                                    null,
+                                    1_000_000_000L,
+                                    100_000_000L,
+                                    1_000_000_000L,
+                                    100_000_000L,
+                                    null,
+                                    null,
+                                    null,
+                                    Instant.now(),
+                                    null,
+                                    null));
             writer.completed("server", RunHistory.State.READY, null, null, Instant.now());
             writer.daemonChecked("server", DagDaemon.Health.READY, null, Instant.now());
             writer.ended(RunHistory.State.SUCCESS);
@@ -95,8 +124,8 @@ class RunDetailEndToEndTest {
         var server = tasks.get(1).getAsJsonObject();
         assertThat(server.get("state").getAsString()).isEqualTo("READY");
         assertThat(server.get("daemonHealth").getAsString()).isEqualTo("READY");
-        // No daemon process record was written, so the live instance section stays absent.
-        assertThat(server.has("daemons")).isFalse();
+        // The observation is stored on the instance, so the live section exists with it.
+        assertThat(server.has("daemons")).isTrue();
     }
 
     @Test

@@ -1,6 +1,7 @@
 package io.github.devpulse.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.util.List;
@@ -56,11 +57,13 @@ class SchemaTest {
 
         assertThat(tables(jdbi))
                 .contains(
+                        "PROJECT",
                         "RUN",
                         "TASK",
-                        "TASK_NEED",
+                        "TASK_EDGE",
                         "TASK_RESULT",
                         "DAEMON_INSTANCE",
+                        "RUN_EVENT",
                         "SCHEMA_VERSION");
         assertThat(Schema.currentVersion(jdbi)).isEqualTo(Schema.VERSION);
     }
@@ -74,6 +77,24 @@ class SchemaTest {
 
         assertThat(Schema.currentVersion(jdbi)).isEqualTo(Schema.VERSION);
         assertThat(versions(jdbi)).hasSize(Schema.VERSION);
+    }
+
+    @Test
+    void refusesToRebuildAStoreThatStillHoldsRuns() throws IOException {
+        var jdbi = Jdbi.create("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
+        try (var handle = jdbi.open()) {
+            for (var statement : Schema.statements(Schema.read(Schema.MIGRATIONS.getFirst()))) {
+                handle.execute(statement);
+            }
+            handle.execute(
+                    "INSERT INTO run (id, project, target, parallelism, state, executor_pid,"
+                            + " started_at) VALUES ('r1', 'proj', 'dev', 1, 'SUCCESS', 1,"
+                            + " CURRENT_TIMESTAMP)");
+        }
+
+        assertThatThrownBy(() -> Schema.migrate(jdbi))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("rebuilds");
     }
 
     private static List<String> tables(Jdbi jdbi) {

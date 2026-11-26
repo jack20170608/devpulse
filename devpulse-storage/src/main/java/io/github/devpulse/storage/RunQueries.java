@@ -15,16 +15,13 @@ public interface RunQueries {
     /**
      * Runs newest first, optionally filtered by project and state.
      *
-     * <p>A {@code null} filter matches everything, which is what a single-project database needs
-     * and what a merged one would also want.
-     *
-     * @param project project filter, or {@code null} for every project
+     * @param projectId project filter, or {@code null} for every project
      * @param state run state filter, or {@code null} for every state
      * @param limit page size
      * @param offset rows to skip
      */
-    List<RunSummary> runs(String project, String state, int limit, int offset) throws IOException;
+    List<RunSummary> runs(String projectId, String state, int limit, int offset) throws IOException;
 
     /** How many runs the same filter matches, for a pager. */
-    long count(String project, String state) throws IOException;
+    long count(String projectId, String state) throws IOException;
 }

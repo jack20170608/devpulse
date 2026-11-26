@@ -487,7 +487,7 @@ public final class DaemonManager {
         }
         var builder =
                 new BashShell(record.bash())
-                        .script(record.project())
+                        .script(projectOf(record.directory()))
                         .redirectInput(script.toFile())
                         .redirectErrorStream(true);
         builder.environment().put("DEVPULSE_DAEMON_PID", Long.toString(record.owner().pid()));
@@ -536,6 +536,11 @@ public final class DaemonManager {
         return directory.resolve("daemons").resolve(taskId);
     }
 
+    /** A run directory is {@code <project>/.devpulse/runs/<runId>}. */
+    private static Path projectOf(Path runDirectory) {
+        return runDirectory.getParent().getParent().getParent();
+    }
+
     private static void validateId(String id) {
         if (!UUID.fromString(id).toString().equals(id)) {
             throw new IllegalArgumentException("Invalid daemon ID: " + id);
@@ -569,7 +574,6 @@ public final class DaemonManager {
                 record.instanceId(),
                 record.attempt(),
                 record.name(),
-                record.project().toString(),
                 record.bash().toString(),
                 record.owner().pid(),
                 record.owner().startedAt(),
@@ -579,8 +583,12 @@ public final class DaemonManager {
                 record.options().checkInterval().toNanos(),
                 record.options().readyTimeout().toNanos(),
                 record.options().checkTimeout().toNanos(),
+                null,
+                null,
+                null,
                 record.readyAt(),
-                record.stoppedAt());
+                record.stoppedAt(),
+                null);
     }
 
     private static Record toRecord(Path directory, DaemonRecord record) {
@@ -591,7 +599,7 @@ public final class DaemonManager {
                 record.instanceId(),
                 record.attempt(),
                 record.name(),
-                Path.of(record.project()),
+                projectOf(directory),
                 Path.of(record.bash()),
                 new Owner(record.pid(), record.processStartedAt()),
                 new BashTaskDefinition.Daemon(
@@ -625,6 +633,6 @@ public final class DaemonManager {
     }
 
     private static void save(Path directory, Record record) throws IOException {
-        storeForProject(record.project()).recordDaemon(toDaemonRecord(record));
+        storeForProject(projectOf(record.directory())).recordDaemon(toDaemonRecord(record));
     }
 }

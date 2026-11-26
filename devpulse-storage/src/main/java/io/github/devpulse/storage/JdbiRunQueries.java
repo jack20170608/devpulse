@@ -30,9 +30,9 @@ final class JdbiRunQueries implements RunQueries {
     }
 
     @Override
-    public List<RunSummary> runs(String project, String state, int limit, int offset)
+    public List<RunSummary> runs(String projectId, String state, int limit, int offset)
             throws IOException {
-        var filter = new Filter(project, state);
+        var filter = new Filter(projectId, state);
         var sql =
                 """
                 SELECT r.id, r.target, r.state, r.started_at, r.finished_at,
@@ -44,7 +44,7 @@ final class JdbiRunQueries implements RunQueries {
                   LEFT JOIN task t ON t.run_id = r.id
                 %s
                  GROUP BY r.id, r.target, r.state, r.started_at, r.finished_at
-                 ORDER BY r.started_at DESC, r.id DESC
+                 ORDER BY COALESCE(r.started_at, r.queued_at) DESC, r.id DESC
                  LIMIT :limit OFFSET :offset
                 """
                         .formatted(FAILED_TASK_STATES, filter.whereClause());
@@ -62,8 +62,8 @@ final class JdbiRunQueries implements RunQueries {
     }
 
     @Override
-    public long count(String project, String state) throws IOException {
-        var filter = new Filter(project, state);
+    public long count(String projectId, String state) throws IOException {
+        var filter = new Filter(projectId, state);
         try {
             return jdbi.withHandle(handle -> {
                 var query =
@@ -98,12 +98,12 @@ final class JdbiRunQueries implements RunQueries {
     }
 
     /** The optional predicates, kept together so the query and the count cannot drift apart. */
-    private record Filter(String project, String state) {
+    private record Filter(String projectId, String state) {
 
         String whereClause() {
             var predicates = new ArrayList<String>(2);
-            if (project != null) {
-                predicates.add("r.project = :project");
+            if (projectId != null) {
+                predicates.add("r.project_id = :projectId");
             }
             if (state != null) {
                 predicates.add("r.state = :state");
@@ -112,8 +112,8 @@ final class JdbiRunQueries implements RunQueries {
         }
 
         void bind(java.util.function.BiConsumer<String, Object> binder) {
-            if (project != null) {
-                binder.accept("project", project);
+            if (projectId != null) {
+                binder.accept("projectId", projectId);
             }
             if (state != null) {
                 binder.accept("state", state);

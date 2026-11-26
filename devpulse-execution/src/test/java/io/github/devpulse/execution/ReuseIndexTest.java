@@ -36,7 +36,10 @@ class ReuseIndexTest {
 
             RunService.recordReuse(history, Map.of("build", "fp-build"));
 
-            var found = history.store().successfulResult("build", "fp-build").orElseThrow();
+            var found =
+                    history.store()
+                            .successfulResult(history.projectId(), "build", "fp-build")
+                            .orElseThrow();
             assertThat(found.runId()).isEqualTo(history.id());
         }
     }
@@ -50,7 +53,8 @@ class ReuseIndexTest {
 
             RunService.recordReuse(history, Map.of("build", "fp-build"));
 
-            assertThat(history.store().successfulResult("build", "fp-build")).isEmpty();
+            assertThat(history.store().successfulResult(history.projectId(), "build", "fp-build"))
+                    .isEmpty();
         }
     }
 
@@ -63,7 +67,8 @@ class ReuseIndexTest {
 
             RunService.recordReuse(history, Map.of());
 
-            assertThat(history.store().successfulResult("build", "fp-build")).isEmpty();
+            assertThat(history.store().successfulResult(history.projectId(), "build", "fp-build"))
+                    .isEmpty();
         }
     }
 }

@@ -135,6 +135,7 @@ public final class RunService {
                 history.store()
                         .recordResult(
                                 new TaskResult(
+                                        history.projectId(),
                                         task.name(),
                                         fingerprint,
                                         snapshot.id(),

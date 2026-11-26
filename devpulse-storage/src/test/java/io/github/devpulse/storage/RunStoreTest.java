@@ -43,8 +43,11 @@ class RunStoreTest {
                 "dev",
                 4,
                 state,
-                1234L,
+                null,
                 startedAt,
+                startedAt,
+                null,
+                1234L,
                 startedAt,
                 null,
                 "/bin/bash",
@@ -57,52 +60,57 @@ class RunStoreTest {
                 runId,
                 name,
                 name + "-id",
+                0,
                 "fp-" + name,
                 state,
                 null,
                 null,
+                null,
                 BASE,
                 null,
                 "logs/" + name + ".log",
                 null,
-                null,
-                null,
-                null,
-                0,
                 needs);
     }
 
     /** A task whose stored order is set explicitly, so name order cannot mask the contract. */
-    private static TaskRecord orderedTask(String runId, String name, int sortOrder) {
+    private static TaskRecord orderedTask(String runId, String name, int seq) {
         return new TaskRecord(
                 runId,
                 name,
                 name + "-id",
+                seq,
                 "fp-" + name,
                 "PENDING",
+                null,
                 null,
                 null,
                 BASE,
                 null,
                 "logs/" + name + ".log",
                 null,
-                null,
-                null,
-                null,
-                sortOrder,
                 List.of());
+    }
+
+    /** Begin a run, creating the project row it points at. */
+    private void begin(RunRecord run, List<TaskRecord> tasks) throws IOException {
+        store.begin(
+                new ProjectRecord(
+                        run.projectId(), "/" + run.projectId(), run.projectId(), BASE, BASE),
+                run,
+                tasks);
     }
 
     @Test
     void ordersTasksByRecordedSortOrderNotByName() throws IOException {
-        store.begin(
+        begin(
                 run("r1", "proj", BASE, "RUNNING"),
                 List.of(orderedTask("r1", "alpha", 1), orderedTask("r1", "zebra", 0)));
 
         var tasks = store.tasks("r1");
 
         assertThat(tasks).extracting(TaskRecord::name).containsExactly("zebra", "alpha");
-        assertThat(tasks.getFirst().sortOrder()).isZero();
+        assertThat(tasks.getFirst().seq()).isZero();
     }
 
     @Test
@@ -132,27 +140,33 @@ class RunStoreTest {
 
     @Test
     void listsTasksOfSeveralRunsInOneRead() throws IOException {
-        store.begin(
+        begin(
                 run("r1", "proj", BASE, "SUCCESS"),
                 List.of(
+                        task("r1", "prep", "SUCCESS", List.of()),
                         task("r1", "build", "SUCCESS", List.of("prep")),
                         task("r1", "test", "SUCCESS", List.of("build"))));
-        store.begin(
+        begin(
                 run("r2", "proj", BASE.plusSeconds(60), "FAILED"),
-                List.of(task("r2", "deploy", "FAILED", List.of("build"))));
+                List.of(
+                        task("r2", "build", "SUCCESS", List.of()),
+                        task("r2", "deploy", "FAILED", List.of("build"))));
 
         var byRun = store.tasks(List.of("r1", "r2"));
 
         assertThat(byRun).containsOnlyKeys("r1", "r2");
-        assertThat(byRun.get("r1")).extracting(TaskRecord::name).containsExactly("build", "test");
+        assertThat(byRun.get("r1"))
+                .extracting(TaskRecord::name)
+                .containsExactly("build", "prep", "test");
         assertThat(byRun.get("r1").getFirst().needs()).containsExactly("prep");
-        assertThat(byRun.get("r2").getFirst().needs()).containsExactly("build");
+        assertThat(byRun.get("r2").getFirst().needs()).isEmpty();
+        assertThat(byRun.get("r2").getLast().needs()).containsExactly("build");
         assertThat(store.tasks(List.of())).isEmpty();
     }
 
     @Test
     void recordsARunWithItsTasksAndDependencies() throws IOException {
-        store.begin(
+        begin(
                 run("r1", "proj", BASE, "RUNNING"),
                 List.of(
                         task("r1", "build", "PENDING", List.of()),
@@ -160,7 +174,7 @@ class RunStoreTest {
 
         var recorded = store.run("r1").orElseThrow();
         assertThat(recorded.target()).isEqualTo("dev");
-        assertThat(recorded.executorPid()).isEqualTo(1234L);
+        assertThat(recorded.workerPid()).isEqualTo(1234L);
         assertThat(recorded.bash()).isEqualTo("/bin/bash");
 
         var tasks = store.tasks("r1");
@@ -175,14 +189,14 @@ class RunStoreTest {
                         task("r1", "build", "PENDING", List.of()),
                         task("r1", "build", "PENDING", List.of()));
 
-        assertThatThrownBy(() -> store.begin(run("r1", "proj", BASE, "RUNNING"), duplicated))
+        assertThatThrownBy(() -> begin(run("r1", "proj", BASE, "RUNNING"), duplicated))
                 .isInstanceOf(IOException.class);
         assertThat(store.run("r1")).isEmpty();
     }
 
     @Test
     void updatesATaskAndFinishesTheRun() throws IOException {
-        store.begin(
+        begin(
                 run("r1", "proj", BASE, "RUNNING"),
                 List.of(task("r1", "build", "PENDING", List.of())));
 
@@ -191,18 +205,16 @@ class RunStoreTest {
                         "r1",
                         "build",
                         "build-id",
+                        0,
                         "fp-build",
                         "SUCCESS",
                         0,
+                        null,
                         null,
                         BASE,
                         BASE.plusSeconds(2),
                         "logs/build.log",
                         null,
-                        null,
-                        null,
-                        null,
-                        0,
                         List.of()));
         var finished = store.tasks("r1").get(0);
         assertThat(finished.state()).isEqualTo("SUCCESS");
@@ -215,9 +227,9 @@ class RunStoreTest {
 
     @Test
     void listsRunsOfAProjectNewestFirst() throws IOException {
-        store.begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
-        store.begin(run("r2", "proj", BASE.plusSeconds(60), "SUCCESS"), List.of());
-        store.begin(run("r3", "other", BASE.plusSeconds(120), "SUCCESS"), List.of());
+        begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
+        begin(run("r2", "proj", BASE.plusSeconds(60), "SUCCESS"), List.of());
+        begin(run("r3", "other", BASE.plusSeconds(120), "SUCCESS"), List.of());
 
         assertThat(store.runs("proj", 10)).extracting(RunRecord::id).containsExactly("r2", "r1");
         assertThat(store.runs(null, 10))
@@ -227,34 +239,34 @@ class RunStoreTest {
 
     @Test
     void exposesAFinishedResultForReuse() throws IOException {
-        assertThat(store.successfulResult("build", "fp-build")).isEmpty();
-        store.begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
+        assertThat(store.successfulResult("proj", "build", "fp-build")).isEmpty();
+        begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
 
-        store.recordResult(new TaskResult("build", "fp-build", "r1", BASE.plusSeconds(2)));
+        store.recordResult(new TaskResult("proj", "build", "fp-build", "r1", BASE.plusSeconds(2)));
 
-        var result = store.successfulResult("build", "fp-build").orElseThrow();
+        var result = store.successfulResult("proj", "build", "fp-build").orElseThrow();
         assertThat(result.runId()).isEqualTo("r1");
         assertThat(result.finishedAt()).isEqualTo(BASE.plusSeconds(2));
-        assertThat(store.successfulResult("build", "other-fingerprint")).isEmpty();
+        assertThat(store.successfulResult("proj", "build", "other-fingerprint")).isEmpty();
     }
 
     @Test
     void replacesAReuseEntryForTheSameKey() throws IOException {
-        store.begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
-        store.begin(run("r2", "proj", BASE.plusSeconds(1), "SUCCESS"), List.of());
-        store.recordResult(new TaskResult("build", "fp", "r1", BASE));
-        store.recordResult(new TaskResult("build", "fp", "r2", BASE.plusSeconds(10)));
+        begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
+        begin(run("r2", "proj", BASE.plusSeconds(1), "SUCCESS"), List.of());
+        store.recordResult(new TaskResult("proj", "build", "fp", "r1", BASE));
+        store.recordResult(new TaskResult("proj", "build", "fp", "r2", BASE.plusSeconds(10)));
 
-        var result = store.successfulResult("build", "fp").orElseThrow();
+        var result = store.successfulResult("proj", "build", "fp").orElseThrow();
         assertThat(result.runId()).isEqualTo("r2");
         assertThat(result.finishedAt()).isEqualTo(BASE.plusSeconds(10));
     }
 
     @Test
     void rejectsADuplicateRunId() throws IOException {
-        store.begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
+        begin(run("r1", "proj", BASE, "SUCCESS"), List.of());
 
-        assertThatThrownBy(() -> store.begin(run("r1", "proj", BASE, "SUCCESS"), List.of()))
+        assertThatThrownBy(() -> begin(run("r1", "proj", BASE, "SUCCESS"), List.of()))
                 .isInstanceOf(IOException.class);
     }
 }

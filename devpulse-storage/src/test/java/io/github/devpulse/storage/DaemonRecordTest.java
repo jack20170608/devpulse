@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.Test;
 /** Guards the daemon instance table that replaced the per-instance metadata files. */
 class DaemonRecordTest {
     private static final Instant BASE = Instant.parse("2026-11-20T00:00:00Z");
+    private static final ProjectRecord PROJECT =
+            new ProjectRecord("p1", "/proj", "proj", BASE, BASE);
 
     private RunStore store;
 
@@ -27,33 +30,60 @@ class DaemonRecordTest {
         store.close();
     }
 
+    /** A run that owns the two nodes the daemon tests refer to. */
     private void run(String runId) throws IOException {
         store.begin(
+                PROJECT,
                 new RunRecord(
                         runId,
-                        "proj",
+                        PROJECT.id(),
                         "dev",
                         4,
                         "RUNNING",
-                        1234L,
+                        null,
                         BASE,
+                        BASE,
+                        null,
+                        1234L,
                         BASE,
                         null,
                         "/bin/bash",
                         "1.0",
                         null),
-                java.util.List.of());
+                List.of(task(runId, "server", "task-1"), task(runId, "other", "task-2")));
+    }
+
+    private static TaskRecord task(String runId, String name, String taskId) {
+        return new TaskRecord(
+                runId,
+                name,
+                taskId,
+                0,
+                "fp-" + name,
+                "RUNNING",
+                null,
+                null,
+                null,
+                BASE,
+                null,
+                "logs/" + taskId + ".log",
+                null,
+                List.of());
     }
 
     private static DaemonRecord daemon(
             String runId, String taskId, String instanceId, int attempt) {
+        return daemon(runId, taskId, instanceId, attempt, null);
+    }
+
+    private static DaemonRecord daemon(
+            String runId, String taskId, String instanceId, int attempt, Instant readyAt) {
         return new DaemonRecord(
                 runId,
                 taskId,
                 instanceId,
                 attempt,
                 "server",
-                "/proj",
                 "/bin/bash",
                 4242L,
                 BASE.plusSeconds(1),
@@ -63,6 +93,10 @@ class DaemonRecordTest {
                 500_000_000L,
                 30_000_000_000L,
                 2_000_000_000L,
+                null,
+                null,
+                null,
+                readyAt,
                 null,
                 null);
     }
@@ -87,32 +121,22 @@ class DaemonRecordTest {
     void replacesAnInstanceWhenReadinessIsObserved() throws IOException {
         run("r1");
         store.recordDaemon(daemon("r1", "task-1", "instance-1", 1));
-
-        var ready = daemon("r1", "task-1", "instance-1", 1);
-        var withReadyAt =
-                new DaemonRecord(
-                        ready.runId(),
-                        ready.taskId(),
-                        ready.instanceId(),
-                        ready.attempt(),
-                        ready.name(),
-                        ready.project(),
-                        ready.bash(),
-                        ready.pid(),
-                        ready.processStartedAt(),
-                        ready.readyCommand(),
-                        ready.stopCommand(),
-                        ready.stopTimeoutNanos(),
-                        ready.intervalNanos(),
-                        ready.timeoutNanos(),
-                        ready.checkTimeoutNanos(),
-                        BASE.plusSeconds(9),
-                        null);
-        store.recordDaemon(withReadyAt);
+        store.recordDaemon(daemon("r1", "task-1", "instance-1", 1, BASE.plusSeconds(9)));
 
         var found = store.daemons("r1", "task-1");
         assertThat(found).hasSize(1);
         assertThat(found.getFirst().readyAt()).isEqualTo(BASE.plusSeconds(9));
+    }
+
+    @Test
+    void recordsHealthOnTheLatestInstance() throws IOException {
+        run("r1");
+        store.recordDaemon(daemon("r1", "task-1", "instance-1", 1));
+
+        store.recordDaemonHealth("r1", "task-1", "READY", null, BASE.plusSeconds(5));
+
+        assertThat(store.daemons("r1", "task-1").getFirst().health()).isEqualTo("READY");
+        assertThat(store.daemons("r1").get("task-1")).hasSize(1);
     }
 
     @Test
@@ -140,6 +164,14 @@ class DaemonRecordTest {
     @Test
     void rejectsADaemonForAnUnknownRun() throws IOException {
         assertThatThrownBy(() -> store.recordDaemon(daemon("missing", "task-1", "instance-1", 1)))
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void rejectsADaemonForAnUnknownTask() throws IOException {
+        run("r1");
+
+        assertThatThrownBy(() -> store.recordDaemon(daemon("r1", "task-9", "instance-1", 1)))
                 .isInstanceOf(IOException.class);
     }
 

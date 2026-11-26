@@ -2,6 +2,7 @@ package io.github.devpulse.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.devpulse.storage.dao.ProjectDao;
 import io.github.devpulse.storage.dao.RunDao;
 import io.github.devpulse.storage.dao.TaskDao;
 import java.io.IOException;
@@ -18,6 +19,8 @@ import org.junit.jupiter.api.Test;
  */
 class DaoInheritanceTest {
     private static final Instant BASE = Instant.parse("2026-11-20T00:00:00Z");
+    private static final ProjectRecord PROJECT =
+            new ProjectRecord("p1", "/proj", "proj", BASE, BASE);
 
     private RunDao runs;
     private TaskDao tasks;
@@ -26,13 +29,28 @@ class DaoInheritanceTest {
     void open() throws IOException {
         var jdbi = Jdbi.create("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         Schema.migrate(jdbi);
+        new ProjectDao(jdbi).upsert(PROJECT);
         runs = new RunDao(jdbi);
         tasks = new TaskDao(jdbi);
     }
 
     private static RunRecord run(String id) {
         return new RunRecord(
-                id, "proj", "dev", 4, "RUNNING", 42L, BASE, BASE, null, "/bin/bash", "1.0", null);
+                id,
+                PROJECT.id(),
+                "dev",
+                4,
+                "RUNNING",
+                null,
+                BASE,
+                BASE,
+                null,
+                42L,
+                BASE,
+                null,
+                "/bin/bash",
+                "1.0",
+                null);
     }
 
     private static TaskRecord task(String runId, String name) {
@@ -40,18 +58,16 @@ class DaoInheritanceTest {
                 runId,
                 name,
                 name + "-id",
+                0,
                 "fp-" + name,
                 "PENDING",
                 null,
                 null,
                 null,
                 null,
+                null,
                 "logs/" + name + ".log",
                 null,
-                null,
-                null,
-                null,
-                0,
                 List.of());
     }
 
@@ -61,7 +77,7 @@ class DaoInheritanceTest {
 
         var found = runs.findOne(new RunKey("r1")).orElseThrow();
 
-        assertThat(found.project()).isEqualTo("proj");
+        assertThat(found.projectId()).isEqualTo(PROJECT.id());
         assertThat(found.startedAt()).isEqualTo(BASE);
         assertThat(found.finishedAt()).isNull();
         assertThat(runs.exists(new RunKey("r1"))).isTrue();
@@ -76,14 +92,17 @@ class DaoInheritanceTest {
         var updated =
                 new RunRecord(
                         "r1",
-                        "proj",
+                        PROJECT.id(),
                         "dev",
                         8,
                         "SUCCESS",
-                        42L,
+                        null,
                         BASE,
                         BASE,
                         BASE.plusSeconds(5),
+                        42L,
+                        BASE,
+                        null,
                         "/bin/bash",
                         "1.0",
                         null);
@@ -122,18 +141,16 @@ class DaoInheritanceTest {
                         "r1",
                         "build",
                         "build-id",
+                        0,
                         "fp-build",
                         "SUCCESS",
                         0,
+                        null,
                         null,
                         BASE,
                         BASE.plusSeconds(2),
                         "logs/build.log",
                         null,
-                        null,
-                        null,
-                        null,
-                        0,
                         List.of());
 
         assertThat(tasks.update(new TaskKey("r1", "build"), updated)).isEqualTo(1);
