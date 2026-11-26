@@ -8,7 +8,7 @@
 
 ### 模块与产物
 
-`devpulse-dist` 是 `packaging=pom` 的发行模块，直接依赖 Pulse 和 Jira 产物，不提供 Java 命令入口。工具不反向依赖发行模块；Gather 和兼容 CLI 不进入当前发行包。
+`devpulse-dist` 是 `packaging=pom` 的发行模块，直接依赖 Pulse 和 Jira 产物，不提供 Java 命令入口。工具不反向依赖发行模块；兼容 CLI 不进入当前发行包。
 
 构建通过根 reactor 同时完成所需工具。`prepare-package` 阶段先生成各 JAR 的 SHA-256，再由 Assembly 按 `src/assembly/pulse.xml` 和 `jira.xml` 组装独立归档；`package` 阶段生成归档的 SHA-256。每个归档包含对应的可执行 JAR、Bash 入口、版本及校验文件，版本使用 `${project.version}`。
 
@@ -24,7 +24,7 @@
 
 ### Module and artifacts
 
-`devpulse-dist` is a `packaging=pom` distribution module that directly depends on Pulse and Jira artifacts and provides no Java command entry point. Tools never depend on distribution; Gather and the compatibility CLI are excluded from current archives.
+`devpulse-dist` is a `packaging=pom` distribution module that directly depends on Pulse and Jira artifacts and provides no Java command entry point. Tools never depend on distribution; The compatibility CLI is excluded from current archives.
 
 The root reactor builds the required tools together. During `prepare-package`, JAR SHA-256 checksums are generated before Assembly creates separate archives using `src/assembly/pulse.xml` and `jira.xml`; `package` generates archive SHA-256 checksums. Each archive contains its executable JAR, Bash launcher, version, and checksum files, using `${project.version}`.
 

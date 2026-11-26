@@ -21,7 +21,7 @@ Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 
 - 不支持 include 或远程资源加载；复杂逻辑由用户维护的本地脚本承载。
 - `tasks` 是以任务名为键的映射，任务支持可选 `description`；`pipelines` 通过目标任务列表选择执行范围。声明顺序不代表依赖顺序。
 - 配置错误应报告文件来源及可用的行号信息；字段类型、重复键、未知依赖和循环依赖均需在执行任何命令之前校验。根级、任务、就绪检查和流水线的未知字段均报错。
-- `gather` 生成的 Prompt 与 `init` 生成的默认配置统一使用 YAML 示例。Jira 配置和内部运行记录继续使用 HOCON，不受任务配置迁移影响。
+- `init` 生成的默认配置统一使用 YAML 示例。Jira 配置和内部运行记录继续使用 HOCON，不受任务配置迁移影响。
 
 ### 执行适配与失败策略
 
@@ -88,7 +88,7 @@ Monitoring parameters parse directly into DAG `DaemonOptions`; the Bash Adapter 
 - Do not support includes or remote resource loading. Keep complex logic in user-maintained local scripts.
 - `tasks` is a mapping keyed by task name, with optional task `description`; `pipelines` select execution targets through task lists. Declaration order is not dependency order.
 - Report configuration origins and line numbers when available. Validate field types, duplicate keys, unknown dependencies, and cycles before executing any command. Reject unknown root, task, readiness, and pipeline fields.
-- Use YAML examples consistently in generated gather prompts and init configurations. Jira configuration and internal run records retain HOCON and are unaffected by task configuration migration.
+- Use YAML examples consistently in generated init configurations. Jira configuration and internal run records retain HOCON and are unaffected by task configuration migration.
 
 ### Execution adaptation and failure policy
 

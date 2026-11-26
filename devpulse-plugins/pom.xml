@@ -15,7 +15,6 @@
     <name>devpulse plugins</name>
     <modules>
         <module>pulse</module>
-        <module>gather</module>
         <module>jira</module>
     </modules>
 

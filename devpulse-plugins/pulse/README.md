@@ -6,7 +6,7 @@
 
 [项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-plugins/pulse/architecture.md)
 
-Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。它提供 `init`、`review`、`status`、`stop` 子命令，不包含 Gather 或 Jira。
+Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。它提供 `init`、`review`、`status`、`stop` 子命令，不包含 Jira。
 
 ### 环境与构建
 
@@ -19,7 +19,7 @@ bash build.sh pulse
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 ```
 
-以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop`。安装见 [发行与安装](../../devpulse-dist/README.md)，环境提示词见 [Gather 使用说明](../gather/README.md)，组合式入口见 [兼容 CLI](../../devpulse-cli/README.md)。
+以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop`。安装见 [发行与安装](../../devpulse-dist/README.md)，组合式入口见 [兼容 CLI](../../devpulse-cli/README.md)。
 
 ### `init`：创建配置模板
 
@@ -222,7 +222,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 
 自己编写配置时，运行 `init`，然后修改模板中的任务命令。需要 AI 辅助时，按以下流程操作；这条路径不要求先运行 `init`：
 
-1. 运行 `gather`，获取环境提示词。
+1. 运行 `pulse status --tools`，确认 Bash 与所需工具可用。
 2. 审核提示词后，将其交给你选择的本地或云端 AI，并补充实际项目脚本和需求。
 3. 审核 AI 生成的 YAML 配置，手动保存为项目目录下的 `.devpulse.yaml`。
 4. 运行 `review` 或 `pulse --dry-run`，检查依赖和完整命令。
@@ -272,7 +272,7 @@ Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元�
 
 [Project home](../../readme.MD) | [Architecture](../../docs/devpulse-plugins/pulse/architecture.md)
 
-Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. It provides `init`, `review`, `status`, and `stop`, without Gather or Jira commands.
+Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. It provides `init`, `review`, `status`, and `stop`, without Jira commands.
 
 ### Requirements and build
 
@@ -285,7 +285,7 @@ bash build.sh pulse
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 ```
 
-All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop`. See [distribution and installation](../../devpulse-dist/README.md), the [Gather guide](../gather/README.md) for environment prompts, and the [compatibility CLI](../../devpulse-cli/README.md) for the combined entry point.
+All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop`. See [distribution and installation](../../devpulse-dist/README.md), and the [compatibility CLI](../../devpulse-cli/README.md) for the combined entry point.
 
 ### `init`: create a configuration template
 
@@ -488,7 +488,7 @@ Times are displayed in UTC to whole seconds, with durations using `ms`, `s`, `m`
 
 To write configuration yourself, run `init` and edit the template's task commands. For AI assistance, follow this workflow; it does not require running `init` first:
 
-1. Run `gather` to obtain the environment prompt.
+1. Run `pulse status --tools` to confirm Bash and the required tools are available.
 2. Review the prompt, share it with your chosen local or cloud AI, and supply actual project scripts and requirements.
 3. Review the AI-generated YAML configuration and manually save it as `.devpulse.yaml` in the project directory.
 4. Run `review` or `pulse --dry-run` to inspect dependencies and complete commands.

@@ -17,7 +17,6 @@
 | [`devpulse-storage`](relational-storage.md) | 运行状态的关系型存储、schema 迁移与复用索引 |
 | [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹与运行编排 |
 | [`devpulse-plugins/pulse`](devpulse-plugins/pulse/architecture.md) | YAML 配置、任务命令与静态审阅 |
-| [`devpulse-plugins/gather`](devpulse-plugins/gather/architecture.md) | 环境提示词与剪贴板输出 |
 | [`devpulse-plugins/jira`](devpulse-plugins/jira/architecture.md) | Jira REST、连接配置与内容转换 |
 | [`devpulse-cli`](devpulse-cli/architecture.md) | 组合式兼容命令分发 |
 | [`devpulse-dist`](devpulse-dist/architecture.md) | 工具归档、校验与安装 |
@@ -27,7 +26,7 @@
 
 ### 依赖与文档边界
 
-独立工具不互相依赖；Pulse 和 Gather 直接复用 core 的环境采集与 Bash 能力，Pulse 的工作流也依赖 core。Jira 独立运行。兼容 CLI 组合 Pulse/Gather，发行模块仅打包 Pulse/Jira；core 不注册命令或动态加载工具。Java 任务与 Bash 工作流共享 DAG 调度，Bash Adapter 负责进程、日志和历史；Daemon 支持就绪及健康监测，由用户管理停止。
+独立工具不互相依赖；Pulse 直接复用 core 的环境采集与 Bash 能力，其工作流也依赖 core。Jira 独立运行。兼容 CLI 组合 Pulse 命令，发行模块仅打包 Pulse/Jira；core 不注册命令或动态加载工具。Java 任务与 Bash 工作流共享 DAG 调度，Bash Adapter 负责进程、日志和历史；Daemon 支持就绪及健康监测，由用户管理停止。
 
 技术栈及仓库约束见 [Copilot 仓库指令](../.github/copilot-instructions.md)。原使用说明路径保留双语迁移页，不重复维护正文。
 
@@ -46,7 +45,6 @@ The former monolithic architecture document has been split by Maven module; this
 | [`devpulse-storage`](relational-storage.md) | Relational run state, schema migrations, and the reuse index |
 | [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, and run orchestration |
 | [`devpulse-plugins/pulse`](devpulse-plugins/pulse/architecture.md) | YAML configuration, workflow commands, and static review |
-| [`devpulse-plugins/gather`](devpulse-plugins/gather/architecture.md) | Environment prompts and clipboard output |
 | [`devpulse-plugins/jira`](devpulse-plugins/jira/architecture.md) | Jira REST, connection configuration, and content conversion |
 | [`devpulse-cli`](devpulse-cli/architecture.md) | Combined compatibility command dispatch |
 | [`devpulse-dist`](devpulse-dist/architecture.md) | Tool archives, checksums, and installation |
@@ -56,6 +54,6 @@ The former monolithic architecture document has been split by Maven module; this
 
 ### Dependency and documentation boundaries
 
-Standalone tools do not depend on each other. Pulse and Gather directly reuse core's environment collection and Bash support; Pulse workflows also depend on core. Jira runs independently. The compatibility CLI combines Pulse/Gather; distribution packages only Pulse/Jira. Core neither registers commands nor dynamically loads tools. Java tasks and Bash workflows share DAG scheduling; the Bash Adapter handles processes, logs, and history. Daemons support readiness/health monitoring and user-managed stopping.
+Standalone tools do not depend on each other. Pulse directly reuses core's environment collection and Bash support, and its workflows also depend on core. Jira runs independently. The compatibility CLI combines Pulse commands; distribution packages only Pulse/Jira. Core neither registers commands nor dynamically loads tools. Java tasks and Bash workflows share DAG scheduling; the Bash Adapter handles processes, logs, and history. Daemons support readiness/health monitoring and user-managed stopping.
 
 See the [Copilot repository instructions](../.github/copilot-instructions.md) for the technology stack and repository constraints. Former usage paths retain bilingual migration pages rather than duplicate content.

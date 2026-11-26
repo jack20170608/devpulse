@@ -7,17 +7,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 devpulse is a local DevOps toolbox built on Java 21 and Maven. It ships independent CLIs:
 
 - **Pulse** — runs tasks/pipelines defined in `.devpulse.yaml` through Bash, with a DAG scheduler, run history, and local daemons.
-- **Gather** — inventories the local environment and generates an AI prompt for writing task config.
 - **Jira** — standalone Jira REST client (issue create/view/update/transition, comments, attachments).
-- **`devpulse`** — combined compatibility CLI that dispatches to Pulse/Gather commands (`init`, `gather`, `pulse`, `review`, `status`, `stop`).
+- **`devpulse`** — combined compatibility CLI that dispatches to Pulse commands (`init`, `pulse`, `review`, `status`, `stop`).
 
-Java 21+ is required to build and run. Actual Bash execution (Pulse, Gather, `status --tools`) also requires Bash; on Windows use Git Bash, never CMD/PowerShell/WSL as a substitute. `init`, `review`, `--dry-run`, history queries, and Jira do not need Bash.
+Java 21+ is required to build and run. Actual Bash execution (Pulse, `status --tools`) also requires Bash; on Windows use Git Bash, never CMD/PowerShell/WSL as a substitute. `init`, `review`, `--dry-run`, history queries, and Jira do not need Bash.
 
 ## Commands
 
 ```bash
 bash build.sh                 # build all modules
-bash build.sh pulse|gather|jira|cli|dist [--clean] [--quiet]
+bash build.sh pulse|jira|cli|dist [--clean] [--quiet]
 bash run.sh --help            # rebuild combined CLI, then run it
 
 bash verify.sh                # THE machine gate: Spotless check + full compile + all tests + SpotBugs
@@ -27,7 +26,7 @@ mvn spotless:apply            # apply google-java-format instead of hand-formatt
 
 Build outputs:
 - Combined CLI: `devpulse-cli/target/devpulse.jar`
-- Standalone tools: `devpulse-plugins/{pulse,gather,jira}/target/devpulse-{pulse,gather,jira}.jar`
+- Standalone tools: `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`
 - Release archives: `devpulse-dist/target/` (Pulse and Jira only)
 
 Run a single test (artifact ID `pulse`/`jira` is unprefixed; keep `-am` so reactor dependencies build):
@@ -48,9 +47,9 @@ The root `pom.xml` is the only place the project version is defined (`<revision>
 
 Dependency direction:
 - Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, and `RunService`).
-- `devpulse-plugins` aggregates `pulse`, `gather`, `jira`. Tools may depend on shared libraries but **never on each other**. Pulse and Gather depend on core; Jira is standalone.
+- `devpulse-plugins` aggregates `pulse` and `jira`. Tools may depend on shared libraries but **never on each other**. Pulse depends on core; Jira is standalone.
 - Libraries register no CLI commands and there is no dynamic plugin loading.
-- `devpulse-cli` is the compatibility entry point wrapping Pulse/Gather only. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.
+- `devpulse-cli` is the compatibility entry point wrapping Pulse only. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.
 
 Core does not read Pulse YAML. Pulse owns YAML config, plan assembly, CLI commands, and presentation; core owns graph planning, scheduling, process execution, and persistence.
 
@@ -73,7 +72,6 @@ Run state lives in `.devpulse/state.mv.db` (H2 via JDBI); `.devpulse/runs/<run-i
 ### Tool-specific notes
 
 - **Jira**: connection config is HOCON, selected whole-file from `--config`, `./.jira/local_jira_config.conf`, or `~/.jira/local_jira_config.conf` (no merging). Only `JIRA_API_TOKEN` comes from the environment. Cloud defaults to REST v3 (ADF descriptions), Data Center to v2; Markdown conversion is covered by golden-file tests.
-- **Gather**: reuses `core.environment.EnvironmentGatherer`; the module only adds prompt assembly and clipboard output.
 
 ## Conventions
 

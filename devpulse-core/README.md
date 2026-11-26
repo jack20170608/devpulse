@@ -14,7 +14,7 @@
 
 ### 环境事实采集
 
-`io.github.devpulse.core.environment.EnvironmentGatherer` 与 `BashShell` 同属 core 的环境包，供 [Gather CLI](../devpulse-plugins/gather/README.md) 和 Pulse 的 `status --tools` 复用，不再单独发布 gatherer 产物。提示词、剪贴板和终端输出仍由调用方处理。
+`io.github.devpulse.core.environment.EnvironmentGatherer` 与 `BashShell` 同属 core 的环境包，供 Pulse 的 `status --tools` 复用，不再单独发布 gatherer 产物。提示词、剪贴板和终端输出仍由调用方处理。
 
 `new EnvironmentGatherer().gather(directory, bashOverride)` 返回 `Facts` record，包含项目绝对路径、OS、架构、Java 版本、Bash、工具位置和存在的项目标志。目录必须已经存在；`bashOverride` 为 `null` 时自动查找 Bash。实际检测需要 Bash，Windows 使用 Git Bash。`Facts.tools()` 和 `Facts.projectFiles()` 为不可修改列表。
 
@@ -282,7 +282,7 @@ try (var history = new RunHistory(directory).begin("dev", graph, 4)) {
 
 ### Environment fact collection
 
-`io.github.devpulse.core.environment.EnvironmentGatherer` shares core's environment package with `BashShell` and is reused by the [Gather CLI](../devpulse-plugins/gather/README.md) and Pulse's `status --tools`. No separate gatherer artifact is published. Callers still own prompts, clipboard access, and terminal output.
+`io.github.devpulse.core.environment.EnvironmentGatherer` shares core's environment package with `BashShell` and is reused by Pulse's `status --tools`. No separate gatherer artifact is published. Callers still own prompts, clipboard access, and terminal output.
 
 `new EnvironmentGatherer().gather(directory, bashOverride)` returns a `Facts` record containing the absolute project path, OS, architecture, Java version, Bash, tool locations, and existing project markers. The directory must already exist; a `null` `bashOverride` enables Bash discovery. Detection requires Bash, with Git Bash on Windows. `Facts.tools()` and `Facts.projectFiles()` are unmodifiable lists.
 

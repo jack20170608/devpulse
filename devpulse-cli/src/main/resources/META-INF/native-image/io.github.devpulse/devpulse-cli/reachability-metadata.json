@@ -24,41 +24,6 @@
       ]
     },
     {
-      "type": "io.github.devpulse.cli.GatherCLI$VersionProvider",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "io.github.devpulse.cli.GatherCommand",
-      "fields": [
-        {
-          "name": "bash"
-        },
-        {
-          "name": "directory"
-        },
-        {
-          "name": "language"
-        },
-        {
-          "name": "noClipboard"
-        },
-        {
-          "name": "spec"
-        }
-      ],
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
       "type": "io.github.devpulse.cli.InitCommand",
       "fields": [
         {

@@ -23,7 +23,7 @@ jira --help
 
 ### 工具边界
 
-`pulse` 包含任务运行以及 `init`、`review`、`status`、`stop` 子命令；`jira` 是独立工具。`gather` 也有自己的可执行 JAR，但目前不发布安装归档。`devpulse-cli/target/devpulse.jar` 保留旧的 `devpulse <子命令>` 用法，不进入单工具发行包。选择安装 Jira 不会安装 Pulse；选择安装 Pulse 不会安装 Jira 或 Gather 命令。
+`pulse` 包含任务运行以及 `init`、`review`、`status`、`stop` 子命令；`jira` 是独立工具。`devpulse-cli/target/devpulse.jar` 保留旧的 `devpulse <子命令>` 用法，不进入单工具发行包。选择安装 Jira 不会安装 Pulse；选择安装 Pulse 不会安装 Jira。
 
 ### 构建和直接运行
 
@@ -52,7 +52,7 @@ bash devpulse-dist/install.sh --uninstall --tool pulse
 
 ### 安装本地构建的发行包
 
-`devpulse-dist` 生成可单独安装的 Pulse 和 Jira 发行包，不是可执行命令，也不包含 Gather 或组合式 `devpulse` 入口。目前没有公开下载渠道，可先从源码构建，再安装本地发行包。
+`devpulse-dist` 生成可单独安装的 Pulse 和 Jira 发行包，不是可执行命令，也不包含组合式 `devpulse` 入口。目前没有公开下载渠道，可先从源码构建，再安装本地发行包。
 
 准备 JDK 21+、Maven、Bash、`tar` 和 `sha256sum`，在仓库根目录执行以下命令（Windows 使用 Git Bash）：
 
@@ -110,7 +110,7 @@ By default, install from `target` beside the installer without `--local`, `--too
 
 ### Tool boundaries
 
-`pulse` runs tasks and includes the `init`, `review`, `status`, and `stop` subcommands; `jira` is independent. `gather` also has its own executable JAR but currently has no installation archive. `devpulse-cli/target/devpulse.jar` preserves the old `devpulse <subcommand>` syntax and is not included in individual tool archives. Installing Jira does not install Pulse; installing Pulse does not install Jira or the Gather command.
+`pulse` runs tasks and includes the `init`, `review`, `status`, and `stop` subcommands; `jira` is independent. `devpulse-cli/target/devpulse.jar` preserves the old `devpulse <subcommand>` syntax and is not included in individual tool archives. Installing Jira does not install Pulse; installing Pulse does not install Jira.
 
 ### Build and run without installation
 
@@ -139,7 +139,7 @@ The URL above is a placeholder; replace it with an actual release location. For 
 
 ### Install locally built release archives
 
-`devpulse-dist` produces separately installable Pulse and Jira archives; it is not an executable command and does not include Gather or the combined `devpulse` entry point. No public download channel is available yet, so build from source and install the local archives.
+`devpulse-dist` produces separately installable Pulse and Jira archives; it is not an executable command and does not include the combined `devpulse` entry point. No public download channel is available yet, so build from source and install the local archives.
 
 Prepare JDK 21+, Maven, Bash, `tar`, and `sha256sum`, then run these commands from the repository root (use Git Bash on Windows):
 

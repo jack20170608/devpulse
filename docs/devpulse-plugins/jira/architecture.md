@@ -8,7 +8,7 @@
 
 ### 模块与分层
 
-Jira 是独立的可执行工具，不依赖 core、Pulse 或 Gather，不需要 Bash 执行 JAR。`JiraCommand` 定义 picocli 命令树并协调连接、输入和输出；创建、编辑、查询、指派、流转、其他 Issue 操作及 Agile/目录命令分担在 `cli` 包的命令类中。
+Jira 是独立的可执行工具，不依赖 core 或 Pulse，不需要 Bash 执行 JAR。`JiraCommand` 定义 picocli 命令树并协调连接、输入和输出；创建、编辑、查询、指派、流转、其他 Issue 操作及 Agile/目录命令分担在 `cli` 包的命令类中。
 
 `JiraConfiguration` 负责 HOCON 连接配置发现与校验；`JiraClient` 负责 Java HTTP 请求、认证、REST 路径、字段元数据和分页。`JiraMarkdown` 处理上传及严格往返转换，`JiraDescriptionMarkdown` 负责只读查看时的近似 Markdown 展示，不能将展示结果的容错规则用于无损导出。
 
@@ -58,7 +58,7 @@ create/edit 的 `--template` 读取完整 YAML metadata + description，`--file`
 
 ### Module and layers
 
-Jira is a standalone executable that depends on neither core, Pulse, nor Gather and needs no Bash to run its JAR. `JiraCommand` defines the picocli command tree and coordinates connections, input, and output. Command classes in `cli` divide creation, editing, querying, assignment, transitions, other issue operations, and Agile/catalog commands.
+Jira is a standalone executable that depends on neither core nor Pulse and needs no Bash to run its JAR. `JiraCommand` defines the picocli command tree and coordinates connections, input, and output. Command classes in `cli` divide creation, editing, querying, assignment, transitions, other issue operations, and Agile/catalog commands.
 
 `JiraConfiguration` discovers and validates HOCON connection configuration. `JiraClient` owns Java HTTP requests, authentication, REST paths, field metadata, and pagination. `JiraMarkdown` handles uploads and strict round-trip conversion; `JiraDescriptionMarkdown` handles approximate read-only Markdown presentation. Presentation fallback rules must not be applied to lossless exports.
 

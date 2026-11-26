@@ -8,7 +8,7 @@
 
 ### 职责与消费边界
 
-`devpulse-bom` 是仅生成 POM 的内部产物版本清单，通过 `dependencyManagement` 管理 `devpulse-core`、`pulse`、`gather`、`jira`，版本统一为 `${project.version}`。它不生成可执行 JAR、不聚合命令，也不作为工具的普通运行时依赖。
+`devpulse-bom` 是仅生成 POM 的内部产物版本清单，通过 `dependencyManagement` 管理 `devpulse-core`、`pulse`、`jira`，版本统一为 `${project.version}`。它不生成可执行 JAR、不聚合命令，也不作为工具的普通运行时依赖。
 
 需要集中管理 devpulse 内部依赖版本的消费者将 BOM 作为 `type=pom`、`scope=import` 导入依赖管理，再声明实际使用的模块。工具仍保持彼此独立，不因同属 BOM 而建立代码依赖。
 
@@ -22,7 +22,7 @@ BOM 通过本地相对路径继承 `devpulse-dependencies`，间接继承根项�
 
 ### Responsibilities and consumption boundaries
 
-`devpulse-bom` is a POM-only internal artifact version catalog. Its `dependencyManagement` manages `devpulse-core`, `pulse`, `gather`, and `jira`, all using `${project.version}`. It produces no executable JAR, aggregates no commands, and is not a regular runtime dependency of tools.
+`devpulse-bom` is a POM-only internal artifact version catalog. Its `dependencyManagement` manages `devpulse-core`, `pulse`, and `jira`, all using `${project.version}`. It produces no executable JAR, aggregates no commands, and is not a regular runtime dependency of tools.
 
 Consumers needing centralized devpulse dependency versions import the BOM into dependency management with `type=pom` and `scope=import`, then declare the modules they actually use. Tools remain independent; appearing in the same BOM does not create code dependencies.
 

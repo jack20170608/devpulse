@@ -123,7 +123,6 @@ YAML
 	expect 0 "status --tools" "$binary" status --tools
 	expect 0 "dry run" "$binary" pulse dev --directory "$work" --dry-run
 	expect 0 "review" "$binary" review dev --directory "$work"
-	expect 0 "gather" "$binary" gather --directory "$work"
 	expect 0 "daemon lifecycle" "$binary" pulse daemon --directory "$work"
 	expect 0 "stop" "$binary" stop --directory "$work"
 	expect 12 "unknown target" "$binary" pulse absent --directory "$work"
