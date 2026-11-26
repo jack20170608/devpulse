@@ -36,6 +36,7 @@ devpulse 面向"**本地、无容器、Bash 原生、有状态**"的任务编排
 | [模块架构导航](docs/architecture.md) | 按 Maven 模块组织的架构设计 |
 | [产品定位与竞品分析](docs/design/positioning.md) | 与 shell 的边界、竞品对比与产品设计准则 |
 | [产品形态：一个二进制](docs/design/product-shape.md) | 服务端与客户端的分工、命名、YAML 数据化与实施顺序 |
+| [服务端接口设计](docs/design/server-api.md) | 进程模型、认证、端点、错误码与事件流 |
 | [Copilot 仓库指令](.github/copilot-instructions.md) | 技术栈、编码、文档及构建规范 |
 
 ### Maven 模块
@@ -90,6 +91,7 @@ devpulse targets task orchestration that is **local, container-free, native to B
 | [Module architecture index](docs/architecture.md) | Architecture organized by Maven module |
 | [Product positioning](docs/design/positioning.md) | Shell boundaries, competitors, and product design rules |
 | [Product shape](docs/design/product-shape.md) | Server/client split, naming, YAML as data, and the order of work |
+| [Server API design](docs/design/server-api.md) | Process model, auth, endpoints, error codes, and events |
 | [Copilot repository instructions](.github/copilot-instructions.md) | Technology stack, coding, documentation, and build conventions |
 
 ### Maven modules
