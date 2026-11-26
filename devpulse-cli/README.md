@@ -10,11 +10,11 @@
 
 devpulse 是一个面向开发者和运维工程师的本地 DevOps 工具箱，目标是用 `.devpulse.yaml` 中的 YAML 配置描述用户自定义脚本、CLI 任务、依赖和流水线，无需搭建远程 CI/CD 平台。
 
-**当前状态**：Pulse 独立工具实现 `init`、`pulse`、`review`、`status` 和 `stop`，支持普通任务和本地长驻进程。Jira 是独立工具；组合式 CLI 保留 Pulse 的全部原有子命令。工具之间不相互依赖，也不内置 AI 调用；仅执行显式配置的长驻进程就绪检查，不自动探测 Docker 等工具的守护进程。
+**当前状态**：Pulse 独立工具实现 `init`、`pulse`、`review`、`status`、`stop` 和 `doctor`，支持普通任务和本地长驻进程。Jira 是独立工具；组合式 CLI 保留 Pulse 的全部原有子命令。工具之间不相互依赖，也不内置 AI 调用；仅执行显式配置的长驻进程就绪检查，不自动探测 Docker 等工具的守护进程。
 
 ### 环境与构建
 
-开发、构建和运行均需要 JDK 21 或更高版本，构建使用 Maven。实际执行的 `pulse` 和 `status --tools` 还需要可用的 Bash；Windows 使用 Git Bash，不使用 CMD、PowerShell 或 WSL 替代 Bash。`init`、`review`、`pulse --dry-run`、历史列表和日志读取不需要 Bash。长驻进程的就绪检查及自定义停止命令使用启动时记录的 Bash 路径，不重新加载项目配置。
+开发、构建和运行均需要 JDK 21 或更高版本，构建使用 Maven。实际执行的 `pulse` 和 `doctor` 还需要可用的 Bash；Windows 使用 Git Bash，不使用 CMD、PowerShell 或 WSL 替代 Bash。`init`、`review`、`pulse --dry-run`、历史列表和日志读取不需要 Bash。长驻进程的就绪检查及自定义停止命令使用启动时记录的 Bash 路径，不重新加载项目配置。
 
 在仓库根目录构建并查看帮助：
 
@@ -68,11 +68,11 @@ java -jar devpulse-cli\target\devpulse.jar --version
 
 devpulse is a local DevOps toolbox for developers and operations engineers. It aims to describe user-defined scripts, CLI tasks, dependencies, and pipelines using YAML in `.devpulse.yaml`, without requiring a remote CI/CD platform.
 
-**Current status**: The independent Pulse tool implements `init`, `pulse`, `review`, `status`, and `stop`, supporting batch tasks and local long-running processes. Jira is an independent tool; the combined compatibility CLI retains all former Pulse subcommands. The tools do not depend on one another and have no built-in AI calls. Pulse runs explicitly configured daemon readiness checks, not automatic health checks for tool daemons such as Docker.
+**Current status**: The independent Pulse tool implements `init`, `pulse`, `review`, `status`, `stop`, and `doctor`, supporting batch tasks and local long-running processes. Jira is an independent tool; the combined compatibility CLI retains all former Pulse subcommands. The tools do not depend on one another and have no built-in AI calls. Pulse runs explicitly configured daemon readiness checks, not automatic health checks for tool daemons such as Docker.
 
 ### Requirements and build
 
-Development, builds, and runtime require JDK 21 or later. Builds use Maven. actual `pulse` execution, and `status --tools` also require working Bash; on Windows, use Git Bash rather than CMD, PowerShell, or WSL as a Bash replacement. `init`, `review`, `pulse --dry-run`, history lists, and log reads do not require Bash. Daemon readiness checks and custom stop commands use the Bash path recorded at startup without reloading project configuration.
+Development, builds, and runtime require JDK 21 or later. Builds use Maven. actual `pulse` execution, and `doctor` also require working Bash; on Windows, use Git Bash rather than CMD, PowerShell, or WSL as a Bash replacement. `init`, `review`, `pulse --dry-run`, history lists, and log reads do not require Bash. Daemon readiness checks and custom stop commands use the Bash path recorded at startup without reloading project configuration.
 
 Build and view help from the repository root:
 

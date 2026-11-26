@@ -2,7 +2,6 @@ package io.github.devpulse.cli;
 
 import io.github.devpulse.core.bash.DaemonManager;
 import io.github.devpulse.core.bash.RunHistory;
-import io.github.devpulse.core.environment.EnvironmentGatherer;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
@@ -25,7 +24,7 @@ import picocli.CommandLine.Spec;
         name = "status",
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
-        description = "Show recorded execution status " + "or local tool availability.")
+        description = "Show recorded execution status.")
 public final class StatusCommand implements Callable<Integer> {
     @Spec private CommandSpec spec;
 
@@ -34,12 +33,6 @@ public final class StatusCommand implements Callable<Integer> {
             defaultValue = ".",
             description = "Project directory (default: ${DEFAULT-VALUE}).")
     private Path directory;
-
-    @Option(names = "--tools", description = "Check Bash and local tool availability.")
-    private boolean tools;
-
-    @Option(names = "--bash", paramLabel = "PATH", description = "Explicit Bash path for --tools.")
-    private Path bash;
 
     @Option(
             names = "--run",
@@ -85,13 +78,9 @@ public final class StatusCommand implements Callable<Integer> {
     public Integer call() {
         var out = spec.commandLine().getOut();
         var err = spec.commandLine().getErr();
-        if ((tools && (run != null || list || log != null))
-                || (list && (run != null || log != null))
-                || (!tools && bash != null)) {
+        if (list && (run != null || log != null)) {
             throw new ParameterException(
-                    spec.commandLine(),
-                    "Use --tools with optional --bash, --list alone, "
-                            + "or --run with optional --log.");
+                    spec.commandLine(), "Use --list alone, or --run with optional --log.");
         }
         var json = format == OutputFormat.json;
         if (log == null && (tail != null || grep != null)) {
@@ -111,26 +100,6 @@ public final class StatusCommand implements Callable<Integer> {
             }
         }
         try {
-            if (tools) {
-                var facts = new EnvironmentGatherer().gather(directory, bash);
-                if (json) {
-                    out.println(StatusJson.tools(facts));
-                    out.flush();
-                    return ExitCodes.OK;
-                }
-                out.println("OS: " + facts.os());
-                out.println("Java: " + facts.javaVersion());
-                out.println("Bash: " + facts.bash().executable());
-                out.println("Availability only; no daemon health checks.");
-                for (var tool : facts.tools()) {
-                    out.printf(
-                            "%-12s %-10s %s%n",
-                            tool.name(),
-                            tool.location().isEmpty() ? "NOT_FOUND" : "AVAILABLE",
-                            tool.location());
-                }
-                return ExitCodes.OK;
-            }
             var history = new RunHistory(directory);
             if (run != null) {
                 return display(history, history.get(run), json, filter);

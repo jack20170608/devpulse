@@ -6,8 +6,6 @@ import com.google.gson.JsonParser;
 import io.github.devpulse.core.bash.DaemonManager;
 import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.dag.DagDaemon;
-import io.github.devpulse.core.environment.BashShell;
-import io.github.devpulse.core.environment.EnvironmentGatherer;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Path;
@@ -208,27 +206,5 @@ class StatusCommandJsonTest {
         assertThat(run.get("durationMs").getAsLong()).isEqualTo(5000L);
         assertThat(run.get("running").getAsBoolean()).isTrue();
         assertThat(run.get("warning").getAsString()).isEqualTo(warning);
-    }
-
-    @Test
-    void reportsToolAvailability() {
-        var facts =
-                new EnvironmentGatherer.Facts(
-                        directory,
-                        "Windows 11",
-                        "amd64",
-                        "21.0.2",
-                        new BashShell(Path.of("bash")),
-                        List.of(
-                                new EnvironmentGatherer.Tool("git", "/usr/bin/git"),
-                                new EnvironmentGatherer.Tool("docker", "")),
-                        List.of("pom.xml"));
-
-        var json = JsonParser.parseString(StatusJson.tools(facts)).getAsJsonObject();
-        var tools = json.getAsJsonArray("tools");
-
-        assertThat(json.getAsJsonObject("environment").get("bash").getAsString()).isEqualTo("bash");
-        assertThat(tools.get(0).getAsJsonObject().get("available").getAsBoolean()).isTrue();
-        assertThat(tools.get(1).getAsJsonObject().get("available").getAsBoolean()).isFalse();
     }
 }

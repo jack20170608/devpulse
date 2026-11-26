@@ -35,7 +35,7 @@ tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
 bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
 ```
 
-Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接解压无需安装器或 Maven；运行需要 Java 21+，脚本需要 Bash（Windows 使用 Git Bash）。Pulse 实际执行任务、`status --tools` 需要 Bash；Jira JAR 本身不依赖 Bash。也可直接运行归档内的 `java -jar devpulse-pulse.jar` 或 `java -jar devpulse-jira.jar`。
+Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接解压无需安装器或 Maven；运行需要 Java 21+，脚本需要 Bash（Windows 使用 Git Bash）。Pulse 实际执行任务、`doctor` 需要 Bash；Jira JAR 本身不依赖 Bash。也可直接运行归档内的 `java -jar devpulse-pulse.jar` 或 `java -jar devpulse-jira.jar`。
 
 ### 按需安装、升级和卸载
 
@@ -122,7 +122,7 @@ tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
 bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
 ```
 
-For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct extraction needs neither the installer nor Maven; running requires Java 21+, and the launcher needs Bash (Git Bash on Windows). Pulse task execution and `status --tools` require Bash; the Jira JAR itself does not. You can also run `java -jar devpulse-pulse.jar` or `java -jar devpulse-jira.jar` directly inside the extracted archive.
+For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct extraction needs neither the installer nor Maven; running requires Java 21+, and the launcher needs Bash (Git Bash on Windows). Pulse task execution and `doctor` require Bash; the Jira JAR itself does not. You can also run `java -jar devpulse-pulse.jar` or `java -jar devpulse-jira.jar` directly inside the extracted archive.
 
 ### Selective installation, upgrades, and removal
 

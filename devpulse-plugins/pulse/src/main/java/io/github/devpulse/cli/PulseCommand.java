@@ -24,6 +24,7 @@ import picocli.CommandLine.Spec;
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
         subcommands = {
+            DoctorCommand.class,
             InitCommand.class,
             ReviewCommand.class,
             StatusCommand.class,

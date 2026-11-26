@@ -8,7 +8,7 @@
 
 ### 职责与依赖
 
-`DevPulseCLI` 保留 `devpulse <子命令>` 的组合式入口，复用 Pulse 的 `init`、`pulse`、`review`、`status`、`stop`。它只负责 picocli 参数分发，不重复实现配置、调度或环境盘点，也不包含 Jira。
+`DevPulseCLI` 保留 `devpulse <子命令>` 的组合式入口，复用 Pulse 的 `init`、`pulse`、`review`、`status`、`stop`、`doctor`。它只负责 picocli 参数分发，不重复实现配置、调度或环境盘点，也不包含 Jira。
 
 该模块直接依赖 `pulse`，继承 `devpulse-dependencies`。独立工具之间不相互依赖；只有兼容入口将它们组合。共享库不注册命令，入口不动态发现或加载插件。
 
@@ -29,7 +29,7 @@ Shade 在 `package` 阶段生成 `devpulse-cli/target/devpulse.jar`，设置 `De
 
 ### Responsibilities and dependencies
 
-`DevPulseCLI` preserves the combined `devpulse <subcommand>` entry point, reusing Pulse's `init`, `pulse`, `review`, `status`, and `stop`. It only dispatches picocli arguments rather than reimplementing configuration, scheduling, or inventory, and does not include Jira.
+`DevPulseCLI` preserves the combined `devpulse <subcommand>` entry point, reusing Pulse's `init`, `pulse`, `review`, `status`, `stop`, and `doctor`. It only dispatches picocli arguments rather than reimplementing configuration, scheduling, or inventory, and does not include Jira.
 
 The module directly depends on `pulse` and inherits `devpulse-dependencies`. Standalone tools do not depend on one another; only this compatibility entry point combines them. The shared library registers no commands, and the entry point neither discovers nor loads plugins dynamically.
 

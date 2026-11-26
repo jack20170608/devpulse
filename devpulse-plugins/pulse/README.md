@@ -6,11 +6,11 @@
 
 [项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-plugins/pulse/architecture.md)
 
-Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。它提供 `init`、`review`、`status`、`stop` 子命令，不包含 Jira。
+Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。它提供 `init`、`review`、`status`、`stop` 和 `doctor` 子命令，不包含 Jira。
 
 ### 环境与构建
 
-构建需要 JDK 21+、Maven 和 Bash（Windows 使用 Git Bash）；JAR 运行需要 Java 21+。实际任务执行和 `status --tools` 需要 Bash；`init`、`review`、`--dry-run`、历史列表及日志读取不需要 Bash。就绪检查及自定义停止命令使用启动时保存的 Bash 路径。
+构建需要 JDK 21+、Maven 和 Bash（Windows 使用 Git Bash）；JAR 运行需要 Java 21+。实际任务执行和 `doctor` 需要 Bash；`init`、`review`、`--dry-run`、历史列表及日志读取不需要 Bash。就绪检查及自定义停止命令使用启动时保存的 Bash 路径。
 
 从仓库根目录运行：
 
@@ -19,7 +19,7 @@ bash build.sh pulse
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 ```
 
-以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop`。安装见 [发行与安装](../../devpulse-dist/README.md)，组合式入口见 [兼容 CLI](../../devpulse-cli/README.md)。
+以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，组合式入口见 [兼容 CLI](../../devpulse-cli/README.md)。
 
 ### `init`：创建配置模板
 
@@ -195,20 +195,17 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 | `--run <ID>` | 查看指定历史运行，默认选择最新运行 |
 | `--list` | 按开始时间从新到旧列出全部运行 |
 | `--log <任务名>` | 输出选中运行的任务日志，可与 `--run` 配合 |
-| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 为默认视图、`--run`、`--list`、`--tools`、`--log` 各输出一个 JSON 文档 |
+| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 为默认视图、`--run`、`--list`、`--log` 各输出一个 JSON 文档 |
 | `--tail <N>` | 配合 `--log`，只保留最后 N 行；`0` 表示全部。文本模式默认全部，JSON 模式默认 `200` |
 | `--grep <正则>` | 配合 `--log`，只保留匹配该大小写敏感正则的行；用 `(?i)` 开启忽略大小写 |
-| `--tools` | 仅检查 Bash 和固定工具清单的可用性，不查询执行历史 |
-| `--bash <路径>` | 仅与 `--tools` 配合，显式指定 Bash |
 
 ```powershell
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --list
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id>" --log build
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 ```
 
-`--list` 不能与 `--run` 或 `--log` 混用；`--tools` 不能与历史查询选项混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `40`，`--run` 指定的运行无法使用时返回 `12`，参数冲突返回 `2`，工具盘点中断返回 `130`。
+`--list` 不能与 `--run` 或 `--log` 混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `40`，`--run` 指定的运行无法使用时返回 `12`，参数冲突返回 `2`。
 
 任务历史状态区分 `PENDING`、`RUNNING`、`READY`、`SUCCESS`、`FAILED`、`SKIPPED`、`CANCELLED` 和 `INTERRUPTED`。`READY` 表示长驻进程在执行时达到就绪，不代表后来始终存活。读取遗留的未完成记录时，通过运行锁及执行器身份判断是否已退出；确认退出后保存中断状态，无法确认时保留记录并警告，不自动续跑或接管进程。
 
@@ -216,19 +213,32 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 
 时间以 UTC 显示到秒，耗时自动使用 `ms`、`s`、`m` 或 `h`；运行中标注 `(running)`，取消或中断的估计耗时以 `~` 标记。未启动或无法计算的时间显示 `-`。
 
-`--tools` 仅检查工具能否被 Bash 找到，不执行版本或守护进程健康检查；找到 `docker` 不代表 Docker 服务正在运行。历史和日志不自动清理，`.devpulse\` 应排除在版本控制之外；任务输出可能包含敏感信息，共享前必须审核。
+历史和日志不自动清理，`.devpulse\` 应排除在版本控制之外；任务输出可能包含敏感信息，共享前必须审核。
+
+### 环境检查（`doctor`）
+
+`doctor` 回答“这台机器能不能跑这个项目”：找到哪个 Bash，以及固定清单里的工具是否在 PATH 上。它只做可用性检查，不执行版本命令，也不检查守护进程健康——找到 `docker` 不代表 Docker 服务正在运行。
+
+| 参数 | 作用 |
+|------|------|
+| `--directory <目录>` | 用于识别项目标记文件的目录，默认当前目录 |
+| `--bash <路径>` | 显式指定 Bash，跳过自动发现 |
+| `--format <FORMAT>` | 结果格式，默认 `text` 或 `json` |
+
+```powershell
+java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar doctor
+```
+
+成功返回 `0`；Bash 不可用或目录不存在返回 `20`，盘点中断返回 `130`。
 
 ### 配置与执行工作流
 
-自己编写配置时，运行 `init`，然后修改模板中的任务命令。需要 AI 辅助时，按以下流程操作；这条路径不要求先运行 `init`：
+1. 运行 `init`，生成 `.devpulse.yaml` 模板。
+2. 按项目实际情况修改任务命令与依赖。
+3. 运行 `review` 或 `pulse --dry-run`，检查依赖闭包和完整命令。
+4. 确认后运行 `pulse`，再用 `status` 查询结果或日志。
 
-1. 运行 `pulse status --tools`，确认 Bash 与所需工具可用。
-2. 审核提示词后，将其交给你选择的本地或云端 AI，并补充实际项目脚本和需求。
-3. 审核 AI 生成的 YAML 配置，手动保存为项目目录下的 `.devpulse.yaml`。
-4. 运行 `review` 或 `pulse --dry-run`，检查依赖和完整命令。
-5. 确认后运行 `pulse`，再用 `status` 查询结果或日志。
-
-devpulse 不内置 AI 调用；是否向外部服务分享提示词由你决定。自己编写的配置也应先审阅，再执行。
+devpulse 不内置 AI 调用；是否借助外部 AI 编写配置由你决定，但生成的内容必须先审阅，再执行。
 
 ### 配置示例（`.devpulse.yaml`）
 
@@ -272,11 +282,11 @@ Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元�
 
 [Project home](../../readme.MD) | [Architecture](../../docs/devpulse-plugins/pulse/architecture.md)
 
-Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. It provides `init`, `review`, `status`, and `stop`, without Jira commands.
+Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. It provides `init`, `review`, `status`, `stop`, and `doctor`, without Jira commands.
 
 ### Requirements and build
 
-Building requires JDK 21+, Maven, and Bash (Git Bash on Windows); running the JAR requires Java 21+. Actual task execution and `status --tools` require Bash; `init`, `review`, `--dry-run`, history lists, and log reads do not. Readiness and custom stop commands use the Bash path saved at startup.
+Building requires JDK 21+, Maven, and Bash (Git Bash on Windows); running the JAR requires Java 21+. Actual task execution and `doctor` require Bash; `init`, `review`, `--dry-run`, history lists, and log reads do not. Readiness and custom stop commands use the Bash path saved at startup.
 
 Run from the repository root:
 
@@ -285,7 +295,7 @@ bash build.sh pulse
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 ```
 
-All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop`. See [distribution and installation](../../devpulse-dist/README.md), and the [compatibility CLI](../../devpulse-cli/README.md) for the combined entry point.
+All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [compatibility CLI](../../devpulse-cli/README.md) for the combined entry point.
 
 ### `init`: create a configuration template
 
@@ -461,20 +471,17 @@ Every actual `pulse` execution creates an independent run ID, storing run and ta
 | `--run <ID>` | Select a historical run instead of the latest |
 | `--list` | List all runs by start time, newest first |
 | `--log <task>` | Print a task log from the selected run; can be combined with `--run` |
-| `--format <FORMAT>` | Result format; defaults to `text`. `json` emits one document per view for the default view, `--run`, `--list`, `--tools`, or `--log` |
+| `--format <FORMAT>` | Result format; defaults to `text`. `json` emits one document per view for the default view, `--run`, `--list`, or `--log` |
 | `--tail <N>` | With `--log`, keep only the last N lines; `0` keeps all. Text mode defaults to all, JSON mode to `200` |
 | `--grep <regex>` | With `--log`, keep lines matching this case-sensitive regular expression; use `(?i)` for case-insensitive matching |
-| `--tools` | Check only Bash and fixed-list tool availability, without querying run history |
-| `--bash <path>` | Explicit Bash path, used only with `--tools` |
 
 ```powershell
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --list
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id>" --log build
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --tools
 ```
 
-`--list` cannot be combined with `--run` or `--log`; `--tools` cannot be combined with history query options. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `40`, an unusable `--run` identifier returns `12`, conflicting options return `2`, and tool inventory interruption returns `130`.
+`--list` cannot be combined with `--run` or `--log`. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `40`, an unusable `--run` identifier returns `12`, and conflicting options return `2`.
 
 Historical task states distinguish `PENDING`, `RUNNING`, `READY`, `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`, and `INTERRUPTED`. `READY` records that a daemon became ready during execution, not that it remains alive later. Reading unfinished records checks the run lock and executor identity. Confirmed exit persists an interrupted result; uncertainty preserves the record and prints a warning. There is no automatic resume or process takeover.
 
@@ -482,19 +489,32 @@ Detailed queries separately show live daemon state and PID: `STARTING`, `READY`,
 
 Times are displayed in UTC to whole seconds, with durations using `ms`, `s`, `m`, or `h` automatically. Active runs show `(running)`; estimated durations for cancellation or interruption are marked `~`. Unstarted or unavailable times display `-`.
 
-`--tools` only checks whether Bash can find tools; it does not execute version commands or daemon health checks. Finding `docker` does not establish that its daemon is running. History and logs are not automatically cleaned up; exclude `.devpulse\` from version control and review task output for sensitive information before sharing.
+History and logs are not automatically cleaned up; exclude `.devpulse\` from version control and review task output for sensitive information before sharing.
+
+### Environment check (`doctor`)
+
+`doctor` answers "can this machine run this project": which Bash was found, and whether the fixed tool list is on the path. It reports availability only — it runs no version commands and no daemon health checks, so finding `docker` does not establish that its daemon is running.
+
+| Option | Effect |
+|--------|--------|
+| `--directory <directory>` | Directory used to detect project markers; defaults to the current directory |
+| `--bash <path>` | Explicit Bash path, skipping discovery |
+| `--format <FORMAT>` | Result format: `text` (default) or `json` |
+
+```powershell
+java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar doctor
+```
+
+It returns `0` on success, `20` when Bash is unavailable or the directory is missing, and `130` when the check is interrupted.
 
 ### Configuration and execution workflow
 
-To write configuration yourself, run `init` and edit the template's task commands. For AI assistance, follow this workflow; it does not require running `init` first:
+1. Run `init` to generate a `.devpulse.yaml` template.
+2. Edit the task commands and dependencies for your project.
+3. Run `review` or `pulse --dry-run` to inspect the dependency closure and complete commands.
+4. After approval, run `pulse`, then use `status` to query results or logs.
 
-1. Run `pulse status --tools` to confirm Bash and the required tools are available.
-2. Review the prompt, share it with your chosen local or cloud AI, and supply actual project scripts and requirements.
-3. Review the AI-generated YAML configuration and manually save it as `.devpulse.yaml` in the project directory.
-4. Run `review` or `pulse --dry-run` to inspect dependencies and complete commands.
-5. After approval, run `pulse`, then use `status` to query results or logs.
-
-devpulse does not include AI calls; you decide whether to share the prompt with external services. Manually written configurations should also be reviewed before execution.
+devpulse makes no AI calls; whether you use an external AI to draft configuration is your decision, but review what it produces before executing it.
 
 ### Configuration example (`.devpulse.yaml`)
 

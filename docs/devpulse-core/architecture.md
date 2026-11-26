@@ -28,7 +28,7 @@
 
 ### 环境事实采集（`EnvironmentGatherer.java`）
 
-`io.github.devpulse.core.environment.EnvironmentGatherer` 与 `BashShell` 同属 core 的环境包，供 Pulse 的 `status --tools` 直接复用，不再维护独立的 gatherer Maven 模块。`gather()` 校验并规范化目录，通过固定的 Bash `command -v` 脚本获取工具位置，拒绝不完整盘点，并检查根目录项目标志；返回防御性复制的 `Facts` / `Tool` record。环境采集与 DAG、Bash 调度相互独立，不引入 CLI、提示词或剪贴板逻辑；不读取项目内容、不递归扫描、不采集环境变量值、不执行版本或健康检查。功能与使用契约见 [Core 使用说明](../../devpulse-core/README.md#环境事实采集)。
+`io.github.devpulse.core.environment.EnvironmentGatherer` 与 `BashShell` 同属 core 的环境包，供 Pulse 的 `doctor` 直接复用，不再维护独立的 gatherer Maven 模块。`gather()` 校验并规范化目录，通过固定的 Bash `command -v` 脚本获取工具位置，拒绝不完整盘点，并检查根目录项目标志；返回防御性复制的 `Facts` / `Tool` record。环境采集与 DAG、Bash 调度相互独立，不引入 CLI、提示词或剪贴板逻辑；不读取项目内容、不递归扫描、不采集环境变量值、不执行版本或健康检查。功能与使用契约见 [Core 使用说明](../../devpulse-core/README.md#环境事实采集)。
 
 ### Bash 定义、计划与运行时
 
@@ -70,7 +70,7 @@
 - **并发读取**：读取走数据库事务，不再需要原子替换文件；同一项目的数据库文件由单写者打开，命令行进程之间以此互斥。
 - **查询方式**：`status` 默认查看开始时间最新的运行，显示整体状态、任务状态、退出码、失败原因，以及运行和每个任务的开始时间、结束时间与耗时；`--run <run-id>` 选择历史运行，`--list` 列出所有运行及其起止时间、耗时，`--log <任务名>` 读取选中运行的任务日志。按开始时间排序，不让较旧运行的晚完成覆盖较新记录；查询成功返回 `0`，不因历史任务失败而返回失败退出码。
 - **时间展示**：起止时间使用 UTC ISO 8601，仅显示到秒；持久化时间戳仍保留原始精度。耗时自动选择单位：小于 1 秒显示整数 `ms`，小于 1 分钟显示 `s`，小于 1 小时显示 `m`，其余显示 `h`；秒、分钟和小时最多保留两位小数并去除末尾零，例如 `303ms`、`2.76s`、`1.5m`、`27h`。运行中按查询时刻计算已耗时并标注 `(running)`；未启动任务的起止时间与耗时显示 `-`。取消或中断记录中的结束时间可能是取消或恢复时刻，不能视为实际进程退出时间，其耗时加 `~` 标记为估计值；缺少时间或系统时钟倒退导致无法计算时显示 `-`。耗时由现有时间戳计算，不额外持久化。
-- **环境检查**：`status --tools` 保留 Bash 和工具可用性检查，可配合 `--bash`；不执行版本命令或探测 Docker 等守护进程。所有模式支持 `--directory`。工具模式不能与运行查询参数混用。
+- **环境检查**：`doctor` 检查 Bash 和工具可用性，可配合 `--bash`；不执行版本命令或探测 Docker 等守护进程。所有模式支持 `--directory`。工具模式不能与运行查询参数混用。
 - **查询与恢复边界**：读取历史、列表和日志不要求 Bash 或项目配置仍然存在；长驻进程的实时就绪检查与自定义停止命令使用启动时保存的 Bash 和脚本，Bash 不可用时不能确认就绪。旧版本以文件保存的运行不再被读取。运行记录不含配置 include，也不从环境变量解析额外数据。不自动断点续跑、接管或重启遗留进程；手动清理仅处理已记录且身份可确认的实例。后续若增加恢复执行，需校验命令及依赖是否变化，并明确幂等性与重跑策略。
 - **本地数据边界**：运行记录与日志属于生成数据，应将 `.devpulse\` 排除在版本控制之外；不保存环境变量或凭据快照。任务输出可能包含敏感信息，用户应在共享日志前审核。首期不自动清理历史记录；运行记录已存放在关系型数据库中，以支持跨进程读取与聚合查询。
 
@@ -108,7 +108,7 @@ Successful batch exit and daemon readiness release dependencies. Handles provide
 
 ### Environment fact collection (`EnvironmentGatherer.java`)
 
-`io.github.devpulse.core.environment.EnvironmentGatherer` shares core's environment package with `BashShell`, directly reused by Pulse's `status --tools` without a separate gatherer Maven module. `gather()` validates and normalizes directories, runs a fixed Bash `command -v` inventory, rejects incomplete results, and checks root-level project markers. It returns `Facts` / `Tool` records with defensive list copies. Collection remains independent of DAG and Bash scheduling, introducing no CLI, prompts, or clipboard logic. It does not read project contents, scan recursively, collect environment variable values, or run version/health checks. See the [Core usage guide](../../devpulse-core/README.md#environment-fact-collection) for functionality and contracts.
+`io.github.devpulse.core.environment.EnvironmentGatherer` shares core's environment package with `BashShell`, directly reused by Pulse's `doctor` without a separate gatherer Maven module. `gather()` validates and normalizes directories, runs a fixed Bash `command -v` inventory, rejects incomplete results, and checks root-level project markers. It returns `Facts` / `Tool` records with defensive list copies. Collection remains independent of DAG and Bash scheduling, introducing no CLI, prompts, or clipboard logic. It does not read project contents, scan recursively, collect environment variable values, or run version/health checks. See the [Core usage guide](../../devpulse-core/README.md#environment-fact-collection) for functionality and contracts.
 
 ### Bash definitions, planning, and runtime
 
@@ -150,7 +150,7 @@ Successful batch exit and daemon readiness release dependencies. Handles provide
 - **Concurrent reads**: Reads run in database transactions, so no atomic file replacement is needed; the project's database file is opened by a single writer, which is how command-line processes exclude each other.
 - **Queries**: `status` defaults to the most recently started run and shows overall state, task states, exit codes, failure reasons, and start times, end times, and durations for both the run and every task. `--run <run-id>` selects a historical run, `--list` lists all runs with their start/end times and durations, and `--log <task-name>` reads a task log from the selected run. Sort by start time so an older run finishing later does not overwrite a newer record. Successful queries return `0`, even when the recorded execution failed.
 - **Timing display**: Use UTC ISO 8601 timestamps displayed to seconds, preserving the original precision in persisted timestamps. Select duration units automatically: integer `ms` below one second, `s` below one minute, `m` below one hour, and `h` otherwise. Seconds, minutes, and hours use at most two decimal places with trailing zeros removed, for example `303ms`, `2.76s`, `1.5m`, and `27h`. For running work, calculate elapsed time at query time and append `(running)`. Show `-` for all timing fields of unstarted tasks. Cancellation or interruption end times may represent cancellation or recovery rather than actual process exit; prefix their estimated durations with `~`. Show `-` when missing timestamps or backward system-clock changes prevent calculation. Derive durations from existing timestamps without persisting additional fields.
-- **Environment checks**: `status --tools` retains Bash and tool availability checks with optional `--bash`. Do not run version commands or probe daemons such as Docker. All modes support `--directory`; do not combine tool mode with run-query options.
+- **Environment checks**: `doctor` checks Bash and tool availability with optional `--bash`. Do not run version commands or probe daemons such as Docker. All modes support `--directory`; do not combine tool mode with run-query options.
 - **Query and recovery boundaries**: Reading history, lists, and logs needs no Bash or project configuration. Live daemon readiness and custom stopping use recorded Bash and scripts; missing Bash prevents confirming readiness. Older runs recorded as files are no longer read. Run records contain no configuration includes and resolve no additional environment data. Do not resume, take over, or restart orphaned processes; manual cleanup targets only recorded, identity-confirmed instances. Future resumption must validate definitions and establish idempotency/retry policies.
 - **Local data boundaries**: Run records and logs are generated data; exclude `.devpulse\` from version control. Do not persist environment-variable or credential snapshots. Task output may contain sensitive information and must be reviewed before sharing. Do not automatically prune history initially; run records already live in a relational database, which supports cross-process reads and aggregate queries.
 

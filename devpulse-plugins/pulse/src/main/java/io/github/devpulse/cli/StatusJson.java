@@ -6,7 +6,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.devpulse.core.bash.DaemonManager;
 import io.github.devpulse.core.bash.RunHistory;
-import io.github.devpulse.core.environment.EnvironmentGatherer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -86,26 +85,6 @@ final class StatusJson {
     }
 
     /** Local tool availability, without daemon health checks. */
-    static String tools(EnvironmentGatherer.Facts facts) {
-        var root = base();
-        root.addProperty("view", "tools");
-        var environment = new JsonObject();
-        environment.addProperty("os", facts.os());
-        environment.addProperty("java", facts.javaVersion());
-        environment.addProperty("bash", facts.bash().executable().toString());
-        root.add("environment", environment);
-        var tools = new JsonArray();
-        for (var tool : facts.tools()) {
-            var item = new JsonObject();
-            item.addProperty("name", tool.name());
-            item.addProperty("available", !tool.location().isEmpty());
-            item.addProperty("location", tool.location());
-            tools.add(item);
-        }
-        root.add("tools", tools);
-        return GSON.toJson(root);
-    }
-
     private static JsonObject runObject(
             RunHistory.Snapshot snapshot,
             Map<String, List<DaemonManager.Instance>> daemons,

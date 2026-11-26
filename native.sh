@@ -120,7 +120,7 @@ YAML
 	expect 0 "help" "$binary" --help
 	expect 0 "run pipeline" "$binary" pulse dev --directory "$work"
 	expect 0 "status" "$binary" status --directory "$work"
-	expect 0 "status --tools" "$binary" status --tools
+	expect 0 "doctor" "$binary" doctor --directory "$work"
 	expect 0 "dry run" "$binary" pulse dev --directory "$work" --dry-run
 	expect 0 "review" "$binary" review dev --directory "$work"
 	expect 0 "daemon lifecycle" "$binary" pulse daemon --directory "$work"

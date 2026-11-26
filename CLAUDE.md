@@ -8,9 +8,9 @@ devpulse is a local DevOps toolbox built on Java 21 and Maven. It ships independ
 
 - **Pulse** — runs tasks/pipelines defined in `.devpulse.yaml` through Bash, with a DAG scheduler, run history, and local daemons.
 - **Jira** — standalone Jira REST client (issue create/view/update/transition, comments, attachments).
-- **`devpulse`** — combined compatibility CLI that dispatches to Pulse commands (`init`, `pulse`, `review`, `status`, `stop`).
+- **`devpulse`** — combined compatibility CLI that dispatches to Pulse commands (`init`, `pulse`, `review`, `status`, `stop`, `doctor`).
 
-Java 21+ is required to build and run. Actual Bash execution (Pulse, `status --tools`) also requires Bash; on Windows use Git Bash, never CMD/PowerShell/WSL as a substitute. `init`, `review`, `--dry-run`, history queries, and Jira do not need Bash.
+Java 21+ is required to build and run. Actual Bash execution (Pulse, `doctor`) also requires Bash; on Windows use Git Bash, never CMD/PowerShell/WSL as a substitute. `init`, `review`, `--dry-run`, history queries, and Jira do not need Bash.
 
 ## Commands
 

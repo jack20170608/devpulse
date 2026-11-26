@@ -14,6 +14,7 @@ import picocli.CommandLine.Spec;
         versionProvider = DevPulseCLI.VersionProvider.class,
         description = "A local DevOps orchestration toolbox.",
         subcommands = {
+            DoctorCommand.class,
             InitCommand.class,
             PulseCommand.class,
             ReviewCommand.class,
