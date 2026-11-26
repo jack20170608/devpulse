@@ -16,7 +16,7 @@
 - 使用 Maven 管理依赖、构建与打包。`devpulse-dependencies/pom.xml` 管理外部依赖版本，`devpulse-bom/pom.xml` 管理内部可消费模块版本；根 `pom.xml` 的 `pluginManagement` 管理构建插件版本。
 - 项目版本只在根 `pom.xml` 的 `<revision>` 定义；根项目及子模块父版本使用 `${revision}`，内部依赖版本继续用 `${project.version}`。保留 Flatten Maven Plugin 的 `resolveCiFriendliesOnly` 设置，使安装和发布的 POM 不含未解析的 `${revision}`。
 - 核心、插件聚合模块、兼容入口、发行模块及内部 BOM 通过本地相对路径继承 `devpulse-dependencies`，无需先安装兄弟 BOM 才能解析父 POM；存在内部代码依赖的模块仍需通过根 reactor 的 `--also-make` 一起构建。不要在运行模块中声明对 BOM 的普通运行时依赖。
-- 根目录为 Maven 聚合项目；`devpulse-core` 仅提供 Bash 和环境盘点共享代码。Pulse 与 Jira 在 `devpulse-plugins` 下各自生成可执行 JAR；工具模块可以依赖共享库，但不可相互依赖。`devpulse-cli` 是组合式兼容入口；共享库不注册或加载工具命令，且不使用动态插件加载。
+- 根目录为 Maven 聚合项目；`devpulse-core` 仅提供 Bash 和环境盘点共享代码。Pulse 与 Jira 在 `devpulse-plugins` 下各自生成可执行 JAR；工具模块可以依赖共享库，但不可相互依赖。`devpulse` 是统一入口；共享库不注册或加载工具命令，且不使用动态插件加载。
 - 使用 picocli 构建 CLI，通过 `@Command` 注解定义命令和子命令。
 - 使用 Typesafe Config（`com.typesafe:config`）解析 HOCON 配置，不引入 Jackson 进行配置映射。
 - 使用原生 Java 控制台输出，可选用 jansi 提供终端颜色和进度展示。
@@ -41,23 +41,23 @@
 - 设置 UTF-8 源码编码，并将 Maven Compiler Plugin 的 `release` 配置为 `21`，保证产物可在 Java 21 上运行。
 - 使用 Maven Shade Plugin 在 `package` 阶段生成包含运行依赖的可执行 JAR。
 - 每个模块通过 `ManifestResourceTransformer` 设置自身的 `Main-Class`。
-- 组合式兼容入口为 `devpulse-cli/target/devpulse.jar`，独立工具产物在 `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`；`devpulse-dist` 按工具打包。
+- 组合式兼容入口为 `devpulse/target/devpulse.jar`，独立工具产物在 `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`；`devpulse-dist` 按工具打包。
 - 分发时，目标机器需要安装 Java 21 或更高版本。
 
 在仓库根目录构建并运行：
 
 ```powershell
 mvn clean package
-java -jar devpulse-cli\target\devpulse.jar --help
+java -jar devpulse\target\devpulse.jar --help
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ```
 
-在 Bash（Windows 使用 Git Bash）中优先通过根目录 `build.sh` 构建：`bash build.sh [all|pulse|jira|cli|dist] [--clean] [--quiet]`。`run.sh` 和 `../integration-test` 复用此脚本，不另写 Maven 模块选择逻辑。
+在 Bash（Windows 使用 Git Bash）中优先通过根目录 `build.sh` 构建：`bash build.sh [all|pulse|jira|devpulse|dist] [--clean] [--quiet]`。`run.sh` 和 `../integration-test` 复用此脚本，不另写 Maven 模块选择逻辑。
 
 ### 测试
 
-- 测试是可信度门禁的一部分，不是可选项。现状：`core`、`storage`、`pulse`、`jira` 有测试，`common`、`cli` 尚无。
+- 测试是可信度门禁的一部分，不是可选项。现状：`core`、`storage`、`pulse`、`jira` 有测试，`common`、`devpulse` 尚无。
 - 采用 **test-on-touch**：修改哪个模块，就为该次改动补最小测试；不要求为全仓补齐测试。优先覆盖纯函数、边界条件和错误路径，而不是输出字符串。
 - 控制测试体积：单个测试文件不超过 150 行；大段期望输出放到 `src/test/resources` 下的黄金文件，不要内联为 Java 文本块。
 - 禁止快照膨胀：不要新增「用一个巨大文本块断言整个输出」的测试，改用黄金文件用例。
@@ -93,7 +93,7 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 - Use Maven for dependencies, builds, and packaging. Manage external dependency versions in `devpulse-dependencies/pom.xml`, consumable internal module versions in `devpulse-bom/pom.xml`, and build plugin versions in the root `pom.xml`'s `pluginManagement`.
 - Define the project version only in the root `pom.xml`'s `<revision>`; use `${revision}` for root and child parent versions, while keeping `${project.version}` for internal dependencies. Retain the Flatten Maven Plugin's `resolveCiFriendliesOnly` setting so installed and deployed POMs have no unresolved `${revision}`.
 - Core, the plugin aggregator, the compatibility entry point, the distribution module, and the internal BOM inherit `devpulse-dependencies` via local relative parent paths so the parent POM does not require installing a sibling BOM first. Modules with internal code dependencies must still be built through the root reactor with `--also-make`. Do not add a BOM as a regular runtime dependency.
-- The root is a Maven reactor; `devpulse-core` provides only shared Bash and environment inventory code. Pulse and Jira each build an executable JAR under `devpulse-plugins`. Tools may depend on the shared library but must not depend on one another. `devpulse-cli` is the combined compatibility entry point; the shared library does not register or load tool commands, and there is no dynamic plugin loading.
+- The root is a Maven reactor; `devpulse-core` provides only shared Bash and environment inventory code. Pulse and Jira each build an executable JAR under `devpulse-plugins`. Tools may depend on the shared library but must not depend on one another. `devpulse` is the combined compatibility entry point; the shared library does not register or load tool commands, and there is no dynamic plugin loading.
 - Use picocli for the CLI and its `@Command` annotations for commands and subcommands.
 - Use Typesafe Config (`com.typesafe:config`) to parse HOCON configuration. Do not introduce Jackson for configuration mapping.
 - Use standard Java console output, optionally with jansi for terminal colors and progress display.
@@ -118,23 +118,23 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 - Set UTF-8 source encoding and configure Maven Compiler Plugin with `release` set to `21`, so artifacts remain runnable on Java 21.
 - Use Maven Shade Plugin during the `package` phase to produce an executable JAR containing runtime dependencies.
 - Use `ManifestResourceTransformer` to set each module's own `Main-Class`.
-- The combined compatibility entry point builds `devpulse-cli/target/devpulse.jar`; standalone tools build `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`. `devpulse-dist` packages the tools individually.
+- The combined compatibility entry point builds `devpulse/target/devpulse.jar`; standalone tools build `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`. `devpulse-dist` packages the tools individually.
 - Distribution requires Java 21 or later on the target machine.
 
 Build and run from the repository root:
 
 ```powershell
 mvn clean package
-java -jar devpulse-cli\target\devpulse.jar --help
+java -jar devpulse\target\devpulse.jar --help
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ```
 
-In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash build.sh [all|pulse|jira|cli|dist] [--clean] [--quiet]`. `run.sh` and `../integration-test` reuse this script rather than duplicating Maven module selection.
+In Bash (Git Bash on Windows), prefer the root `build.sh` for builds: `bash build.sh [all|pulse|jira|devpulse|dist] [--clean] [--quiet]`. `run.sh` and `../integration-test` reuse this script rather than duplicating Maven module selection.
 
 ### Testing
 
-- Tests are part of the trust gate, not optional. Current state: `core`, `storage`, `pulse`, and `jira` have tests, while `common` and `cli` have none.
+- Tests are part of the trust gate, not optional. Current state: `core`, `storage`, `pulse`, and `jira` have tests, while `common` and `devpulse` have none.
 - Use **test-on-touch**: when you change a module, add the smallest test for that change; do not backfill tests across the whole repository. Prefer pure functions, boundary conditions, and error paths over rendered output strings.
 - Keep tests small: a test file stays under 150 lines; put large expected output in golden files under `src/test/resources` instead of inline Java text blocks.
 - No snapshot bloat: do not add a test that asserts an entire output with one huge text block; add a golden-file case instead.

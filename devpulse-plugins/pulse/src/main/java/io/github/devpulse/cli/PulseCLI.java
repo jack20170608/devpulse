@@ -10,7 +10,7 @@ public final class PulseCLI {
 
     public static void main(String[] args) {
         var cli =
-                new CommandLine(new PulseCommand())
+                new CommandLine(new RunCommand())
                         .setOut(new PrintWriter(System.out, true, StandardCharsets.UTF_8))
                         .setErr(new PrintWriter(System.err, true, StandardCharsets.UTF_8));
         System.exit(cli.execute(args));

@@ -20,13 +20,13 @@ import picocli.CommandLine;
  * Guards the machine-readable contract of {@code pulse}: exit codes classify what went wrong, and
  * {@code --format json} prints exactly one parseable document so a caller needs no stderr parsing.
  */
-class PulseCommandJsonTest {
+class RunCommandJsonTest {
     @TempDir Path directory;
 
     private record Outcome(int exitCode, String out, String err) {}
 
     private Outcome execute(String... args) {
-        var command = new CommandLine(new PulseCommand());
+        var command = new CommandLine(new RunCommand());
         var out = new StringWriter();
         var err = new StringWriter();
         command.setOut(new PrintWriter(out, true));
@@ -165,7 +165,7 @@ class PulseCommandJsonTest {
     @Test
     void mapsDaemonOutcomesToTheirOwnExitCodes() {
         assertThat(
-                        PulseCommand.exitCodeFor(
+                        RunCommand.exitCodeFor(
                                 new WorkflowRun.Result(
                                         RunHistory.State.SUCCESS,
                                         1,
@@ -174,7 +174,7 @@ class PulseCommandJsonTest {
                                         WorkflowRun.DaemonOutcome.NONE)))
                 .isEqualTo(ExitCodes.OK);
         assertThat(
-                        PulseCommand.exitCodeFor(
+                        RunCommand.exitCodeFor(
                                 new WorkflowRun.Result(
                                         RunHistory.State.FAILED,
                                         0,
@@ -183,7 +183,7 @@ class PulseCommandJsonTest {
                                         WorkflowRun.DaemonOutcome.NONE)))
                 .isEqualTo(ExitCodes.TASK_FAILED);
         assertThat(
-                        PulseCommand.exitCodeFor(
+                        RunCommand.exitCodeFor(
                                 new WorkflowRun.Result(
                                         RunHistory.State.FAILED,
                                         0,
@@ -192,7 +192,7 @@ class PulseCommandJsonTest {
                                         WorkflowRun.DaemonOutcome.NEVER_READY)))
                 .isEqualTo(ExitCodes.DAEMON_NOT_READY);
         assertThat(
-                        PulseCommand.exitCodeFor(
+                        RunCommand.exitCodeFor(
                                 new WorkflowRun.Result(
                                         RunHistory.State.FAILED,
                                         0,
@@ -209,6 +209,6 @@ class PulseCommandJsonTest {
 
         assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_INVALID);
         assertThat(result.out()).isEmpty();
-        assertThat(result.err()).startsWith("pulse: ");
+        assertThat(result.err()).startsWith("devpulse: ");
     }
 }

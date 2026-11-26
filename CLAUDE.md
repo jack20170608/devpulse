@@ -8,7 +8,7 @@ devpulse is a local DevOps toolbox built on Java 21 and Maven. It ships independ
 
 - **Pulse** — runs tasks/pipelines defined in `.devpulse.yaml` through Bash, with a DAG scheduler, run history, and local daemons.
 - **Jira** — standalone Jira REST client (issue create/view/update/transition, comments, attachments).
-- **`devpulse`** — combined compatibility CLI that dispatches to Pulse commands (`init`, `pulse`, `review`, `status`, `stop`, `doctor`).
+- **`devpulse`** — the unified CLI: `init`, `run`, `review`, `status`, `stop`, `doctor`. The `run` command executes Pulse's task graph.
 
 Java 21+ is required to build and run. Actual Bash execution (Pulse, `doctor`) also requires Bash; on Windows use Git Bash, never CMD/PowerShell/WSL as a substitute. `init`, `review`, `--dry-run`, history queries, and Jira do not need Bash.
 
@@ -16,7 +16,7 @@ Java 21+ is required to build and run. Actual Bash execution (Pulse, `doctor`) a
 
 ```bash
 bash build.sh                 # build all modules
-bash build.sh pulse|jira|cli|dist [--clean] [--quiet]
+bash build.sh pulse|jira|devpulse|dist [--clean] [--quiet]
 bash run.sh --help            # rebuild combined CLI, then run it
 
 bash verify.sh                # THE machine gate: Spotless check + full compile + all tests + SpotBugs
@@ -25,7 +25,7 @@ mvn spotless:apply            # apply google-java-format instead of hand-formatt
 ```
 
 Build outputs:
-- Combined CLI: `devpulse-cli/target/devpulse.jar`
+- Combined CLI: `devpulse/target/devpulse.jar`
 - Standalone tools: `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`
 - Release archives: `devpulse-dist/target/` (Pulse and Jira only)
 
@@ -49,7 +49,7 @@ Dependency direction:
 - Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, and `RunService`).
 - `devpulse-plugins` aggregates `pulse` and `jira`. Tools may depend on shared libraries but **never on each other**. Pulse depends on core; Jira is standalone.
 - Libraries register no CLI commands and there is no dynamic plugin loading.
-- `devpulse-cli` is the compatibility entry point wrapping Pulse only. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.
+- `devpulse` is the unified entry point: its commands wrap Pulse's task graph. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.
 
 Core does not read Pulse YAML. Pulse owns YAML config, plan assembly, CLI commands, and presentation; core owns graph planning, scheduling, process execution, and persistence.
 

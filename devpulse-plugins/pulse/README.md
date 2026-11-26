@@ -19,7 +19,7 @@ bash build.sh pulse
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 ```
 
-以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，组合式入口见 [兼容 CLI](../../devpulse-cli/README.md)。
+以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，组合式入口见 [兼容 CLI](../../devpulse/README.md)。
 
 ### `init`：创建配置模板
 
@@ -295,7 +295,7 @@ bash build.sh pulse
 java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 ```
 
-All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [compatibility CLI](../../devpulse-cli/README.md) for the combined entry point.
+All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [compatibility CLI](../../devpulse/README.md) for the combined entry point.
 
 ### `init`: create a configuration template
 

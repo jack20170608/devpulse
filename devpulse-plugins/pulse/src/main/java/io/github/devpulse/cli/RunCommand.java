@@ -20,7 +20,7 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
 @Command(
-        name = "pulse",
+        name = "run",
         mixinStandardHelpOptions = true,
         versionProvider = PulseCLI.VersionProvider.class,
         subcommands = {
@@ -32,7 +32,7 @@ import picocli.CommandLine.Spec;
             RetryCommand.class
         },
         description = "Run a local task or pipeline " + "according to its dependencies.")
-public final class PulseCommand implements Callable<Integer> {
+public final class RunCommand implements Callable<Integer> {
     @Spec private CommandSpec spec;
 
     @Parameters(
@@ -240,7 +240,7 @@ public final class PulseCommand implements Callable<Integer> {
     }
 
     private static Integer interrupted(boolean json, PrintWriter out, PrintWriter err) {
-        return CommandOutput.interrupted(json, out, err, "pulse", "execution interrupted.");
+        return CommandOutput.interrupted(json, out, err, "devpulse", "execution interrupted.");
     }
 
     /**
@@ -255,6 +255,6 @@ public final class PulseCommand implements Callable<Integer> {
             String code,
             String message,
             Exception cause) {
-        return CommandOutput.fail(json, out, err, "pulse", exitCode, code, message, cause);
+        return CommandOutput.fail(json, out, err, "devpulse", exitCode, code, message, cause);
     }
 }

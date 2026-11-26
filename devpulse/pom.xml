@@ -9,8 +9,8 @@
         <version>${revision}</version>
         <relativePath>../devpulse-dependencies/pom.xml</relativePath>
     </parent>
-    <artifactId>devpulse-cli</artifactId>
-    <name>devpulse compatibility CLI</name>
+    <artifactId>devpulse</artifactId>
+    <name>devpulse CLI</name>
     <dependencies>
         <dependency>
             <groupId>io.github.devpulse</groupId>

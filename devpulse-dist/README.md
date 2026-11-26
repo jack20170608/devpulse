@@ -23,7 +23,7 @@ jira --help
 
 ### 工具边界
 
-`pulse` 包含任务运行以及 `init`、`review`、`status`、`stop` 子命令；`jira` 是独立工具。`devpulse-cli/target/devpulse.jar` 保留旧的 `devpulse <子命令>` 用法，不进入单工具发行包。选择安装 Jira 不会安装 Pulse；选择安装 Pulse 不会安装 Jira。
+`pulse` 包含任务运行以及 `init`、`review`、`status`、`stop` 子命令；`jira` 是独立工具。`devpulse/target/devpulse.jar` 保留旧的 `devpulse <子命令>` 用法，不进入单工具发行包。选择安装 Jira 不会安装 Pulse；选择安装 Pulse 不会安装 Jira。
 
 ### 构建和直接运行
 
@@ -110,7 +110,7 @@ By default, install from `target` beside the installer without `--local`, `--too
 
 ### Tool boundaries
 
-`pulse` runs tasks and includes the `init`, `review`, `status`, and `stop` subcommands; `jira` is independent. `devpulse-cli/target/devpulse.jar` preserves the old `devpulse <subcommand>` syntax and is not included in individual tool archives. Installing Jira does not install Pulse; installing Pulse does not install Jira.
+`pulse` runs tasks and includes the `init`, `review`, `status`, and `stop` subcommands; `jira` is independent. `devpulse/target/devpulse.jar` preserves the old `devpulse <subcommand>` syntax and is not included in individual tool archives. Installing Jira does not install Pulse; installing Pulse does not install Jira.
 
 ### Build and run without installation
 

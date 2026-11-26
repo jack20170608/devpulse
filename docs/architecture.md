@@ -18,7 +18,7 @@
 | [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹与运行编排 |
 | [`devpulse-plugins/pulse`](devpulse-plugins/pulse/architecture.md) | YAML 配置、任务命令与静态审阅 |
 | [`devpulse-plugins/jira`](devpulse-plugins/jira/architecture.md) | Jira REST、连接配置与内容转换 |
-| [`devpulse-cli`](devpulse-cli/architecture.md) | 组合式兼容命令分发 |
+| [`devpulse`](devpulse/architecture.md) | 组合式兼容命令分发 |
 | [`devpulse-dist`](devpulse-dist/architecture.md) | 工具归档、校验与安装 |
 | [`devpulse-dependencies`](devpulse-dependencies/architecture.md) | 外部依赖与构建版本继承 |
 | [`devpulse-bom`](devpulse-bom/architecture.md) | 内部可消费模块版本 |
@@ -46,7 +46,7 @@ The former monolithic architecture document has been split by Maven module; this
 | [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, and run orchestration |
 | [`devpulse-plugins/pulse`](devpulse-plugins/pulse/architecture.md) | YAML configuration, workflow commands, and static review |
 | [`devpulse-plugins/jira`](devpulse-plugins/jira/architecture.md) | Jira REST, connection configuration, and content conversion |
-| [`devpulse-cli`](devpulse-cli/architecture.md) | Combined compatibility command dispatch |
+| [`devpulse`](devpulse/architecture.md) | Combined compatibility command dispatch |
 | [`devpulse-dist`](devpulse-dist/architecture.md) | Tool archives, checksums, and installation |
 | [`devpulse-dependencies`](devpulse-dependencies/architecture.md) | External dependencies and inherited build versions |
 | [`devpulse-bom`](devpulse-bom/architecture.md) | Consumable internal module versions |

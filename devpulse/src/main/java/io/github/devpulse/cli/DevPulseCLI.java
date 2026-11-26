@@ -16,7 +16,7 @@ import picocli.CommandLine.Spec;
         subcommands = {
             DoctorCommand.class,
             InitCommand.class,
-            PulseCommand.class,
+            RunCommand.class,
             ReviewCommand.class,
             StatusCommand.class,
             StopCommand.class
