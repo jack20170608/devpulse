@@ -4,7 +4,7 @@
 
 ## 中文
 
-[架构导航](../../architecture.md) | [使用说明](../../../devpulse-plugins/pulse/README.md)
+[架构导航](../../architecture.md) | [使用说明](../../../devpulse-pulse/README.md)
 
 ### 模块边界
 
@@ -14,7 +14,7 @@ Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 
 
 ### 配置格式与加载
 
-- 任务配置仅支持 UTF-8 YAML 文件 `.devpulse.yaml`，不再读取 `.devpulse.conf`；迁移说明见[核心 CLI 使用指南](../../../devpulse-plugins/pulse/README.md)。
+- 任务配置仅支持 UTF-8 YAML 文件 `.devpulse.yaml`，不再读取 `.devpulse.conf`；迁移说明见[核心 CLI 使用指南](../../../devpulse-pulse/README.md)。
 - 使用 SnakeYAML Engine 的 YAML 1.2 Core Schema 解析单个映射文档，限制文件大小为 1 MiB、集合嵌套为 64 层；拒绝重复键、非字符串键、自定义标签、锚点、别名和合并键，不构造任意 Java 对象。
 - 将 YAML 节点转换为带文件和行号来源的 Typesafe Config 值，复用类型化读取和时长校验；不将 YAML 字符串再次按 HOCON 解析。
 - 默认 `version: 1`、`parallelism: 4` 和空 `pipelines`；不做配置变量替换，不加载 JVM 系统属性或环境变量，命令中的变量保留给 Bash。
@@ -71,7 +71,7 @@ Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 
 
 ## English
 
-[Architecture index](../../architecture.md) | [Usage](../../../devpulse-plugins/pulse/README.md)
+[Architecture index](../../architecture.md) | [Usage](../../../devpulse-pulse/README.md)
 
 ### Module boundaries
 
@@ -81,7 +81,7 @@ Monitoring parameters parse directly into DAG `DaemonOptions`; the Bash Adapter 
 
 ### Configuration format and loading
 
-- Task configuration supports only UTF-8 YAML in `.devpulse.yaml`; `.devpulse.conf` is no longer read. See the [Core CLI guide](../../../devpulse-plugins/pulse/README.md) for migration.
+- Task configuration supports only UTF-8 YAML in `.devpulse.yaml`; `.devpulse.conf` is no longer read. See the [Core CLI guide](../../../devpulse-pulse/README.md) for migration.
 - Use SnakeYAML Engine's YAML 1.2 Core Schema to parse a single mapping document, limited to 1 MiB and 64 collection nesting levels. Reject duplicate keys, non-string keys, custom tags, anchors, aliases, and merge keys; never construct arbitrary Java objects.
 - Convert YAML nodes to Typesafe Config values with file and line origins, reusing typed reads and duration validation without reparsing YAML strings as HOCON.
 - Default to `version: 1`, `parallelism: 4`, and empty `pipelines`. Do not substitute configuration variables or load JVM system properties/environment variables; leave command variables to Bash.

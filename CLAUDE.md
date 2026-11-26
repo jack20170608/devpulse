@@ -26,7 +26,7 @@ mvn spotless:apply            # apply google-java-format instead of hand-formatt
 
 Build outputs:
 - Combined CLI: `devpulse/target/devpulse.jar`
-- Standalone tool: `devpulse-plugins/jira/target/devpulse-jira.jar` (Pulse's commands ship inside `devpulse.jar`)
+- Standalone tool: `devpulse-tools/jira/target/devpulse-jira.jar` (Pulse's commands ship inside `devpulse.jar`)
 - Release archives: `devpulse-dist/target/` (devpulse and Jira)
 
 Run a single test (artifact ID `pulse`/`jira` is unprefixed; keep `-am` so reactor dependencies build):
@@ -47,7 +47,7 @@ The root `pom.xml` is the only place the project version is defined (`<revision>
 
 Dependency direction:
 - Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, and `RunService`).
-- `devpulse-plugins` aggregates `pulse` and `jira`. Tools may depend on shared libraries but **never on each other**. Pulse depends on core; Jira is standalone.
+- `devpulse-pulse` holds Pulse's commands as a library for the unified CLI; `devpulse-tools` aggregates independent tools and currently holds only `jira`. Tools may depend on shared libraries but **never on each other**.
 - Libraries register no CLI commands and there is no dynamic plugin loading.
 - `devpulse` is the unified entry point: its commands wrap Pulse's task graph. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.
 
@@ -57,7 +57,7 @@ Core does not read Pulse YAML. Pulse owns YAML config, plan assembly, CLI comman
 
 `.devpulse.yaml` (strict YAML 1.2, single mapping document) → `PulseConfiguration` parses with SnakeYAML Engine and converts the AST into Typesafe Config for typed reads/validation → `PulsePlan` resolves the target and delegates dependency closure, cycle detection, and validation to core's `DagGraph` (iterative Kahn) → `DagWorkflow` binds sealed `DagTask`/`DagDaemon` actions supplied by `BashTaskAdapter` → `DagRun` schedules virtual threads from a ready queue using dependency counters and cooperative cancellation → `WorkflowRun` consumes events, records history, and summarizes results.
 
-Failure semantics: a failed batch task skips its descendants while independent branches continue; a daemon's readiness releases its startup slot, but later health loss cancels its active dependents and skips unstarted ones. Do not infer daemons from result types; the lifecycle is explicit. Pulse maps results to categorized exit codes (0, 2, 10–13, 20, 30–32, 40, 130) documented in `devpulse-plugins/pulse/README.md`.
+Failure semantics: a failed batch task skips its descendants while independent branches continue; a daemon's readiness releases its startup slot, but later health loss cancels its active dependents and skips unstarted ones. Do not infer daemons from result types; the lifecycle is explicit. Pulse maps results to categorized exit codes (0, 2, 10–13, 20, 30–32, 40, 130) documented in `devpulse-pulse/README.md`.
 
 ### Runtime state and storage
 

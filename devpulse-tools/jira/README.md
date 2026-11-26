@@ -4,9 +4,9 @@
 
 ## 中文
 
-[项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-plugins/jira/architecture.md)
+[项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-tools/jira/architecture.md)
 
-`devpulse-jira` 是 `devpulse-plugins` Maven 聚合模块下独立可运行的 `jira` 子模块与 Jira REST 客户端，支持 Jira Cloud（默认 REST v3）和 Data Center（默认 REST v2），可显式配置 API 版本。核心 `devpulse` 不加载或依赖它，也不需要 Bash 来执行 Jira JAR。在仓库根目录运行 `mvn clean package` 或 `bash build.sh jira` 生成 `devpulse-plugins/jira/target/devpulse-jira.jar`；下文示例中的 `bash run-jira.sh` 需在 `integration-test/jira` 目录执行，也可从仓库根目录运行 `bash integration-test/jira/run-jira.sh`。**未连接真实 Jira 实例验证**；先在测试项目中检查字段格式、权限与工作流。
+`devpulse-jira` 是 `devpulse-plugins` Maven 聚合模块下独立可运行的 `jira` 子模块与 Jira REST 客户端，支持 Jira Cloud（默认 REST v3）和 Data Center（默认 REST v2），可显式配置 API 版本。核心 `devpulse` 不加载或依赖它，也不需要 Bash 来执行 Jira JAR。在仓库根目录运行 `mvn clean package` 或 `bash build.sh jira` 生成 `devpulse-tools/jira/target/devpulse-jira.jar`；下文示例中的 `bash run-jira.sh` 需在 `integration-test/jira` 目录执行，也可从仓库根目录运行 `bash integration-test/jira/run-jira.sh`。**未连接真实 Jira 实例验证**；先在测试项目中检查字段格式、权限与工作流。
 
 ### 连接配置与认证
 
@@ -498,9 +498,9 @@ v2 的 `export` 和 `comment-export` 保留原始 Wiki 正文，不执行有损�
 
 ## English
 
-[Project home](../../readme.MD) | [Architecture](../../docs/devpulse-plugins/jira/architecture.md)
+[Project home](../../readme.MD) | [Architecture](../../docs/devpulse-tools/jira/architecture.md)
 
-`devpulse-jira` is an independently executable `jira` child module under the `devpulse-plugins` Maven aggregator and a Jira REST client for Jira Cloud (REST v3 by default) and Data Center (REST v2 by default), with an explicit API version override. The core `devpulse` neither loads nor depends on it; the Jira JAR itself does not need Bash. From the repository root, `mvn clean package` or `bash build.sh jira` produces `devpulse-plugins/jira/target/devpulse-jira.jar`; the `bash run-jira.sh` examples below run from `integration-test/jira`, or use `bash integration-test/jira/run-jira.sh` from the repository root. **It has not been validated against a live Jira instance**; first check field shapes, permissions, and workflows in a test project.
+`devpulse-jira` is an independently executable `jira` child module under the `devpulse-plugins` Maven aggregator and a Jira REST client for Jira Cloud (REST v3 by default) and Data Center (REST v2 by default), with an explicit API version override. The core `devpulse` neither loads nor depends on it; the Jira JAR itself does not need Bash. From the repository root, `mvn clean package` or `bash build.sh jira` produces `devpulse-tools/jira/target/devpulse-jira.jar`; the `bash run-jira.sh` examples below run from `integration-test/jira`, or use `bash integration-test/jira/run-jira.sh` from the repository root. **It has not been validated against a live Jira instance**; first check field shapes, permissions, and workflows in a test project.
 
 ### Connection configuration and authentication
 

@@ -44,7 +44,7 @@
                                 <checksum file="${project.basedir}/../devpulse/target/devpulse.jar"
                                           todir="${project.build.directory}/checksums/devpulse"
                                           fileext=".sha256" algorithm="SHA-256" format="MD5SUM"/>
-                                <checksum file="${project.basedir}/../devpulse-plugins/jira/target/devpulse-jira.jar"
+                                <checksum file="${project.basedir}/../devpulse-tools/jira/target/devpulse-jira.jar"
                                           todir="${project.build.directory}/checksums/jira"
                                           fileext=".sha256" algorithm="SHA-256" format="MD5SUM"/>
                             </target>

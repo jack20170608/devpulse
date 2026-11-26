@@ -10,4 +10,4 @@ PROJECT_ROOT=${SCRIPT_DIR}/../../
 #bash "$PROJECT_ROOT/build.sh" jira --quiet
 
 exec java -jar \
-	"$PROJECT_ROOT/devpulse-plugins/jira/target/devpulse-jira.jar" "$@"
+	"$PROJECT_ROOT/devpulse-tools/jira/target/devpulse-jira.jar" "$@"

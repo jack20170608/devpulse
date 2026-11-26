@@ -8,7 +8,7 @@
     <baseDirectory>devpulse-jira-${project.version}</baseDirectory>
     <files>
         <file>
-            <source>../devpulse-plugins/jira/target/devpulse-jira.jar</source>
+            <source>../devpulse-tools/jira/target/devpulse-jira.jar</source>
             <outputDirectory>/</outputDirectory>
             <destName>devpulse-jira.jar</destName>
         </file>

@@ -5,8 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>io.github.devpulse</groupId>
-        <artifactId>devpulse-plugins</artifactId>
+        <artifactId>devpulse-dependencies</artifactId>
         <version>${revision}</version>
+        <relativePath>../devpulse-dependencies/pom.xml</relativePath>
     </parent>
     <artifactId>pulse</artifactId>
     <name>devpulse Pulse CLI</name>

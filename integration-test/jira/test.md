@@ -12,7 +12,7 @@
 
 ```bash
 bash build.sh jira --quiet
-JAR="$PWD/devpulse-plugins/jira/target/devpulse-jira.jar" && jira() { java -jar "$JAR" "$@"; }
+JAR="$PWD/devpulse-tools/jira/target/devpulse-jira.jar" && jira() { java -jar "$JAR" "$@"; }
 
 export JIRA_API_TOKEN='your-api-token'
 export JIRA_URL='https://your-site.atlassian.net'
@@ -214,7 +214,7 @@ Run from the repository root in Git Bash. Build once, define a `jira` function, 
 
 ```bash
 bash build.sh jira --quiet
-JAR="$PWD/devpulse-plugins/jira/target/devpulse-jira.jar"
+JAR="$PWD/devpulse-tools/jira/target/devpulse-jira.jar"
 jira() { java -jar "$JAR" "$@"; }
 
 export JIRA_API_TOKEN='your-api-token'

@@ -6,8 +6,9 @@
 
     <parent>
         <groupId>io.github.devpulse</groupId>
-        <artifactId>devpulse-plugins</artifactId>
+        <artifactId>devpulse-tools</artifactId>
         <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>jira</artifactId>
     <name>devpulse Jira CLI</name>

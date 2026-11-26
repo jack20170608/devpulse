@@ -4,7 +4,7 @@
 
 ## 中文
 
-[项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-plugins/pulse/architecture.md)
+[项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-pulse/architecture.md)
 
 Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。这些命令由统一的 `devpulse` 入口提供；Jira 不在其中。
 
@@ -280,7 +280,7 @@ Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元�
 
 ## English
 
-[Project home](../../readme.MD) | [Architecture](../../docs/devpulse-plugins/pulse/architecture.md)
+[Project home](../../readme.MD) | [Architecture](../../docs/devpulse-pulse/architecture.md)
 
 Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. The unified `devpulse` entry point provides these commands; Jira is not among them.
 

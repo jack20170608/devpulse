@@ -45,7 +45,7 @@ GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # 构建并运行冒烟�
 | `review` | 静态校验并审阅执行计划，不运行任务 | 已实现 |
 | `status` | 查询运行历史、日志及长驻进程的存活与就绪状态，或检查工具可用性 | 已实现 |
 | `stop` | 手动停止指定运行中的长驻进程 | 已实现 |
-| 独立的 `devpulse-jira` | 从 HOCON/Markdown 模板创建 Jira Issue、导出与更新、流转、评论和附件；详见 [Jira CLI](../devpulse-plugins/jira/README.md) | 已实现 |
+| 独立的 `devpulse-jira` | 从 HOCON/Markdown 模板创建 Jira Issue、导出与更新、流转、评论和附件；详见 [Jira CLI](../devpulse-tools/jira/README.md) | 已实现 |
 
 不指定子命令时显示主命令帮助。主命令和所有子命令均支持 `-h` / `--help` 和 `-V` / `--version`。
 
@@ -56,7 +56,7 @@ java -jar devpulse\target\devpulse.jar --version
 
 ### 各命令使用说明
 
-工作流命令与 YAML 配置见 [Pulse](../devpulse-plugins/pulse/README.md)。Jira 不属于组合入口，请参阅 [Jira](../devpulse-plugins/jira/README.md)。
+工作流命令与 YAML 配置见 [Pulse](../devpulse-pulse/README.md)。Jira 不属于组合入口，请参阅 [Jira](../devpulse-tools/jira/README.md)。
 
 [架构设计](../docs/devpulse/architecture.md)
 
@@ -103,7 +103,7 @@ The output is `devpulse/target/devpulse-native`, about 47 MB. `--verify` covers 
 | `review` | Validate and review execution plans without running tasks | Implemented |
 | `status` | Query history, logs, and daemon liveness/readiness | Implemented |
 | `stop` | Manually stop daemons in a selected run | Implemented |
-| Standalone `devpulse-jira` | Create Jira issues from HOCON/Markdown templates, export and update, transition, comment, and attach files; see [Jira CLI](../devpulse-plugins/jira/README.md) | Implemented |
+| Standalone `devpulse-jira` | Create Jira issues from HOCON/Markdown templates, export and update, transition, comment, and attach files; see [Jira CLI](../devpulse-tools/jira/README.md) | Implemented |
 
 Running without a subcommand displays the main command help. The main command and all subcommands support `-h` / `--help` and `-V` / `--version`.
 
@@ -114,6 +114,6 @@ java -jar devpulse\target\devpulse.jar --version
 
 ### Command guides
 
-See [Pulse](../devpulse-plugins/pulse/README.md) for workflow commands and YAML configuration,. Jira is not part of the combined entry point; see [Jira](../devpulse-plugins/jira/README.md).
+See [Pulse](../devpulse-pulse/README.md) for workflow commands and YAML configuration,. Jira is not part of the combined entry point; see [Jira](../devpulse-tools/jira/README.md).
 
 [Architecture](../docs/devpulse/architecture.md)

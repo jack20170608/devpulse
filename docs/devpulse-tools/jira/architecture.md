@@ -4,7 +4,7 @@
 
 ## 中文
 
-[架构导航](../../architecture.md) | [使用说明](../../../devpulse-plugins/jira/README.md)
+[架构导航](../../architecture.md) | [使用说明](../../../devpulse-tools/jira/README.md)
 
 ### 模块与分层
 
@@ -54,7 +54,7 @@ create/edit 的 `--template` 读取完整 YAML metadata + description，`--file`
 
 ## English
 
-[Architecture index](../../architecture.md) | [Usage](../../../devpulse-plugins/jira/README.md)
+[Architecture index](../../architecture.md) | [Usage](../../../devpulse-tools/jira/README.md)
 
 ### Module and layers
 
