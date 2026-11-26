@@ -1,9 +1,9 @@
--- Central store: one database holds every project.
+-- The schema, version 1: one database holds every project.
 --
--- Applied as schema version 3. This rebuilds the store from scratch: the old
--- per-project layout has no place for a project identity, so a store that still
--- holds rows is refused by Schema before this file runs. Existing data moves
--- through the import tool, not through this migration.
+-- This is the whole schema, not an upgrade step. There is no migration history
+-- to preserve yet, so a layout change edits this file and existing stores are
+-- deleted rather than upgraded. The DROP statements make that explicit: applying
+-- this file to a leftover store rebuilds it instead of blending two layouts.
 
 DROP TABLE IF EXISTS run_event;
 DROP TABLE IF EXISTS task_edge;

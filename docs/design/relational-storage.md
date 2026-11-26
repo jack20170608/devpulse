@@ -64,7 +64,7 @@
 
 **约束**：引擎选择必须可替换。`RunStore` 是不可变接口，SQL 只出现在实现类与迁移脚本中。
 
-### 5. 数据模型（v3，单库）
+### 5. 数据模型（单库基线）
 
 ```text
 project(id PK, path UNIQUE, name, created_at, last_seen_at)
@@ -119,7 +119,7 @@ schema_version(version, applied_at)
 
 ### 7. 旧数据
 
-**不做迁移。** v3 迁移会检测旧 `run` 表是否仍有记录：有则拒绝执行并提示移走 `.devpulse` 目录，而不是静默丢数据。现有 `.devpulse/runs/` 目录保留但不再被读取；文档说明可安全删除。理由是当前只有一个使用者，而迁移代码本身会成为需要长期维护的兼容负担。
+**不做迁移。** schema 只有一份基线：旧库直接删除 `.devpulse` 目录后重建，不提供导入工具，也不保留兼容代码。若库的版本号高于本构建，迁移会拒绝执行并提示删除，避免旧代码误读新布局。理由是当前只有一个使用者，而迁移代码本身会成为需要长期维护的兼容负担。
 
 ### 8. 对 retry 的影响
 
@@ -235,7 +235,7 @@ The engine keeps its role while storage becomes a reusable, independently testab
 
 **Constraint**: the engine must stay replaceable. `RunStore` is a stable interface, and SQL appears only in implementations and migration scripts.
 
-### 5. Data model (v3, one database)
+### 5. Data model (one database)
 
 ```text
 project(id PK, path UNIQUE, name, created_at, last_seen_at)
@@ -290,7 +290,7 @@ Indexes: `run(project_id, started_at)`, `task(run_id, seq)`, `task_result(projec
 
 ### 7. Legacy data
 
-**No migration.** The v3 migration checks whether the old `run` table still holds rows and refuses to run if it does, telling the user to move `.devpulse` aside instead of dropping data silently. The existing `.devpulse/runs/` directory is left in place but no longer read. There is a single user today, and migration code would itself become a long-lived compatibility burden.
+**No migration.** There is a single schema baseline: an old store is rebuilt by deleting its `.devpulse` directory, with no import tool and no compatibility code. A store whose version is newer than this build is refused with the same instruction, so an old build cannot read a new layout. There is a single user today, and migration code would itself become a long-lived compatibility burden.
 
 ### 8. Effect on retry
 

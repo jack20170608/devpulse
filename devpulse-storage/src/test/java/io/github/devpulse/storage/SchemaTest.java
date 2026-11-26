@@ -80,21 +80,39 @@ class SchemaTest {
     }
 
     @Test
-    void refusesToRebuildAStoreThatStillHoldsRuns() throws IOException {
+    void theBaselineRebuildsALeftoverStoreInsteadOfBlendingLayouts() throws IOException {
         var jdbi = Jdbi.create("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
+        var baseline = Schema.read(Schema.MIGRATIONS.getFirst());
         try (var handle = jdbi.open()) {
-            for (var statement : Schema.statements(Schema.read(Schema.MIGRATIONS.getFirst()))) {
+            for (var statement : Schema.statements(baseline)) {
                 handle.execute(statement);
             }
             handle.execute(
-                    "INSERT INTO run (id, project, target, parallelism, state, executor_pid,"
-                            + " started_at) VALUES ('r1', 'proj', 'dev', 1, 'SUCCESS', 1,"
-                            + " CURRENT_TIMESTAMP)");
+                    "INSERT INTO project (id, path, name, created_at, last_seen_at)"
+                            + " VALUES ('p1', '/p1', 'p1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+
+            for (var statement : Schema.statements(baseline)) {
+                handle.execute(statement);
+            }
+
+            assertThat(
+                            handle.createQuery("SELECT COUNT(*) FROM project")
+                                    .mapTo(Integer.class)
+                                    .one())
+                    .isZero();
         }
+    }
+
+    @Test
+    void refusesAStoreWrittenByANewerBuild() throws IOException {
+        var jdbi = Jdbi.create("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
+        Schema.migrate(jdbi);
+        jdbi.useHandle(handle -> handle.execute("UPDATE schema_version SET version = 99"));
 
         assertThatThrownBy(() -> Schema.migrate(jdbi))
                 .isInstanceOf(IOException.class)
-                .hasMessageContaining("rebuilds");
+                .hasMessageContaining("newer than this build")
+                .hasMessageContaining(".devpulse");
     }
 
     private static List<String> tables(Jdbi jdbi) {

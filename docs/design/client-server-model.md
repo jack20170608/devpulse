@@ -207,11 +207,11 @@ CREATE TABLE run_event (
 
 ### 5. 迁移策略
 
-单库意味着与现有"每项目一库"不是同一个库，因此**不做原地升级**：
+单库与"每项目一库"不是同一个布局，因此**不保留升级路径**：
 
-1. v3 迁移只服务**新建的中央库**。对新库按 v1 → v2 → v3 顺序执行（v3 内 `DROP` 旧表并建新表），或用一条新的基线，视实现成本决定。
-2. 存量数据由显式工具导入：`devpulse-server migrate --from <project-dir>`，读取旧的 `state.mv.db`，写入中央库，并补齐 `project_id`。
-3. v3 迁移在 Java 侧加守卫：若旧表仍有数据则拒绝执行并提示先运行导入工具，避免静默丢数据。
+1. schema 只有一份全量基线 `V1__central-store.sql`，包含所有表；布局变化直接改这份文件。
+2. 存量库不导入：删除 `.devpulse` 目录重建即可，没有迁移工具，也没有兼容代码。
+3. 若库的版本号高于本构建，迁移会拒绝并提示删除，避免旧代码误读新布局。
 
 ### 6. 客户端接口草案
 
@@ -271,11 +271,11 @@ The payoff: cross-project paging and statistics are one SQL statement, one pool 
 
 ### 4. Migration
 
-A single database is not an upgrade of the per-project store, so there is no in-place migration:
+A single database is not the per-project layout, so there is no upgrade path:
 
-1. The v3 migration only serves a **new central store**.
-2. Existing data is imported explicitly: `devpulse-server migrate --from <project-dir>` reads the old `state.mv.db`, writes the central tables, and fills in `project_id`.
-3. A Java-side guard refuses v3 while old tables still hold rows, so data cannot be dropped silently.
+1. The schema is one full baseline, `V1__central-store.sql`, containing every table; a layout change edits that file.
+2. Old stores are not imported: delete `.devpulse` and rebuild, with no migration tool and no compatibility code.
+3. A store whose version is newer than this build is refused with the same instruction, so an old build cannot read a new layout.
 
 ### 5. Client surface
 
