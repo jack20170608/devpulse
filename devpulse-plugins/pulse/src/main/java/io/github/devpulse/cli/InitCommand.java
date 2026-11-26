@@ -16,7 +16,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "init",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         description = "Initialize a local .devpulse.yaml task configuration.")
 public final class InitCommand implements Callable<Integer> {
     private static final String DEFAULT_CONFIGURATION =

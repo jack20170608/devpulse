@@ -1,4 +1,4 @@
-# 兼容 CLI 架构设计 / Compatibility CLI architecture
+# devpulse CLI 架构设计 / Compatibility CLI architecture
 
 [中文](#中文) | [English](#english)
 
@@ -8,7 +8,7 @@
 
 ### 职责与依赖
 
-`DevPulseCLI` 保留 `devpulse <子命令>` 的组合式入口，复用 Pulse 的 `init`、`run`、`review`、`status`、`stop`、`doctor`。它只负责 picocli 参数分发，不重复实现配置、调度或环境盘点，也不包含 Jira。
+`DevPulseCLI` 保留 `devpulse <子命令>` 的统一入口，复用 Pulse 的 `init`、`run`、`review`、`status`、`stop`、`doctor`。它只负责 picocli 参数分发，不重复实现配置、调度或环境盘点，也不包含 Jira。
 
 该模块直接依赖 `pulse`，继承 `devpulse-dependencies`。独立工具之间不相互依赖；只有兼容入口将它们组合。共享库不注册命令，入口不动态发现或加载插件。
 

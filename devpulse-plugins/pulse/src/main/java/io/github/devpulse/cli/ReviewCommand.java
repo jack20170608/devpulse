@@ -18,7 +18,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "review",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         description =
                 "Validate and review a task or pipeline plan " + "without executing commands.")
 public final class ReviewCommand implements Callable<Integer> {

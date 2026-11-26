@@ -41,7 +41,7 @@
 - 设置 UTF-8 源码编码，并将 Maven Compiler Plugin 的 `release` 配置为 `21`，保证产物可在 Java 21 上运行。
 - 使用 Maven Shade Plugin 在 `package` 阶段生成包含运行依赖的可执行 JAR。
 - 每个模块通过 `ManifestResourceTransformer` 设置自身的 `Main-Class`。
-- 组合式兼容入口为 `devpulse/target/devpulse.jar`，独立工具产物在 `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`；`devpulse-dist` 按工具打包。
+- 组合式兼容入口为 `devpulse/target/devpulse.jar`，独立工具产物在 `devpulse-plugins/jira/target/devpulse-jira.jar`（Pulse 命令已并入 `devpulse.jar`）；`devpulse-dist` 打包 `devpulse` 与 Jira。
 - 分发时，目标机器需要安装 Java 21 或更高版本。
 
 在仓库根目录构建并运行：
@@ -49,7 +49,7 @@
 ```powershell
 mvn clean package
 java -jar devpulse\target\devpulse.jar --help
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
+java -jar devpulse\target\devpulse.jar --help
 java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ```
 
@@ -118,7 +118,7 @@ java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 - Set UTF-8 source encoding and configure Maven Compiler Plugin with `release` set to `21`, so artifacts remain runnable on Java 21.
 - Use Maven Shade Plugin during the `package` phase to produce an executable JAR containing runtime dependencies.
 - Use `ManifestResourceTransformer` to set each module's own `Main-Class`.
-- The combined compatibility entry point builds `devpulse/target/devpulse.jar`; standalone tools build `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`. `devpulse-dist` packages the tools individually.
+- The unified entry point builds `devpulse/target/devpulse.jar`; the only standalone tool left is `devpulse-plugins/jira/target/devpulse-jira.jar`. `devpulse-dist` packages `devpulse` and Jira individually.
 - Distribution requires Java 21 or later on the target machine.
 
 Build and run from the repository root:
@@ -126,7 +126,7 @@ Build and run from the repository root:
 ```powershell
 mvn clean package
 java -jar devpulse\target\devpulse.jar --help
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
+java -jar devpulse\target\devpulse.jar --help
 java -jar devpulse-plugins\jira\target\devpulse-jira.jar --help
 ```
 

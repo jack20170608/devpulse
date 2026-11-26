@@ -13,8 +13,8 @@
 ```bash
 cd devpulse-dist
 ./install.sh jira
-# 或安装 Pulse
-./install.sh pulse
+# 安装 Jira
+./install.sh devpulse
 export PATH="$HOME/.local/bin:$PATH"
 jira --help
 ```
@@ -23,19 +23,19 @@ jira --help
 
 ### 工具边界
 
-`pulse` 包含任务运行以及 `init`、`review`、`status`、`stop` 子命令；`jira` 是独立工具。`devpulse/target/devpulse.jar` 保留旧的 `devpulse <子命令>` 用法，不进入单工具发行包。选择安装 Jira 不会安装 Pulse；选择安装 Pulse 不会安装 Jira。
+`devpulse` 是统一入口，包含 `init`、`run`、`review`、`status`、`stop`、`doctor`；`jira` 是独立工具。两者可分别安装，互不影响。
 
 ### 构建和直接运行
 
-在仓库根目录使用 JDK 21+ 和 Maven 构建。`bash build.sh dist` 默认执行 `clean package`，清理发行模块及其 reactor 依赖的旧构建产物，避免不同版本归档残留。`devpulse-dist/target/` 生成各工具独立的 `devpulse-pulse-<版本>.tar.gz`、`devpulse-jira-<版本>.tar.gz` 及对应 `.sha256` 文件。每个归档只含对应工具的可执行 JAR、Bash 启动脚本、版本文件和 JAR 校验文件。
+在仓库根目录使用 JDK 21+ 和 Maven 构建。`bash build.sh dist` 默认执行 `clean package`，清理发行模块及其 reactor 依赖的旧构建产物，避免不同版本归档残留。`devpulse-dist/target/` 生成各工具独立的 `devpulse-<版本>.tar.gz`、`devpulse-jira-<版本>.tar.gz` 及对应 `.sha256` 文件。每个归档只含对应工具的可执行 JAR、Bash 启动脚本、版本文件和 JAR 校验文件。
 
 ```bash
 bash build.sh dist
-tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
-bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
+tar -xzf devpulse-dist/target/devpulse-0.1.0-SNAPSHOT.tar.gz
+bash devpulse-0.1.0-SNAPSHOT/bin/devpulse --help
 ```
 
-Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接解压无需安装器或 Maven；运行需要 Java 21+，脚本需要 Bash（Windows 使用 Git Bash）。Pulse 实际执行任务、`doctor` 需要 Bash；Jira JAR 本身不依赖 Bash。也可直接运行归档内的 `java -jar devpulse-pulse.jar` 或 `java -jar devpulse-jira.jar`。
+Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接解压无需安装器或 Maven；运行需要 Java 21+，脚本需要 Bash（Windows 使用 Git Bash）。`run` 实际执行任务、`doctor` 需要 Bash；Jira JAR 本身不依赖 Bash。也可直接运行归档内的 `java -jar devpulse.jar` 或 `java -jar devpulse-jira.jar`。
 
 ### 按需安装、升级和卸载
 
@@ -43,16 +43,16 @@ Jira 对应解压 `devpulse-jira-<版本>.tar.gz` 并运行 `bin/jira`。直接�
 
 ```bash
 RELEASE_URL="https://example.org/devpulse/releases/v0.1.0"
-bash devpulse-dist/install.sh --tool pulse --version 0.1.0 --base-url "$RELEASE_URL"
+bash devpulse-dist/install.sh --tool devpulse --version 0.1.0 --base-url "$RELEASE_URL"
 bash devpulse-dist/install.sh --tool jira --version 0.1.0 --base-url "$RELEASE_URL" --prefix "$HOME/.local"
-bash devpulse-dist/install.sh --uninstall --tool pulse
+bash devpulse-dist/install.sh --uninstall --tool devpulse
 ```
 
 以上 URL 仅为占位符，需替换为实际发行地址；当前可使用本地构建的归档目录。安装另一个版本只切换所选工具；`--uninstall --tool jira` 只移除安装器管理的 Jira 文件。不会删除项目中的 `.devpulse` 运行历史或用户配置。校验文件与归档同源，传输校验不替代对发行来源的信任。安装器拒绝覆盖非自身管理的同名入口或安装目录。
 
 ### 安装本地构建的发行包
 
-`devpulse-dist` 生成可单独安装的 Pulse 和 Jira 发行包，不是可执行命令，也不包含组合式 `devpulse` 入口。目前没有公开下载渠道，可先从源码构建，再安装本地发行包。
+`devpulse-dist` 生成可单独安装的 `devpulse` 和 Jira 发行包，本身不是可执行命令。目前没有公开下载渠道，可先从源码构建，再安装本地发行包。
 
 准备 JDK 21+、Maven、Bash、`tar` 和 `sha256sum`，在仓库根目录执行以下命令（Windows 使用 Git Bash）：
 
@@ -60,7 +60,7 @@ bash devpulse-dist/install.sh --uninstall --tool pulse
 bash build.sh dist
 
 # 按需安装；自动定位脚本旁的 target，并选择所选工具的最高版本
-bash devpulse-dist/install.sh pulse
+bash devpulse-dist/install.sh devpulse
 bash devpulse-dist/install.sh jira
 
 export PATH="$HOME/.local/bin:$PATH"
@@ -85,7 +85,7 @@ bash devpulse-dist/install.sh jira --base-url "/opt/devpulse/releases"
 
 默认安装到 `$HOME/.local`，无需管理员权限；将上述 `export PATH=...` 加入 `~/.bashrc` 可供后续 Bash 会话使用。安装后直接执行 `pulse` 或 `jira`，不需要 Maven 或源码目录，但仍需 Java 21+ 和 Bash。
 
-可通过 `--prefix` 自定义安装目录，并将其 `bin` 加入 `PATH`。卸载使用 `bash devpulse-dist/install.sh --uninstall --tool pulse` 或 `--tool jira`；自定义安装目录时需传入相同的 `--prefix`。
+可通过 `--prefix` 自定义安装目录，并将其 `bin` 加入 `PATH`。卸载使用 `bash devpulse-dist/install.sh --uninstall --tool devpulse` 或 `--tool jira`；自定义安装目录时需传入相同的 `--prefix`。
 
 [架构设计](../docs/devpulse-dist/architecture.md)
 
@@ -100,8 +100,8 @@ Run `bash build.sh dist` from the repository root first, then enter `devpulse-di
 ```bash
 cd devpulse-dist
 ./install.sh jira
-# Or install Pulse
-./install.sh pulse
+# Or install Jira
+./install.sh devpulse
 export PATH="$HOME/.local/bin:$PATH"
 jira --help
 ```
@@ -110,19 +110,19 @@ By default, install from `target` beside the installer without `--local`, `--too
 
 ### Tool boundaries
 
-`pulse` runs tasks and includes the `init`, `review`, `status`, and `stop` subcommands; `jira` is independent. `devpulse/target/devpulse.jar` preserves the old `devpulse <subcommand>` syntax and is not included in individual tool archives. Installing Jira does not install Pulse; installing Pulse does not install Jira.
+`devpulse` is the unified entry point: `init`, `run`, `review`, `status`, `stop`, `doctor`. `jira` is an independent tool. They install separately and neither pulls in the other.
 
 ### Build and run without installation
 
-Build from the repository root with JDK 21+ and Maven. `bash build.sh dist` defaults to `clean package`, removing previous build outputs from the distribution module and its reactor dependencies so archives from different versions do not linger. `devpulse-dist/target/` produces separate `devpulse-pulse-<version>.tar.gz` and `devpulse-jira-<version>.tar.gz` archives with adjacent `.sha256` files. Each archive contains only its tool's executable JAR, Bash launcher, version file, and JAR checksum.
+Build from the repository root with JDK 21+ and Maven. `bash build.sh dist` defaults to `clean package`, removing previous build outputs from the distribution module and its reactor dependencies so archives from different versions do not linger. `devpulse-dist/target/` produces separate `devpulse-<version>.tar.gz` and `devpulse-jira-<version>.tar.gz` archives with adjacent `.sha256` files. Each archive contains only its tool's executable JAR, Bash launcher, version file, and JAR checksum.
 
 ```bash
 bash build.sh dist
-tar -xzf devpulse-dist/target/devpulse-pulse-0.1.0-SNAPSHOT.tar.gz
-bash devpulse-pulse-0.1.0-SNAPSHOT/bin/pulse --help
+tar -xzf devpulse-dist/target/devpulse-0.1.0-SNAPSHOT.tar.gz
+bash devpulse-0.1.0-SNAPSHOT/bin/devpulse --help
 ```
 
-For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct extraction needs neither the installer nor Maven; running requires Java 21+, and the launcher needs Bash (Git Bash on Windows). Pulse task execution and `doctor` require Bash; the Jira JAR itself does not. You can also run `java -jar devpulse-pulse.jar` or `java -jar devpulse-jira.jar` directly inside the extracted archive.
+For Jira, extract `devpulse-jira-<version>.tar.gz` and run `bin/jira`. Direct extraction needs neither the installer nor Maven; running requires Java 21+, and the launcher needs Bash (Git Bash on Windows). `run` execution and `doctor` require Bash; the Jira JAR itself does not. You can also run `java -jar devpulse.jar` or `java -jar devpulse-jira.jar` directly inside the extracted archive.
 
 ### Selective installation, upgrades, and removal
 
@@ -130,16 +130,16 @@ Obtain `devpulse-dist/install.sh` from a trusted checkout; do not execute an unr
 
 ```bash
 RELEASE_URL="https://example.org/devpulse/releases/v0.1.0"
-bash devpulse-dist/install.sh --tool pulse --version 0.1.0 --base-url "$RELEASE_URL"
+bash devpulse-dist/install.sh --tool devpulse --version 0.1.0 --base-url "$RELEASE_URL"
 bash devpulse-dist/install.sh --tool jira --version 0.1.0 --base-url "$RELEASE_URL" --prefix "$HOME/.local"
-bash devpulse-dist/install.sh --uninstall --tool pulse
+bash devpulse-dist/install.sh --uninstall --tool devpulse
 ```
 
 The URL above is a placeholder; replace it with an actual release location. For now, you can use the directory containing locally built archives. Installing another version switches only the selected tool; `--uninstall --tool jira` removes only installer-managed Jira files. It does not delete `.devpulse` run history or user configuration in a project. A checksum served from the same location verifies transfer integrity, not the authenticity of the release source. The installer refuses to overwrite a launcher or installation directory it does not manage.
 
 ### Install locally built release archives
 
-`devpulse-dist` produces separately installable Pulse and Jira archives; it is not an executable command and does not include the combined `devpulse` entry point. No public download channel is available yet, so build from source and install the local archives.
+`devpulse-dist` produces separately installable `devpulse` and Jira archives; it is not itself an executable command. No public download channel is available yet, so build from source and install the local archives.
 
 Prepare JDK 21+, Maven, Bash, `tar`, and `sha256sum`, then run these commands from the repository root (use Git Bash on Windows):
 
@@ -147,7 +147,7 @@ Prepare JDK 21+, Maven, Bash, `tar`, and `sha256sum`, then run these commands fr
 bash build.sh dist
 
 # Install as needed; find target beside the script and select the tool's highest version
-bash devpulse-dist/install.sh pulse
+bash devpulse-dist/install.sh devpulse
 bash devpulse-dist/install.sh jira
 
 export PATH="$HOME/.local/bin:$PATH"
@@ -172,6 +172,6 @@ The installer is kept with LF line endings. Installation also handles CRLF launc
 
 Installation defaults to `$HOME/.local` without administrator access. Add the `export PATH=...` line above to `~/.bashrc` for future Bash sessions. Once installed, run `pulse` or `jira` directly without Maven or the source checkout; Java 21+ and Bash are still required.
 
-Use `--prefix` to customize the installation directory and add its `bin` directory to `PATH`. To uninstall, run `bash devpulse-dist/install.sh --uninstall --tool pulse` or use `--tool jira`; pass the same `--prefix` if you customized it.
+Use `--prefix` to customize the installation directory and add its `bin` directory to `PATH`. To uninstall, run `bash devpulse-dist/install.sh --uninstall --tool devpulse` or use `--tool jira`; pass the same `--prefix` if you customized it.
 
 [Architecture](../docs/devpulse-dist/architecture.md)

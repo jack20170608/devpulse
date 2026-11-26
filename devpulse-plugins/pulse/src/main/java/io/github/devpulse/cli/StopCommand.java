@@ -15,7 +15,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "stop",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         description = "Stop recorded local daemon processes.")
 public final class StopCommand implements Callable<Integer> {
     @Spec private CommandSpec spec;

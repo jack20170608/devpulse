@@ -6,7 +6,7 @@
 
 [项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-plugins/pulse/architecture.md)
 
-Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。它提供 `init`、`review`、`status`、`stop` 和 `doctor` 子命令，不包含 Jira。
+Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。这些命令由统一的 `devpulse` 入口提供；Jira 不在其中。
 
 ### 环境与构建
 
@@ -16,10 +16,10 @@ Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批�
 
 ```powershell
 bash build.sh pulse
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
+java -jar devpulse\target\devpulse.jar --help
 ```
 
-以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `pulse [TARGET]` 或 `pulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，组合式入口见 [兼容 CLI](../../devpulse/README.md)。
+以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `devpulse run [TARGET]` 或 `devpulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，统一入口见 [devpulse CLI](../../devpulse/README.md)。
 
 ### `init`：创建配置模板
 
@@ -36,20 +36,20 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
 
 ```powershell
 # 在当前目录创建配置模板
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init
+java -jar devpulse\target\devpulse.jar init
 
 # 在已有项目目录创建配置模板
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init --directory "D:\your-project"
+java -jar devpulse\target\devpulse.jar init --directory "D:\your-project"
 
 # 覆盖已有配置，原内容将丢失
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init --directory "D:\your-project" --force
+java -jar devpulse\target\devpulse.jar init --directory "D:\your-project" --force
 ```
 
 成功时输出配置文件路径并返回退出码 `0`。目录不存在、配置已存在且未指定 `--force`，或文件无法写入时，输出错误并返回 `1`。
 
 ### `pulse`：执行任务或流水线
 
-`pulse [TARGET]` 从项目目录读取 `.devpulse.yaml`，默认执行名为 `dev` 的流水线或任务。自动补齐传递依赖，共享依赖和重复目标只执行一次；普通依赖必须成功退出，长驻进程依赖必须通过就绪检查，下游才会启动。独立任务可在并发上限内同时执行。
+`devpulse run [TARGET]` 从项目目录读取 `.devpulse.yaml`，默认执行名为 `dev` 的流水线或任务。自动补齐传递依赖，共享依赖和重复目标只执行一次；普通依赖必须成功退出，长驻进程依赖必须通过就绪检查，下游才会启动。独立任务可在并发上限内同时执行。
 
 执行前校验完整配置，包括字段类型、未知字段、重复任务名、未知依赖和循环依赖。目标同时是任务名和流水线名时拒绝执行。配置错误不会启动任务。
 
@@ -63,9 +63,9 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init --directory "D:\
 | `--format <FORMAT>` | 结果格式，默认 `text`；`json` 时标准输出只打印一个 JSON 文档，任务日志只写入日志文件 |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar build --jobs 2
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\your-project" --dry-run
+java -jar devpulse\target\devpulse.jar
+java -jar devpulse\target\devpulse.jar build --jobs 2
+java -jar devpulse\target\devpulse.jar dev --directory "D:\your-project" --dry-run
 ```
 
 任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录。普通任务的输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志；长驻进程的合并输出直接写入日志文件，不在控制台实时转发，以便 CLI 返回后仍能输出。普通任务以 Bash 退出码判断结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
@@ -124,16 +124,16 @@ pipelines:
 
 ```powershell
 # 停止最新运行的所有长驻进程
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop
+java -jar devpulse\target\devpulse.jar stop
 
 # 停止指定运行中 server 任务的全部实例
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>"
+java -jar devpulse\target\devpulse.jar stop server --run "<run-id>"
 
 # 只停止 server 的指定实例（实例 ID 可从 status 获取）
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>" --instance "<instance-id>"
+java -jar devpulse\target\devpulse.jar stop server --run "<run-id>" --instance "<instance-id>"
 
 # 停止其他项目的指定运行
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\your-project" --run "<run-id>"
+java -jar devpulse\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
 `stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；任务级停止处理该任务全部记录实例，省略任务名按逆依赖顺序处理全部任务。`--instance <ID>` 必须与任务名一起使用，只停止属于该任务的指定实例。停止使用已保存配置，不依赖当前 `.devpulse.yaml`，不清理其他历史运行或删除日志、业务数据。PID 和启动时间用于核验身份，身份不确定时拒绝清理；单个实例清理失败仍继续处理其他实例并汇报失败。旧单实例记录仍可查询和停止。
@@ -157,7 +157,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\
 | `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出重跑与复用集合，以及逐节点原因 |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
+java -jar devpulse\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
 ```
 
 成功返回 `0`；运行 id 不存在或父运行目标已不可解析返回 `12`；父运行仍在执行、缺少清单，或本阶段未传 `--dry-run` 返回 `13`；读取记录失败返回 `40`。
@@ -174,14 +174,14 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar retry 1e6183ab-90ff-4
 | `--directory <目录>` | 项目配置目录，默认当前目录 |
 | `--jobs <N>` | 覆盖审阅时显示的并发上限，不修改配置 |
 | `--plain` | 强制输出纯文本计划，不打开 TUI |
-| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出与 `pulse --dry-run --format json` 相同的计划文档，且不打开 TUI |
+| `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出与 `devpulse run --dry-run --format json` 相同的计划文档，且不打开 TUI |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
+java -jar devpulse\target\devpulse.jar review
+java -jar devpulse\target\devpulse.jar review build --plain
 ```
 
-交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、用户管理生命周期和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `pulse --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
+交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、用户管理生命周期和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `devpulse run --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
 
 成功返回 `0`。配置整体无效返回 `10`，依赖图或字段值错误返回 `11`，目标不存在或歧义返回 `12`，界面或本地基础设施故障返回 `40`，中断返回 `130`。拓扑顺序和依赖深度不是固定执行批次；静态校验通过不代表命令安全或工具可用。
 
@@ -200,9 +200,9 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
 | `--grep <正则>` | 配合 `--log`，只保留匹配该大小写敏感正则的行；用 `(?i)` 开启忽略大小写 |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --list
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id>" --log build
+java -jar devpulse\target\devpulse.jar status
+java -jar devpulse\target\devpulse.jar status --list
+java -jar devpulse\target\devpulse.jar status --run "<run-id>" --log build
 ```
 
 `--list` 不能与 `--run` 或 `--log` 混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `40`，`--run` 指定的运行无法使用时返回 `12`，参数冲突返回 `2`。
@@ -226,7 +226,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id
 | `--format <FORMAT>` | 结果格式，默认 `text` 或 `json` |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar doctor
+java -jar devpulse\target\devpulse.jar doctor
 ```
 
 成功返回 `0`；Bash 不可用或目录不存在返回 `20`，盘点中断返回 `130`。
@@ -235,7 +235,7 @@ java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar doctor
 
 1. 运行 `init`，生成 `.devpulse.yaml` 模板。
 2. 按项目实际情况修改任务命令与依赖。
-3. 运行 `review` 或 `pulse --dry-run`，检查依赖闭包和完整命令。
+3. 运行 `review` 或 `devpulse run --dry-run`，检查依赖闭包和完整命令。
 4. 确认后运行 `pulse`，再用 `status` 查询结果或日志。
 
 devpulse 不内置 AI 调用；是否借助外部 AI 编写配置由你决定，但生成的内容必须先审阅，再执行。
@@ -274,7 +274,7 @@ pipelines:
 1. 将 `tools = [{ name = build, cmd = "..." }]` 改为 `tasks` 映射，以 `build` 为键，移除 `name` 字段；将 HOCON 的 `=`、花括号结构改为 YAML 冒号和缩进。
 2. 保留任务名称、命令、`needs`、`pipelines` 和长驻进程选项的含义；任务和流水线引用仍使用列表。HOCON 三引号脚本改为 `cmd: |`。
 3. 展开原有 include，移除根级辅助字段，并显式填写原来通过 HOCON 引用得到的值。配置不再解析 `${...}`；需要 Shell 变量时，在命令中按 Bash 规则使用。
-4. 保存为 `.devpulse.yaml`，先运行 `review --plain` 或 `pulse --dry-run`，核对完整命令与依赖后再执行。`init` 只生成新模板，不迁移旧文件。
+4. 保存为 `.devpulse.yaml`，先运行 `review --plain` 或 `devpulse run --dry-run`，核对完整命令与依赖后再执行。`init` 只生成新模板，不迁移旧文件。
 
 Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元数据不变；历史查询和清理仍可使用既有记录。
 
@@ -282,7 +282,7 @@ Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元�
 
 [Project home](../../readme.MD) | [Architecture](../../docs/devpulse-plugins/pulse/architecture.md)
 
-Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. It provides `init`, `review`, `status`, `stop`, and `doctor`, without Jira commands.
+Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. The unified `devpulse` entry point provides these commands; Jira is not among them.
 
 ### Requirements and build
 
@@ -292,10 +292,10 @@ Run from the repository root:
 
 ```powershell
 bash build.sh pulse
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar --help
+java -jar devpulse\target\devpulse.jar --help
 ```
 
-All build and JAR examples below run from the repository root. After installation use `pulse [TARGET]` or `pulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [compatibility CLI](../../devpulse/README.md) for the combined entry point.
+All build and JAR examples below run from the repository root. After installation use `devpulse run [TARGET]` or `devpulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [devpulse CLI](../../devpulse/README.md) for the entry point.
 
 ### `init`: create a configuration template
 
@@ -312,20 +312,20 @@ The template contains `version: 1`, `parallelism: 4`, two tasks named `check` an
 
 ```powershell
 # Create a configuration template in the current directory
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init
+java -jar devpulse\target\devpulse.jar init
 
 # Create a configuration template in an existing project directory
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init --directory "D:\your-project"
+java -jar devpulse\target\devpulse.jar init --directory "D:\your-project"
 
 # Overwrite an existing configuration, losing its original contents
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar init --directory "D:\your-project" --force
+java -jar devpulse\target\devpulse.jar init --directory "D:\your-project" --force
 ```
 
 On success, the command prints the configuration path and returns exit code `0`. A missing directory, an existing configuration without `--force`, or a write failure produces an error and returns `1`.
 
 ### `pulse`: run tasks or pipelines
 
-`pulse [TARGET]` reads `.devpulse.yaml` from the project directory and defaults to the pipeline or task named `dev`. It includes transitive dependencies automatically and runs shared dependencies and duplicate targets only once. Batch dependencies must exit successfully and daemon dependencies must pass readiness before downstream tasks start. Independent tasks can run concurrently within the limit.
+`devpulse run [TARGET]` reads `.devpulse.yaml` from the project directory and defaults to the pipeline or task named `dev`. It includes transitive dependencies automatically and runs shared dependencies and duplicate targets only once. Batch dependencies must exit successfully and daemon dependencies must pass readiness before downstream tasks start. Independent tasks can run concurrently within the limit.
 
 The entire configuration is validated before execution, including field types, unknown fields, duplicate task names, unknown dependencies, and dependency cycles. A target that names both a task and a pipeline is rejected. Configuration errors do not start tasks.
 
@@ -339,9 +339,9 @@ The entire configuration is validated before execution, including field types, u
 | `--format <FORMAT>` | Result format; defaults to `text`. With `json`, stdout carries exactly one JSON document and task logs go only to their log files |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar build --jobs 2
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar dev --directory "D:\your-project" --dry-run
+java -jar devpulse\target\devpulse.jar
+java -jar devpulse\target\devpulse.jar build --jobs 2
+java -jar devpulse\target\devpulse.jar dev --directory "D:\your-project" --dry-run
 ```
 
 Tasks run through non-login, non-interactive Bash in the project configuration directory. Batch output and errors are merged, prefixed in the console, and saved as UTF-8 logs. Daemon output is merged and redirected directly to its log, without live console forwarding, so output continues after CLI exit. Bash's exit code determines batch results; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly when needed.
@@ -400,16 +400,16 @@ Checks and stop commands receive `DEVPULSE_DAEMON_PID`, `DEVPULSE_DAEMON_INSTANC
 
 ```powershell
 # Stop all daemons in the latest run
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop
+java -jar devpulse\target\devpulse.jar stop
 
 # Stop every instance of the server task in a selected run
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>"
+java -jar devpulse\target\devpulse.jar stop server --run "<run-id>"
 
 # Stop only one server instance (obtain its ID from status)
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop server --run "<run-id>" --instance "<instance-id>"
+java -jar devpulse\target\devpulse.jar stop server --run "<run-id>" --instance "<instance-id>"
 
 # Stop a selected run in another project
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar stop --directory "D:\your-project" --run "<run-id>"
+java -jar devpulse\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
 `stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Task-level stopping handles every recorded instance of that task; omission processes all tasks in reverse dependency order. `--instance <ID>` requires a task name and targets only an instance belonging to that task. Recorded stop settings are used without requiring the current `.devpulse.yaml`, cleaning other runs, or deleting logs/business data. PID/start time confirm identity; uncertain identity is refused. A failed instance cleanup does not prevent processing other instances and returns diagnostics. Legacy single-instance records remain queryable and stoppable.
@@ -433,7 +433,7 @@ This stage **reports only and executes nothing**: `--dry-run` is required, and o
 | `--format <FORMAT>` | Result format; defaults to `text`. `json` reports both sets plus a per-node reason |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
+java -jar devpulse\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
 ```
 
 Success returns `0`; an unknown run id or a parent target that no longer resolves returns `12`; a run that is still executing, a missing manifest, or a missing `--dry-run` returns `13`; a failure to read the record returns `40`.
@@ -450,14 +450,14 @@ Success returns `0`; an unknown run id or a parent target that no longer resolve
 | `--directory <directory>` | Project configuration directory; defaults to the current directory |
 | `--jobs <N>` | Override the displayed concurrency limit without modifying configuration |
 | `--plain` | Force a plain-text plan instead of opening the TUI |
-| `--format <FORMAT>` | Result format; defaults to `text`. `json` emits the same plan document as `pulse --dry-run --format json` and never opens the TUI |
+| `--format <FORMAT>` | Result format; defaults to `text`. `json` emits the same plan document as `devpulse run --dry-run --format json` and never opens the TUI |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar review build --plain
+java -jar devpulse\target\devpulse.jar review
+java -jar devpulse\target\devpulse.jar review build --plain
 ```
 
-An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, user-managed lifecycle, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `pulse --dry-run` also show all lifecycle commands without running checks or cleanup.
+An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, user-managed lifecycle, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `devpulse run --dry-run` also show all lifecycle commands without running checks or cleanup.
 
 Success returns `0`. Wholly invalid configuration returns `10`, dependency-graph or field-value errors return `11`, a missing or ambiguous target returns `12`, interface or local infrastructure faults return `40`, and interruption returns `130`. Topological order and dependency depth are not fixed execution batches; valid configuration does not guarantee command safety or tool availability.
 
@@ -476,9 +476,9 @@ Every actual `pulse` execution creates an independent run ID, storing run and ta
 | `--grep <regex>` | With `--log`, keep lines matching this case-sensitive regular expression; use `(?i)` for case-insensitive matching |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --list
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar status --run "<run-id>" --log build
+java -jar devpulse\target\devpulse.jar status
+java -jar devpulse\target\devpulse.jar status --list
+java -jar devpulse\target\devpulse.jar status --run "<run-id>" --log build
 ```
 
 `--list` cannot be combined with `--run` or `--log`. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `40`, an unusable `--run` identifier returns `12`, and conflicting options return `2`.
@@ -502,7 +502,7 @@ History and logs are not automatically cleaned up; exclude `.devpulse\` from ver
 | `--format <FORMAT>` | Result format: `text` (default) or `json` |
 
 ```powershell
-java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar doctor
+java -jar devpulse\target\devpulse.jar doctor
 ```
 
 It returns `0` on success, `20` when Bash is unavailable or the directory is missing, and `130` when the check is interrupted.
@@ -511,7 +511,7 @@ It returns `0` on success, `20` when Bash is unavailable or the directory is mis
 
 1. Run `init` to generate a `.devpulse.yaml` template.
 2. Edit the task commands and dependencies for your project.
-3. Run `review` or `pulse --dry-run` to inspect the dependency closure and complete commands.
+3. Run `review` or `devpulse run --dry-run` to inspect the dependency closure and complete commands.
 4. After approval, run `pulse`, then use `status` to query results or logs.
 
 devpulse makes no AI calls; whether you use an external AI to draft configuration is your decision, but review what it produces before executing it.
@@ -550,6 +550,6 @@ Legacy `.devpulse.conf` files are no longer read or automatically converted. A l
 1. Replace `tools = [{ name = build, cmd = "..." }]` with a `tasks` mapping keyed by `build`, removing `name`; replace HOCON `=` and braces with YAML colons and indentation.
 2. Preserve task names, commands, `needs`, `pipelines`, and daemon option meanings; task and pipeline references remain lists. Replace HOCON triple-quoted scripts with `cmd: |`.
 3. Inline former includes, remove root-level helper fields, and explicitly supply values formerly obtained through HOCON substitutions. `${...}` is no longer resolved by configuration loading; use Bash variables inside commands when appropriate.
-4. Save as `.devpulse.yaml`, run `review --plain` or `pulse --dry-run`, and verify complete commands and dependencies before execution. `init` creates a new template rather than migrating existing files.
+4. Save as `.devpulse.yaml`, run `review --plain` or `devpulse run --dry-run`, and verify complete commands and dependencies before execution. `init` creates a new template rather than migrating existing files.
 
 Jira HOCON configuration/templates and history/daemon metadata under `.devpulse` remain unchanged; existing records remain available for history queries and cleanup.

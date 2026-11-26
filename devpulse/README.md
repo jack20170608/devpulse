@@ -1,4 +1,4 @@
-# 组合式兼容 CLI 使用说明 / Combined compatibility CLI usage
+# devpulse CLI 使用说明 / devpulse CLI usage
 
 [中文](#中文) | [English](#english)
 
@@ -81,7 +81,7 @@ bash build.sh --clean
 java -jar devpulse\target\devpulse.jar --help
 ```
 
-The combined entry point produces `devpulse\target\devpulse.jar` and is not included in individual tool archives. The examples below use it to preserve existing command syntax. To run Pulse alone, use `java -jar devpulse-plugins\pulse\target\devpulse-pulse.jar [TARGET]`; its related commands are `pulse init|review|status|stop`. See the [architecture index](../docs/architecture.md) for modules and [distribution and installation](../devpulse-dist/README.md) for installation. In Git Bash, `bash run.sh --help` launches the combined entry point, while `bash run-jira.sh --help` builds only Jira. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
+The combined entry point produces `devpulse\target\devpulse.jar` and is not included in individual tool archives. The examples below use it to preserve existing command syntax. To run Pulse alone, use `java -jar devpulse\target\devpulse.jar [TARGET]`; its related commands are `devpulse init|review|status|stop`. See the [architecture index](../docs/architecture.md) for modules and [distribution and installation](../devpulse-dist/README.md) for installation. In Git Bash, `bash run.sh --help` launches the combined entry point, while `bash run-jira.sh --help` builds only Jira. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
 
 ### Native executable (optional)
 

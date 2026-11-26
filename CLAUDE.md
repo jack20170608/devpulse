@@ -26,8 +26,8 @@ mvn spotless:apply            # apply google-java-format instead of hand-formatt
 
 Build outputs:
 - Combined CLI: `devpulse/target/devpulse.jar`
-- Standalone tools: `devpulse-plugins/{pulse,jira}/target/devpulse-{pulse,jira}.jar`
-- Release archives: `devpulse-dist/target/` (Pulse and Jira only)
+- Standalone tool: `devpulse-plugins/jira/target/devpulse-jira.jar` (Pulse's commands ship inside `devpulse.jar`)
+- Release archives: `devpulse-dist/target/` (devpulse and Jira)
 
 Run a single test (artifact ID `pulse`/`jira` is unprefixed; keep `-am` so reactor dependencies build):
 

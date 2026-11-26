@@ -22,7 +22,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "run",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         subcommands = {
             DoctorCommand.class,
             InitCommand.class,

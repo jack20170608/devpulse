@@ -19,7 +19,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "doctor",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         description = "Check Bash and local tool availability.")
 public final class DoctorCommand implements Callable<Integer> {
     @Spec private CommandSpec spec;

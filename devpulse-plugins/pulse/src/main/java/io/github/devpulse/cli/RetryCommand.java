@@ -20,7 +20,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "retry",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         description =
                 "Show what a retry of a recorded run would rerun and reuse. "
                         + "Execution arrives in a later stage; this stage reports only.")

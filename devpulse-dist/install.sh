@@ -3,10 +3,10 @@ set -euo pipefail
 
 usage() {
     cat <<'USAGE'
-Usage: ./install.sh pulse|jira [--version VERSION] [--prefix DIR]
-       install.sh --tool pulse|jira --version VERSION --base-url URL [--prefix DIR]
-       install.sh --local --tool pulse|jira [--version VERSION] [--base-url DIR] [--prefix DIR]
-       install.sh --uninstall --tool pulse|jira [--prefix DIR]
+Usage: ./install.sh devpulse|jira [--version VERSION] [--prefix DIR]
+       install.sh --tool devpulse|jira --version VERSION --base-url URL [--prefix DIR]
+       install.sh --local --tool devpulse|jira [--version VERSION] [--base-url DIR] [--prefix DIR]
+       install.sh --uninstall --tool devpulse|jira [--prefix DIR]
 
 Installs one tool without Maven or administrator access (requires Java to run).
 The default prefix is ~/.local. Add PREFIX/bin to PATH.
@@ -22,6 +22,15 @@ USAGE
 }
 
 die() { echo "devpulse installer: $*" >&2; exit 1; }
+
+# The unified CLI is published as devpulse-<version>.tar.gz; Jira keeps the
+# per-tool prefix. Everything else derives from these two names.
+archive_stem() {
+    if [[ "$1" == devpulse ]]; then printf '%s' devpulse; else printf '%s' "devpulse-$1"; fi
+}
+jar_name() {
+    if [[ "$1" == devpulse ]]; then printf '%s' devpulse.jar; else printf '%s' "devpulse-$1.jar"; fi
+}
 
 decode_file_path() {
     local value="$1" decoded='' escape character
@@ -97,7 +106,7 @@ while (($#)); do
             ;;
         --uninstall) uninstall=true; shift ;;
         --local) local_install=true; shift ;;
-        pulse|jira)
+        devpulse|jira)
             [[ -z "$tool" ]] || die 'select exactly one tool'
             tool="$1"
             shift
@@ -107,7 +116,7 @@ while (($#)); do
     esac
 done
 
-[[ "$tool" == pulse || "$tool" == jira ]] || die 'use install.sh pulse or install.sh jira'
+[[ "$tool" == devpulse || "$tool" == jira ]] || die 'use install.sh devpulse or install.sh jira'
 if [[ "$uninstall" == false ]]; then
     if [[ -z "$base_url" ]]; then
         base_url="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/target"
@@ -128,20 +137,26 @@ if [[ "$uninstall" == false ]]; then
     esac
     if [[ -n "$source_dir" && -z "$version" ]]; then
         archives=()
-        for candidate in "$source_dir"/devpulse-"$tool"-*.tar.gz; do
-            [[ -f "$candidate" ]] && archives+=("$candidate")
+        for candidate in "$source_dir"/"$(archive_stem "$tool")"-*.tar.gz; do
+            [[ -f "$candidate" ]] || continue
+            # devpulse- is a prefix of devpulse-jira-, so the unified tool must
+            # not claim another tool's archive.
+            if [[ "$tool" == devpulse && "${candidate##*/}" == devpulse-jira-* ]]; then
+                continue
+            fi
+            archives+=("$candidate")
         done
         ((${#archives[@]} > 0)) || die "no $tool release archive in $source_dir; build with bash build.sh dist"
         latest_archive="$(printf '%s\n' "${archives[@]}" | LC_ALL=C sort -V | tail -n 1)" ||
             die 'cannot sort local versions; install GNU-compatible sort or specify --version'
         version="${latest_archive##*/}"
-        version="${version#devpulse-"$tool"-}"
+        version="${version#$(archive_stem "$tool")-}"
         version="${version%.tar.gz}"
     fi
     [[ "$version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ && "$version" != *..* ]] ||
         die 'provide a safe, explicit --version'
     if [[ -n "$source_dir" ]]; then
-        for filename in "devpulse-$tool-$version.tar.gz" "devpulse-$tool-$version.tar.gz.sha256"; do
+        for filename in "$(archive_stem "$tool")-$version.tar.gz" "$(archive_stem "$tool")-$version.tar.gz.sha256"; do
             [[ -f "$source_dir/$filename" && -r "$source_dir/$filename" ]] ||
                 die "local release file not found or unreadable: $source_dir/$filename"
         done
@@ -189,7 +204,7 @@ if [[ "$uninstall" == true ]]; then
             [[ -d "$directory" && ! -L "$directory" &&
                -f "$directory/.devpulse-managed" &&
                "$(cat "$directory/.devpulse-managed")" == "$marker" ]] || continue
-            rm -f -- "$directory/devpulse-$tool.jar" "$directory/.devpulse-managed"
+            rm -f -- "$directory/$(jar_name "$tool")" "$directory/.devpulse-managed"
             rmdir -- "$directory" 2>/dev/null || true
         done
         rm -f -- "$tool_home/current" "$tool_home/.devpulse-managed"
@@ -212,7 +227,7 @@ if [[ -e "$version_home" || -L "$version_home" ]]; then
        -f "$version_home/.devpulse-managed" && ! -L "$version_home/.devpulse-managed" &&
        "$(cat "$version_home/.devpulse-managed")" == "$marker" ]] ||
         die "refusing to replace an unmanaged version: $version_home"
-    [[ ! -L "$version_home/devpulse-$tool.jar" ]] ||
+    [[ ! -L "$version_home/$(jar_name "$tool")" ]] ||
         die 'refusing to replace a symlinked JAR'
 fi
 [[ ! -L "$tool_home/current" ]] || die 'refusing to replace a symlinked current file'
@@ -232,8 +247,8 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -- "$stage"
-archive="devpulse-$tool-$version.tar.gz"
-root="devpulse-$tool-$version"
+archive="$(archive_stem "$tool")-$version.tar.gz"
+root="$(archive_stem "$tool")-$version"
 if [[ -n "$source_dir" ]]; then
     cp -- "$source_dir/$archive" "$source_dir/$archive.sha256" "$stage/"
 else
@@ -257,20 +272,20 @@ verify_checksum() {
 }
 
 verify_checksum "$archive.sha256" "$archive"
-tar -xOzf "$stage/$archive" "$root/devpulse-$tool.jar" > "$stage/devpulse-$tool.jar"
-tar -xOzf "$stage/$archive" "$root/devpulse-$tool.jar.sha256" > "$stage/devpulse-$tool.jar.sha256"
+tar -xOzf "$stage/$archive" "$root/$(jar_name "$tool")" > "$stage/$(jar_name "$tool")"
+tar -xOzf "$stage/$archive" "$root/$(jar_name "$tool").sha256" > "$stage/$(jar_name "$tool").sha256"
 # Windows-built archives may contain CRLF launchers and version files.
 tar -xOzf "$stage/$archive" "$root/bin/$tool" |
     sed $'s/\r$//' > "$stage/$tool"
 tar -xOzf "$stage/$archive" "$root/version.txt" > "$stage/version.txt"
 archive_version="$(cat "$stage/version.txt")"
 [[ "${archive_version%$'\r'}" == "$version" ]] || die 'archive version does not match request'
-verify_checksum "devpulse-$tool.jar.sha256" "devpulse-$tool.jar"
+verify_checksum "$(jar_name "$tool").sha256" "$(jar_name "$tool")"
 grep -Fqx "# devpulse-managed-wrapper: $tool" "$stage/$tool" ||
     die 'archive wrapper is not installer-managed'
 chmod 755 "$stage/$tool"
 mkdir -p -- "$version_home"
-mv -f -- "$stage/devpulse-$tool.jar" "$version_home/"
+mv -f -- "$stage/$(jar_name "$tool")" "$version_home/"
 printf '%s\n' "$marker" > "$version_home/.devpulse-managed"
 cp -- "$stage/$tool" "$new_wrapper"
 mv -f -- "$new_wrapper" "$wrapper"

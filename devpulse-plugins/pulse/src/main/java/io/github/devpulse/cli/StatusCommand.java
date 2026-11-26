@@ -23,7 +23,7 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "status",
         mixinStandardHelpOptions = true,
-        versionProvider = PulseCLI.VersionProvider.class,
+        versionProvider = VersionProvider.class,
         description = "Show recorded execution status.")
 public final class StatusCommand implements Callable<Integer> {
     @Spec private CommandSpec spec;

@@ -2,20 +2,20 @@
 <assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.1"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.1 https://maven.apache.org/xsd/assembly-2.1.1.xsd">
-    <id>pulse</id>
+    <id>devpulse</id>
     <formats><format>tar.gz</format></formats>
     <includeBaseDirectory>true</includeBaseDirectory>
-    <baseDirectory>devpulse-pulse-${project.version}</baseDirectory>
+    <baseDirectory>devpulse-${project.version}</baseDirectory>
     <files>
         <file>
-            <source>../devpulse-plugins/pulse/target/devpulse-pulse.jar</source>
+            <source>../devpulse/target/devpulse.jar</source>
             <outputDirectory>/</outputDirectory>
-            <destName>devpulse-pulse.jar</destName>
+            <destName>devpulse.jar</destName>
         </file>
         <file>
-            <source>src/bin/pulse</source>
+            <source>src/bin/devpulse</source>
             <outputDirectory>/bin</outputDirectory>
-            <destName>pulse</destName>
+            <destName>devpulse</destName>
             <fileMode>0755</fileMode>
         </file>
         <file>
@@ -24,7 +24,7 @@
             <filtered>true</filtered>
         </file>
         <file>
-            <source>${project.build.directory}/checksums/pulse/devpulse-pulse.jar.sha256</source>
+            <source>${project.build.directory}/checksums/devpulse/devpulse.jar.sha256</source>
             <outputDirectory>/</outputDirectory>
         </file>
     </files>
