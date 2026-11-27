@@ -16,7 +16,7 @@ Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批�
 
 ```powershell
 bash build.sh pulse
-java -jar devpulse\target\devpulse.jar --help
+java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
 以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `devpulse run [TARGET]` 或 `devpulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，统一入口见 [devpulse CLI](../../devpulse-cli/README.md)。
@@ -36,13 +36,13 @@ java -jar devpulse\target\devpulse.jar --help
 
 ```powershell
 # 在当前目录创建配置模板
-java -jar devpulse\target\devpulse.jar init
+java -jar devpulse-cli\target\devpulse.jar init
 
 # 在已有项目目录创建配置模板
-java -jar devpulse\target\devpulse.jar init --directory "D:\your-project"
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project"
 
 # 覆盖已有配置，原内容将丢失
-java -jar devpulse\target\devpulse.jar init --directory "D:\your-project" --force
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project" --force
 ```
 
 成功时输出配置文件路径并返回退出码 `0`。目录不存在、配置已存在且未指定 `--force`，或文件无法写入时，输出错误并返回 `1`。
@@ -63,9 +63,9 @@ java -jar devpulse\target\devpulse.jar init --directory "D:\your-project" --forc
 | `--format <FORMAT>` | 结果格式，默认 `text`；`json` 时标准输出只打印一个 JSON 文档，任务日志只写入日志文件 |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar
-java -jar devpulse\target\devpulse.jar build --jobs 2
-java -jar devpulse\target\devpulse.jar dev --directory "D:\your-project" --dry-run
+java -jar devpulse-cli\target\devpulse.jar
+java -jar devpulse-cli\target\devpulse.jar build --jobs 2
+java -jar devpulse-cli\target\devpulse.jar dev --directory "D:\your-project" --dry-run
 ```
 
 任务通过非登录、非交互 Bash 执行，工作目录为项目配置目录。普通任务的输出和错误流合并，控制台日志带任务名前缀，并保存 UTF-8 日志；长驻进程的合并输出直接写入日志文件，不在控制台实时转发，以便 CLI 返回后仍能输出。普通任务以 Bash 退出码判断结果；脚本提前 `exit 0` 不会因输入管道关闭而被误判为失败。不隐式启用 `errexit` 或 `pipefail`，需要时由命令显式设置。
@@ -124,16 +124,16 @@ pipelines:
 
 ```powershell
 # 停止最新运行的所有长驻进程
-java -jar devpulse\target\devpulse.jar stop
+java -jar devpulse-cli\target\devpulse.jar stop
 
 # 停止指定运行中 server 任务的全部实例
-java -jar devpulse\target\devpulse.jar stop server --run "<run-id>"
+java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>"
 
 # 只停止 server 的指定实例（实例 ID 可从 status 获取）
-java -jar devpulse\target\devpulse.jar stop server --run "<run-id>" --instance "<instance-id>"
+java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>" --instance "<instance-id>"
 
 # 停止其他项目的指定运行
-java -jar devpulse\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
+java -jar devpulse-cli\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
 `stop [TASK]` 支持 `--directory` 和 `--run`，默认选择最新运行；任务级停止处理该任务全部记录实例，省略任务名按逆依赖顺序处理全部任务。`--instance <ID>` 必须与任务名一起使用，只停止属于该任务的指定实例。停止使用已保存配置，不依赖当前 `.devpulse.yaml`，不清理其他历史运行或删除日志、业务数据。PID 和启动时间用于核验身份，身份不确定时拒绝清理；单个实例清理失败仍继续处理其他实例并汇报失败。旧单实例记录仍可查询和停止。
@@ -157,7 +157,7 @@ java -jar devpulse\target\devpulse.jar stop --directory "D:\your-project" --run 
 | `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出重跑与复用集合，以及逐节点原因 |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
+java -jar devpulse-cli\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
 ```
 
 成功返回 `0`；运行 id 不存在或父运行目标已不可解析返回 `12`；父运行仍在执行、缺少清单，或本阶段未传 `--dry-run` 返回 `13`；读取记录失败返回 `40`。
@@ -177,8 +177,8 @@ java -jar devpulse\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d
 | `--format <FORMAT>` | 结果格式，默认 `text`；`json` 输出与 `devpulse run --dry-run --format json` 相同的计划文档，且不打开 TUI |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar review
-java -jar devpulse\target\devpulse.jar review build --plain
+java -jar devpulse-cli\target\devpulse.jar review
+java -jar devpulse-cli\target\devpulse.jar review build --plain
 ```
 
 交互终端中显示分层 DAG、依赖深度、前置和后继连线及完整命令，长驻进程还显示就绪命令、超时、用户管理生命周期和停止配置；`Tab` 可切换 DAG 和任务列表。上／下方向键选择任务，`Home`／`End` 选择首／末任务，左／右方向键水平平移图，`w`／`s` 垂直平移，`r` 定位到选中任务，`PageUp`／`PageDown` 滚动详情，`q` 退出。窗口小于 `60 × 16` 时提示放大，退出时恢复终端。输出重定向或无可用交互终端时自动使用纯文本计划。`review --plain` 与 `devpulse run --dry-run` 也显示所有生命周期命令，但不执行检查或清理。
@@ -200,9 +200,9 @@ java -jar devpulse\target\devpulse.jar review build --plain
 | `--grep <正则>` | 配合 `--log`，只保留匹配该大小写敏感正则的行；用 `(?i)` 开启忽略大小写 |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar status
-java -jar devpulse\target\devpulse.jar status --list
-java -jar devpulse\target\devpulse.jar status --run "<run-id>" --log build
+java -jar devpulse-cli\target\devpulse.jar status
+java -jar devpulse-cli\target\devpulse.jar status --list
+java -jar devpulse-cli\target\devpulse.jar status --run "<run-id>" --log build
 ```
 
 `--list` 不能与 `--run` 或 `--log` 混用。查询成功返回 `0`，即使历史任务失败；没有运行记录时也返回 `0`。读取或恢复失败返回 `40`，`--run` 指定的运行无法使用时返回 `12`，参数冲突返回 `2`。
@@ -226,7 +226,7 @@ java -jar devpulse\target\devpulse.jar status --run "<run-id>" --log build
 | `--format <FORMAT>` | 结果格式，默认 `text` 或 `json` |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar doctor
+java -jar devpulse-cli\target\devpulse.jar doctor
 ```
 
 成功返回 `0`；Bash 不可用或目录不存在返回 `20`，盘点中断返回 `130`。
@@ -292,7 +292,7 @@ Run from the repository root:
 
 ```powershell
 bash build.sh pulse
-java -jar devpulse\target\devpulse.jar --help
+java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
 All build and JAR examples below run from the repository root. After installation use `devpulse run [TARGET]` or `devpulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [devpulse CLI](../../devpulse-cli/README.md) for the entry point.
@@ -312,13 +312,13 @@ The template contains `version: 1`, `parallelism: 4`, two tasks named `check` an
 
 ```powershell
 # Create a configuration template in the current directory
-java -jar devpulse\target\devpulse.jar init
+java -jar devpulse-cli\target\devpulse.jar init
 
 # Create a configuration template in an existing project directory
-java -jar devpulse\target\devpulse.jar init --directory "D:\your-project"
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project"
 
 # Overwrite an existing configuration, losing its original contents
-java -jar devpulse\target\devpulse.jar init --directory "D:\your-project" --force
+java -jar devpulse-cli\target\devpulse.jar init --directory "D:\your-project" --force
 ```
 
 On success, the command prints the configuration path and returns exit code `0`. A missing directory, an existing configuration without `--force`, or a write failure produces an error and returns `1`.
@@ -339,9 +339,9 @@ The entire configuration is validated before execution, including field types, u
 | `--format <FORMAT>` | Result format; defaults to `text`. With `json`, stdout carries exactly one JSON document and task logs go only to their log files |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar
-java -jar devpulse\target\devpulse.jar build --jobs 2
-java -jar devpulse\target\devpulse.jar dev --directory "D:\your-project" --dry-run
+java -jar devpulse-cli\target\devpulse.jar
+java -jar devpulse-cli\target\devpulse.jar build --jobs 2
+java -jar devpulse-cli\target\devpulse.jar dev --directory "D:\your-project" --dry-run
 ```
 
 Tasks run through non-login, non-interactive Bash in the project configuration directory. Batch output and errors are merged, prefixed in the console, and saved as UTF-8 logs. Daemon output is merged and redirected directly to its log, without live console forwarding, so output continues after CLI exit. Bash's exit code determines batch results; an early `exit 0` is not misclassified as failure when the input pipe closes. `errexit` and `pipefail` are not enabled implicitly; set them explicitly when needed.
@@ -400,16 +400,16 @@ Checks and stop commands receive `DEVPULSE_DAEMON_PID`, `DEVPULSE_DAEMON_INSTANC
 
 ```powershell
 # Stop all daemons in the latest run
-java -jar devpulse\target\devpulse.jar stop
+java -jar devpulse-cli\target\devpulse.jar stop
 
 # Stop every instance of the server task in a selected run
-java -jar devpulse\target\devpulse.jar stop server --run "<run-id>"
+java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>"
 
 # Stop only one server instance (obtain its ID from status)
-java -jar devpulse\target\devpulse.jar stop server --run "<run-id>" --instance "<instance-id>"
+java -jar devpulse-cli\target\devpulse.jar stop server --run "<run-id>" --instance "<instance-id>"
 
 # Stop a selected run in another project
-java -jar devpulse\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
+java -jar devpulse-cli\target\devpulse.jar stop --directory "D:\your-project" --run "<run-id>"
 ```
 
 `stop [TASK]` accepts `--directory` and `--run`, defaulting to the latest run. Task-level stopping handles every recorded instance of that task; omission processes all tasks in reverse dependency order. `--instance <ID>` requires a task name and targets only an instance belonging to that task. Recorded stop settings are used without requiring the current `.devpulse.yaml`, cleaning other runs, or deleting logs/business data. PID/start time confirm identity; uncertain identity is refused. A failed instance cleanup does not prevent processing other instances and returns diagnostics. Legacy single-instance records remain queryable and stoppable.
@@ -433,7 +433,7 @@ This stage **reports only and executes nothing**: `--dry-run` is required, and o
 | `--format <FORMAT>` | Result format; defaults to `text`. `json` reports both sets plus a per-node reason |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
+java -jar devpulse-cli\target\devpulse.jar retry 1e6183ab-90ff-4e5b-ab97-4b774155a2d2 --dry-run --format json
 ```
 
 Success returns `0`; an unknown run id or a parent target that no longer resolves returns `12`; a run that is still executing, a missing manifest, or a missing `--dry-run` returns `13`; a failure to read the record returns `40`.
@@ -453,8 +453,8 @@ Success returns `0`; an unknown run id or a parent target that no longer resolve
 | `--format <FORMAT>` | Result format; defaults to `text`. `json` emits the same plan document as `devpulse run --dry-run --format json` and never opens the TUI |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar review
-java -jar devpulse\target\devpulse.jar review build --plain
+java -jar devpulse-cli\target\devpulse.jar review
+java -jar devpulse-cli\target\devpulse.jar review build --plain
 ```
 
 An interactive terminal shows a layered DAG, dependency depth, prerequisite/dependent connections, and complete commands. Daemons also show readiness commands, timeouts, user-managed lifecycle, and stop settings. `Tab` switches between graph and task list. Up/Down selects tasks, `Home`/`End` selects the first/last task, Left/Right pans horizontally, `w`/`s` pans vertically, `r` centers selection, `PageUp`/`PageDown` scrolls details, and `q` exits. Windows smaller than `60 × 16` show an enlargement notice, and exit restores the terminal. Redirected or unavailable interactive output uses a plain-text plan. `review --plain` and `devpulse run --dry-run` also show all lifecycle commands without running checks or cleanup.
@@ -476,9 +476,9 @@ Every actual `pulse` execution creates an independent run ID, storing run and ta
 | `--grep <regex>` | With `--log`, keep lines matching this case-sensitive regular expression; use `(?i)` for case-insensitive matching |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar status
-java -jar devpulse\target\devpulse.jar status --list
-java -jar devpulse\target\devpulse.jar status --run "<run-id>" --log build
+java -jar devpulse-cli\target\devpulse.jar status
+java -jar devpulse-cli\target\devpulse.jar status --list
+java -jar devpulse-cli\target\devpulse.jar status --run "<run-id>" --log build
 ```
 
 `--list` cannot be combined with `--run` or `--log`. Successful queries return `0`, even for failed historical tasks or an empty history. Reading or recovery failures return `40`, an unusable `--run` identifier returns `12`, and conflicting options return `2`.
@@ -502,7 +502,7 @@ History and logs are not automatically cleaned up; exclude `.devpulse\` from ver
 | `--format <FORMAT>` | Result format: `text` (default) or `json` |
 
 ```powershell
-java -jar devpulse\target\devpulse.jar doctor
+java -jar devpulse-cli\target\devpulse.jar doctor
 ```
 
 It returns `0` on success, `20` when Bash is unavailable or the directory is missing, and `130` when the check is interrupted.

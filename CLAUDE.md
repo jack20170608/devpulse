@@ -17,7 +17,7 @@ Java 21+ is required to build and run. Actual Bash execution (Pulse, `doctor`) a
 ```bash
 bash build.sh                 # build all modules
 bash build.sh cli|jira|dist [--clean] [--quiet]
-bash run.sh --help            # rebuild combined CLI, then run it
+bash run.sh --help            # rebuild the CLI, then run it
 
 bash verify.sh                # THE machine gate: Spotless check + full compile + all tests + SpotBugs
 bash verify.sh --clean        # mandatory after changing compiler settings or dependency versions

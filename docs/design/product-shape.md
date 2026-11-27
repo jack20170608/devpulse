@@ -20,7 +20,7 @@
 | 6 | `status --tools` 改为 `devpulse doctor`，分本地诊断与服务端报告两段 | 排障命令不能依赖它要诊断的东西 |
 | 7 | 客户端与服务端统一为一个二进制 `devpulse`，不加短别名；`pulse` 名字退役 | 版本永远一致；少一个故障源 |
 | 8 | `review` 与 `--dry-run` 走服务端 API | 配置语义只有一份 |
-| 9 | 服务端不在时自动拉起 | 客户端越薄，行为越可预测 |
+| 9 | 服务端由 `server start` 显式启动；是否自动拉起留到客户端改走服务端时再定 | 显式启动可预测，隐藏进程难排查 |
 
 ### 2. 一个二进制
 
@@ -56,28 +56,24 @@ devpulse version
 
 客户端不持有任何进程、不打开数据库。这意味着它可以在另一台机器上运行——首版不做远程，但边界已经立住。
 
-### 4. 服务端不在时：自动拉起
+### 4. 服务端生命周期：显式 start
 
 ```text
-devpulse run
-  → 读 ~/.devpulse/token
-  → 连不上：检查锁文件，确认没有别的进程正在拉起
-  → 拉起 devpulse server（后台，写锁文件）
-  → 等待就绪（超时 10s）
-  → 就绪：提交；未就绪：报错并给出日志位置
+devpulse server start   → 后台拉起自身，等待就绪（超时 10s），打印端口
+devpulse server status  → 读状态文件 + 探活
+devpulse server stop    → 发 SIGTERM，等进程退出并清理状态文件
+devpulse server run     → 前台运行（调试用）
 ```
 
-三种失败必须区分清楚，否则用户只会看到“超时”：
+服务的边界：绑定 `127.0.0.1`，默认端口 **12580**，端口被占用时报错并提示 `--port`；**不做认证**，只用 Host 校验 + `X-Devpulse-Client` 头挡住跨站请求与 DNS rebinding。
 
-1. 服务端启动失败（端口占用、数据库打不开）——报出服务端自己的错误。
-2. 版本不匹配——客户端与服务端来自不同安装，拒绝并提示重新安装。
-3. 拉起竞争——另一个客户端先赢了，等它就绪即可。
+**自动拉起暂不实现**。等客户端命令真正改为“提交到服务端”时再决定是否引入（届时需要区分启动失败、版本不匹配、拉起竞争三种情形）。
 
 ### 5. `review` 与 `--dry-run` 走服务端
 
 两者都需要解析 YAML、建图、校验。放在服务端意味着配置语义只有一份，客户端不必打包配置解析器。
 
-代价是“没服务端就不能校验配置”。由于服务端会自动拉起，这个代价只体现为一次启动延迟。
+代价是“没服务端就不能校验配置”；在显式 `server start` 的模型下，这就是一条明确的报错，而不是隐式的启动延迟。
 
 ### 6. `doctor` 两段式
 
@@ -85,7 +81,7 @@ devpulse run
 
 | 段 | 位置 | 检查内容 |
 |---|---|---|
-| 本地诊断 | 客户端 | 服务端进程是否存在、端口是否可连、token 是否可读、客户端/服务端版本是否一致 |
+| 本地诊断 | 客户端 | 服务端进程是否存在、端口是否可连、客户端/服务端版本是否一致 |
 | 环境报告 | 服务端 | bash 路径、17 个工具链（git、docker、kubectl、helm、node、npm、pnpm、yarn、java、mvn、gradle、python、python3、go、cargo、make、terraform）、项目标记文件 |
 
 服务端不可达时，本地诊断照常输出，并明确说明“服务端未运行”，而不是整条命令失败。
@@ -183,7 +179,7 @@ devpulse-dist          发行
 | 6 | `status --tools` becomes `devpulse doctor`, split into local diagnostics and a server report | A diagnostic command cannot depend on what it diagnoses |
 | 7 | One binary `devpulse` for client and server, no short alias; the `pulse` name retires | Versions can never diverge |
 | 8 | `review` and `--dry-run` go through the server API | Configuration semantics exist once |
-| 9 | The server auto-starts when absent | A thinner client behaves more predictably |
+| 9 | The server starts explicitly with `server start`; auto-start is revisited when client commands move to the server | An explicit start is predictable; a hidden process is hard to debug |
 
 ### 2. One binary
 
@@ -197,11 +193,11 @@ The client parses arguments, renders, maps exit codes, and talks HTTP/SSE. The s
 
 ### 4. Auto-start
 
-Read the token, try to connect, check the lock file, start `devpulse server` in the background, wait for readiness with a ten-second timeout. Three failures must stay distinguishable: the server's own startup error, a client/server version mismatch, and a lost start race.
+`server start` relaunches the binary in the background, waits up to ten seconds for readiness and prints the port; `status` reads the state file and probes liveness; `stop` sends SIGTERM, waits for exit and clears the state file; `run` stays in the foreground for debugging. The server binds `127.0.0.1` on port 12580 by default, reports a busy port as an error, and has no authentication: a Host check plus the `X-Devpulse-Client` header are the boundary. Auto-start is deliberately not implemented yet; it is revisited when client commands move to the server.
 
 ### 5. Doctor
 
-Local diagnostics (process, port, token, version) always run; the environment report (bash, seventeen tools, project markers) comes from the server. When the server is unreachable, the command says so instead of failing.
+Local diagnostics (process, port, version) always run; the environment report (bash, seventeen tools, project markers) comes from the server. When the server is unreachable, the command says so instead of failing.
 
 ### 6. YAML as plain data
 

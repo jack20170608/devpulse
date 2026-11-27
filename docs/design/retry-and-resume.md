@@ -2,7 +2,7 @@
 
 **状态 / Status**：提案，未实现 / Proposal, not implemented
 
-[项目首页](../readme.MD)
+[项目首页](../../readme.MD)
 
 ## 中文
 

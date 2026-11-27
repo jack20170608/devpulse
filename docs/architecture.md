@@ -14,7 +14,7 @@
 |------|------|
 | [`devpulse-common`](devpulse-common/architecture.md) | 跨模块共享通用代码 |
 | [`devpulse-core`](devpulse-core/architecture.md) | Java DAG、Bash 计划与运行时、历史、长驻进程及环境采集 |
-| [`devpulse-storage`](relational-storage.md) | 运行状态的关系型存储、schema 迁移与复用索引 |
+| [`devpulse-storage`](design/relational-storage.md) | 运行状态的关系型存储、schema 迁移与复用索引 |
 | [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹与运行编排 |
 | [`devpulse-server`](devpulse-server/architecture.md) | 本地服务端：回环 HTTP、token 认证与健康/环境端点 |
 | [`devpulse-cli`](devpulse-cli/architecture.md) | 统一 CLI：入口装配、Pulse 命令与呈现 |
@@ -26,7 +26,7 @@
 
 ### 依赖与文档边界
 
-独立工具不互相依赖；Pulse 直接复用 core 的环境采集与 Bash 能力，其工作流也依赖 core。Jira 独立运行。兼容 CLI 组合 Pulse 命令，发行模块仅打包 Pulse/Jira；core 不注册命令或动态加载工具。Java 任务与 Bash 工作流共享 DAG 调度，Bash Adapter 负责进程、日志和历史；Daemon 支持就绪及健康监测，由用户管理停止。
+独立工具不互相依赖；Pulse 直接复用 core 的环境采集与 Bash 能力，其工作流也依赖 core。Jira 独立运行。CLI 模块把 Pulse 命令与服务端子命令装配成一个可执行文件，发行模块打包 CLI 与 Jira；core 不注册命令或动态加载工具。Java 任务与 Bash 工作流共享 DAG 调度，Bash Adapter 负责进程、日志和历史；Daemon 支持就绪及健康监测，由用户管理停止。
 
 技术栈及仓库约束见 [Copilot 仓库指令](../.github/copilot-instructions.md)。原使用说明路径保留双语迁移页，不重复维护正文。
 
@@ -42,7 +42,7 @@ The former monolithic architecture document has been split by Maven module; this
 |--------|----------------|
 | [`devpulse-common`](devpulse-common/architecture.md) | Shared common code |
 | [`devpulse-core`](devpulse-core/architecture.md) | Java DAG, Bash planning/runtime, history, daemons, and environment collection |
-| [`devpulse-storage`](relational-storage.md) | Relational run state, schema migrations, and the reuse index |
+| [`devpulse-storage`](design/relational-storage.md) | Relational run state, schema migrations, and the reuse index |
 | [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, and run orchestration |
 | [`devpulse-server`](devpulse-server/architecture.md) | Local server: loopback HTTP, token auth, health and environment endpoints |
 | [`devpulse-cli`](devpulse-cli/architecture.md) | Unified CLI: entry assembly, Pulse commands, and presentation |

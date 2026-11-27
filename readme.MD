@@ -14,7 +14,7 @@ devpulse 是基于 Java 21 和 Maven 的本地 DevOps 工具箱。`devpulse` 是
 bash build.sh --clean
 bash run.sh --help
 bash integration-test/jira/run-jira.sh --help
-java -jar devpulse/target/devpulse.jar --help
+java -jar devpulse-cli/target/devpulse.jar --help
 ```
 
 `build.sh` 默认构建全部模块，也支持 `bash build.sh pulse|jira|devpulse|dist` 按需构建，`--clean` 可清理所选模块的旧产物；`dist` 目标始终先清理再打包。`run.sh` 构建并运行统一入口；`integration-test/jira/run-jira.sh` 只运行已构建的 Jira JAR。两者都不会修改父终端的环境变量。可选安装与发行包见 [发行与安装](devpulse-dist/README.md)。运行 JAR 需要 Java 21 或更高版本；实际执行 `run` 和 `doctor` 还需要 Bash。
@@ -27,7 +27,7 @@ devpulse 面向"**本地、无容器、Bash 原生、有状态**"的任务编排
 
 | 文档 | 内容 |
 |------|------|
-| [Pulse 命令说明](devpulse-pulse/README.md) | 任务配置、执行、审阅、状态与长驻进程 |
+| [Pulse 命令说明](docs/devpulse-cli/pulse-commands.md) | 任务配置、执行、审阅、状态与长驻进程 |
 | [Core 使用说明](devpulse-core/README.md) | Java DAG Builder、Bash 工作流嵌入与环境采集 |
 | [devpulse CLI 使用说明](devpulse/README.md) | 统一入口与命令导航 |
 | [发行与安装](devpulse-dist/README.md) | 本地构建安装、升级与卸载 |
@@ -66,7 +66,7 @@ From the repository root (use Git Bash on Windows):
 bash build.sh --clean
 bash run.sh --help
 bash integration-test/jira/run-jira.sh --help
-java -jar devpulse/target/devpulse.jar --help
+java -jar devpulse-cli/target/devpulse.jar --help
 ```
 
 `build.sh` builds every module by default, or use `bash build.sh pulse|jira|devpulse|dist` to build a selected target; `--clean` removes its previous output, while `dist` always cleans before packaging. `run.sh` builds and runs the unified entry point; `integration-test/jira/run-jira.sh` runs the built Jira JAR. Neither modifies the parent shell's environment. See [distribution and installation](devpulse-dist/README.md) for installation. Running the JARs requires Java 21 or later; `run` and `doctor` also require Bash.
@@ -79,7 +79,7 @@ devpulse targets task orchestration that is **local, container-free, native to B
 
 | Document | Contents |
 |----------|----------|
-| [Pulse commands](devpulse-pulse/README.md) | Task configuration, execution, review, status, and daemons |
+| [Pulse commands](docs/devpulse-cli/pulse-commands.md) | Task configuration, execution, review, status, and daemons |
 | [Core guide](devpulse-core/README.md) | Java DAG Builder, embedded Bash workflows, and environment collection |
 | [devpulse CLI guide](devpulse/README.md) | Unified entry point and command navigation |
 | [Distribution and installation](devpulse-dist/README.md) | Local build installation, upgrades, and removal |

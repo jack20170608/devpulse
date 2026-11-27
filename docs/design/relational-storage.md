@@ -2,7 +2,7 @@
 
 **状态 / Status**：设计参考，存储层已实现（与提案的差异见 §0）/ Design reference, storage implemented (see §0 for differences from the proposal)
 
-[项目首页](../readme.MD) | [中文](#中文) | [English](#english)
+[项目首页](../../readme.MD) | [中文](#中文) | [English](#english)
 
 ## 中文
 

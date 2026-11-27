@@ -29,15 +29,15 @@ Shade 在 `package` 阶段生成 `devpulse-cli/target/devpulse.jar`，设置 `De
 
 ### Responsibilities and dependencies
 
-`DevPulseCLI` preserves the combined `devpulse <subcommand>` entry point, reusing Pulse's `init`, `run`, `review`, `status`, `stop`, and `doctor`. It only dispatches picocli arguments rather than reimplementing configuration, scheduling, or inventory, and does not include Jira.
+`DevPulseCLI` is the single `devpulse <subcommand>` entry point, containing Pulse's `init`, `run`, `review`, `status`, `stop`, `doctor` and the server's `server` subcommand. It only dispatches picocli arguments rather than reimplementing configuration, scheduling, or inventory, and does not include Jira.
 
-The module directly depends on `pulse` and inherits `devpulse-dependencies`. Standalone tools do not depend on one another; only this compatibility entry point combines them. The shared library registers no commands, and the entry point neither discovers nor loads plugins dynamically.
+The module depends on `devpulse-core`, `devpulse-execution` and `devpulse-server`, and inherits `devpulse-dependencies`. Tools do not depend on one another; shared libraries register no commands, and the entry point neither discovers nor loads plugins dynamically.
 
 ### Packaging and lifecycle
 
-Shade produces `devpulse-cli/target/devpulse.jar` during `package`, sets `DevPulseCLI` as `Main-Class`, and merges service files and `reference.conf`. The manifest's `Implementation-Version` uses the project version. This artifact is for compatibility only and is excluded from individual tool archives.
+Shade produces `devpulse-cli/target/devpulse.jar` during `package`, sets `DevPulseCLI` as `Main-Class`, and merges service files and `reference.conf`. The manifest's `Implementation-Version` uses the project version. This artifact is the single binary used by release archives and the native image.
 
-Pulse commands retain ownership of workflow execution and terminal lifecycle. This module creates no second execution-state model.
+The `run` command retains ownership of workflow execution and terminal lifecycle. This module creates no second execution-state model. Details of the command layer are in [Pulse command layer](pulse-commands-architecture.md).
 
 ### Original implementation roadmap
 

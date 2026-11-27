@@ -1,6 +1,6 @@
 # devpulse-execution 架构 / devpulse-execution architecture
 
-[项目首页](../readme.MD) | [中文](#中文) | [English](#english)
+[项目首页](../../readme.MD) | [中文](#中文) | [English](#english)
 
 ## 中文
 

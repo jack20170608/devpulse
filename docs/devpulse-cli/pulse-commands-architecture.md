@@ -4,17 +4,17 @@
 
 ## 中文
 
-[架构导航](../../architecture.md) | [使用说明](../../devpulse-cli/pulse-commands.md)
+[架构导航](../architecture.md) | [使用说明](pulse-commands.md)
 
 ### 模块边界
 
-Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 命令与终端展示；[devpulse-core](../../devpulse-core/architecture.md) 提供唯一的 `DagGraph` 图规划、`DagWorkflow` 执行定义、Bash Adapter、运行历史和长驻进程管理。`PulsePlan` 仅保存选定图及配置展示信息，不实现图算法。Pulse 将核心结果映射为 CLI 退出码，并负责 CLI 退出钩子。
+Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 命令与终端展示；[devpulse-core](../devpulse-core/architecture.md) 提供唯一的 `DagGraph` 图规划、`DagWorkflow` 执行定义、Bash Adapter、运行历史和长驻进程管理。`PulsePlan` 仅保存选定图及配置展示信息，不实现图算法。Pulse 将核心结果映射为 CLI 退出码，并负责 CLI 退出钩子。
 
 监测参数直接解析为 DAG 的 `DaemonOptions`，Bash Adapter 从启动上下文取得实际策略；退出码由 Adapter 明确记录，不猜测 Java 整数结果。Pulse 负责汇总终端文案。Daemon 每次启动保存独立实例 ID、尝试编号、脚本及身份，`status` 显示所有实例；任务级 `stop` 停止全部实例，`stop TASK --instance <ID>` 只停止指定实例，工作流结束不自动停止。
 
 ### 配置格式与加载
 
-- 任务配置仅支持 UTF-8 YAML 文件 `.devpulse.yaml`，不再读取 `.devpulse.conf`；迁移说明见[核心 CLI 使用指南](../../devpulse-cli/pulse-commands.md)。
+- 任务配置仅支持 UTF-8 YAML 文件 `.devpulse.yaml`，不再读取 `.devpulse.conf`；迁移说明见[核心 CLI 使用指南](pulse-commands.md)。
 - 使用 SnakeYAML Engine 的 YAML 1.2 Core Schema 解析单个映射文档，限制文件大小为 1 MiB、集合嵌套为 64 层；拒绝重复键、非字符串键、自定义标签、锚点、别名和合并键，不构造任意 Java 对象。
 - 将 YAML 节点转换为带文件和行号来源的 Typesafe Config 值，复用类型化读取和时长校验；不将 YAML 字符串再次按 HOCON 解析。
 - 默认 `version: 1`、`parallelism: 4` 和空 `pipelines`；不做配置变量替换，不加载 JVM 系统属性或环境变量，命令中的变量保留给 Bash。
@@ -36,7 +36,7 @@ Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 
 - **并发上限**：默认最多同时运行 4 个批任务或长驻进程启动等待；支持配置 `parallelism` 与 `pulse --jobs` 覆盖，优先级为命令行参数高于项目配置、高于默认值。取值必须为正整数，并在执行前校验；该限制不控制已就绪长驻进程数量、探测进程或外部任务内部的并发。
 - **失败处理**：以 Bash 退出码判断批任务结果；提前 `exit 0` 关闭输入不误判为失败。不隐式启用 `errexit` 或 `pipefail`。普通失败跳过后继，Daemon 失效取消运行中的受影响后继并跳过未启动后继，独立分支继续；日志、启动或持久化基础设施失败取消运行。`WorkflowRun` 消费装配完成的 DAG 的事件与结果，保存历史并汇总成功、失败和跳过数量，不建图或管理进程。
 - **命令选项**：`--directory` 指定项目目录，`--bash` 指定 Bash，`--jobs` 覆盖并发上限；`--dry-run` 校验完整配置并显示补齐依赖后的计划及命令，不探测 Bash、不启动任务。
-- **执行边界**：Bash 配置暂不提供批任务重试/超时、Daemon 自动重启或常驻调度平台。取消时 Adapter 尽力回收批任务及可见后代，不停止 Daemon；`shutdownHook` 已移除，用户通过 `stop` 管理。核心支持 JVM 或外部进程的 Daemon Handle，仅处理就绪和健康，不处理自动清理。后续路线见 [核心使用说明](../../../devpulse-core/README.md)。
+- **执行边界**：Bash 配置暂不提供批任务重试/超时、Daemon 自动重启或常驻调度平台。取消时 Adapter 尽力回收批任务及可见后代，不停止 Daemon；`shutdownHook` 已移除，用户通过 `stop` 管理。核心支持 JVM 或外部进程的 Daemon Handle，仅处理就绪和健康，不处理自动清理。后续路线见 [核心使用说明](../../devpulse-core/README.md)。
 
 ### 配置初始化模块（`InitCommand.java`）
 
@@ -71,17 +71,17 @@ Pulse 负责 YAML 配置适配、流水线目标解析、任务装配、picocli 
 
 ## English
 
-[Architecture index](../../architecture.md) | [Usage](../../devpulse-cli/pulse-commands.md)
+[Architecture index](../architecture.md) | [Usage](pulse-commands.md)
 
 ### Module boundaries
 
-Pulse owns YAML adaptation, pipeline target resolution, task assembly, picocli commands, and terminal presentation. [devpulse-core](../../devpulse-core/architecture.md) provides the single `DagGraph` planner, `DagWorkflow` execution definitions, the Bash Adapter, history, and daemon management. `PulsePlan` only stores the selected graph and configuration presentation metadata, with no graph algorithms. Pulse maps core results to CLI exit codes and owns CLI shutdown hooks.
+Pulse owns YAML adaptation, pipeline target resolution, task assembly, picocli commands, and terminal presentation. [devpulse-core](../devpulse-core/architecture.md) provides the single `DagGraph` planner, `DagWorkflow` execution definitions, the Bash Adapter, history, and daemon management. `PulsePlan` only stores the selected graph and configuration presentation metadata, with no graph algorithms. Pulse maps core results to CLI exit codes and owns CLI shutdown hooks.
 
 Monitoring parameters parse directly into DAG `DaemonOptions`; the Bash Adapter reads actual policy from startup context and explicitly records exit codes without guessing integer Java results. Pulse prints summary text. Every daemon startup records its independent instance ID, attempt number, scripts, and identity. `status` shows all instances; task-level `stop` stops all instances, while `stop TASK --instance <ID>` targets one. Workflow completion never stops them automatically.
 
 ### Configuration format and loading
 
-- Task configuration supports only UTF-8 YAML in `.devpulse.yaml`; `.devpulse.conf` is no longer read. See the [Core CLI guide](../../devpulse-cli/pulse-commands.md) for migration.
+- Task configuration supports only UTF-8 YAML in `.devpulse.yaml`; `.devpulse.conf` is no longer read. See the [Core CLI guide](pulse-commands.md) for migration.
 - Use SnakeYAML Engine's YAML 1.2 Core Schema to parse a single mapping document, limited to 1 MiB and 64 collection nesting levels. Reject duplicate keys, non-string keys, custom tags, anchors, aliases, and merge keys; never construct arbitrary Java objects.
 - Convert YAML nodes to Typesafe Config values with file and line origins, reusing typed reads and duration validation without reparsing YAML strings as HOCON.
 - Default to `version: 1`, `parallelism: 4`, and empty `pipelines`. Do not substitute configuration variables or load JVM system properties/environment variables; leave command variables to Bash.
@@ -103,7 +103,7 @@ Monitoring parameters parse directly into DAG `DaemonOptions`; the Bash Adapter 
 - **Concurrency**: Allow at most 4 concurrent batch tasks or daemon startup waits by default. Support `parallelism` and `pulse --jobs`, with CLI options overriding project configuration and defaults. Validate positive integers before execution. This does not limit ready daemons, probe processes, or concurrency inside external tasks.
 - **Failure policy**: Use batch exit codes; early `exit 0` closing stdin is not a failure. Do not implicitly enable `errexit` or `pipefail`. Ordinary failure skips descendants; daemon faults cancel running affected descendants and skip unstarted descendants while independent branches continue. Logging, startup, or persistence infrastructure faults cancel the run. `WorkflowRun` consumes events and results from the assembled DAG, persisting history and summarizing succeeded, failed, and skipped counts without constructing graphs or managing processes.
 - **Options**: `--directory` selects the project, `--bash` selects Bash, and `--jobs` overrides concurrency. `--dry-run` validates the whole configuration and prints the expanded plan and commands without discovering Bash or starting tasks.
-- **Execution boundaries**: Bash configuration does not yet expose batch retries/timeouts, automatic daemon restart, or a persistent scheduler. The Adapter attempts batch/visible-descendant cleanup on cancellation without stopping daemons. `shutdownHook` is removed; users invoke `stop`. Core Handles may represent JVM threads or external processes and provide readiness/health, not automatic cleanup. See the [core usage roadmap](../../../devpulse-core/README.md).
+- **Execution boundaries**: Bash configuration does not yet expose batch retries/timeouts, automatic daemon restart, or a persistent scheduler. The Adapter attempts batch/visible-descendant cleanup on cancellation without stopping daemons. `shutdownHook` is removed; users invoke `stop`. Core Handles may represent JVM threads or external processes and provide readiness/health, not automatic cleanup. See the [core usage roadmap](../../devpulse-core/README.md).
 
 ### Configuration initializer (`InitCommand.java`)
 
