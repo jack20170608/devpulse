@@ -17,6 +17,7 @@ import picocli.CommandLine.Spec;
             DoctorCommand.class,
             InitCommand.class,
             RunCommand.class,
+            ServerCommand.class,
             ReviewCommand.class,
             StatusCommand.class,
             StopCommand.class

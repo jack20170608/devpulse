@@ -23,6 +23,7 @@
         <module>devpulse-storage</module>
         <module>devpulse-core</module>
         <module>devpulse-execution</module>
+        <module>devpulse-server</module>
         <module>devpulse-pulse</module>
         <module>devpulse-tools</module>
         <module>devpulse</module>

@@ -118,15 +118,15 @@ YAML
 		return 1
 	fi
 	expect 0 "help" "$binary" --help
-	expect 0 "run pipeline" "$binary" pulse dev --directory "$work"
+	expect 0 "run pipeline" "$binary" run dev --directory "$work"
 	expect 0 "status" "$binary" status --directory "$work"
 	expect 0 "doctor" "$binary" doctor --directory "$work"
-	expect 0 "dry run" "$binary" pulse dev --directory "$work" --dry-run
+	expect 0 "dry run" "$binary" run dev --directory "$work" --dry-run
 	expect 0 "review" "$binary" review dev --directory "$work"
-	expect 0 "daemon lifecycle" "$binary" pulse daemon --directory "$work"
+	expect 0 "daemon lifecycle" "$binary" run daemon --directory "$work"
 	expect 0 "stop" "$binary" stop --directory "$work"
-	expect 12 "unknown target" "$binary" pulse absent --directory "$work"
-	expect 30 "task failure" "$binary" pulse fail --directory "$work"
+	expect 12 "unknown target" "$binary" run absent --directory "$work"
+	expect 30 "task failure" "$binary" run fail --directory "$work"
 	echo "native smoke: all checks passed"
 }
 

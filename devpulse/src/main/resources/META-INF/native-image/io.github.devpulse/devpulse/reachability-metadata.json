@@ -24,13 +24,16 @@
       ]
     },
     {
-      "type": "io.github.devpulse.cli.InitCommand",
+      "type": "io.github.devpulse.cli.DoctorCommand",
       "fields": [
+        {
+          "name": "bash"
+        },
         {
           "name": "directory"
         },
         {
-          "name": "force"
+          "name": "format"
         },
         {
           "name": "spec"
@@ -44,7 +47,18 @@
       ]
     },
     {
-      "type": "io.github.devpulse.cli.PulseCLI$VersionProvider",
+      "type": "io.github.devpulse.cli.InitCommand",
+      "fields": [
+        {
+          "name": "directory"
+        },
+        {
+          "name": "force"
+        },
+        {
+          "name": "spec"
+        }
+      ],
       "methods": [
         {
           "name": "<init>",
@@ -128,6 +142,100 @@
       ]
     },
     {
+      "type": "io.github.devpulse.cli.RunCommand",
+      "fields": [
+        {
+          "name": "bash"
+        },
+        {
+          "name": "directory"
+        },
+        {
+          "name": "dryRun"
+        },
+        {
+          "name": "format"
+        },
+        {
+          "name": "jobs"
+        },
+        {
+          "name": "spec"
+        },
+        {
+          "name": "target"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.ServerCommand",
+      "fields": [
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.ServerCommand$Run",
+      "fields": [
+        {
+          "name": "directory"
+        },
+        {
+          "name": "port"
+        },
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.ServerCommand$Status",
+      "fields": [
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.ServerCommand$Stop",
+      "fields": [
+        {
+          "name": "spec"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.github.devpulse.cli.StatusCommand",
       "fields": [
         {
@@ -195,6 +303,15 @@
       ]
     },
     {
+      "type": "io.github.devpulse.cli.VersionProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.github.devpulse.storage.DaemonRecord"
     },
     {
@@ -254,6 +371,22 @@
           "parameterTypes": []
         },
         {
+          "name": "projectId",
+          "parameterTypes": []
+        },
+        {
+          "name": "queuedAt",
+          "parameterTypes": []
+        },
+        {
+          "name": "requestedBy",
+          "parameterTypes": []
+        },
+        {
+          "name": "serverBootId",
+          "parameterTypes": []
+        },
+        {
           "name": "startedAt",
           "parameterTypes": []
         },
@@ -271,6 +404,43 @@
         },
         {
           "name": "toolVersion",
+          "parameterTypes": []
+        },
+        {
+          "name": "workerPid",
+          "parameterTypes": []
+        },
+        {
+          "name": "workerStartedAt",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.storage.TaskEdgeRecord",
+      "methods": [
+        {
+          "name": "dependentName",
+          "parameterTypes": []
+        },
+        {
+          "name": "hashCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "prerequisiteName",
+          "parameterTypes": []
+        },
+        {
+          "name": "runId",
+          "parameterTypes": []
+        },
+        {
+          "name": "seq",
+          "parameterTypes": []
+        },
+        {
+          "name": "toString",
           "parameterTypes": []
         }
       ]
@@ -324,6 +494,10 @@
           "parameterTypes": []
         },
         {
+          "name": "errorKind",
+          "parameterTypes": []
+        },
+        {
           "name": "exitCode",
           "parameterTypes": []
         },
@@ -357,6 +531,10 @@
         },
         {
           "name": "runId",
+          "parameterTypes": []
+        },
+        {
+          "name": "seq",
           "parameterTypes": []
         },
         {
@@ -903,6 +1081,15 @@
       ]
     },
     {
+      "type": "sun.security.provider.MD5",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "sun.security.provider.NativePRNG",
       "methods": [
         {
@@ -980,6 +1167,15 @@
       "glob": "META-INF/services/org/jline/terminal/provider/jni"
     },
     {
+      "glob": "db/**"
+    },
+    {
+      "glob": "db/bootstrap/schema-version.sql"
+    },
+    {
+      "glob": "db/migration/V1__central-store.sql"
+    },
+    {
       "glob": "org/h2/util/data.zip"
     },
     {
@@ -990,6 +1186,9 @@
     },
     {
       "glob": "org/jline/utils/dumb.caps"
+    },
+    {
+      "glob": "org/slf4j/impl/StaticLoggerBinder.class"
     },
     {
       "module": "java.base",
@@ -1005,9 +1204,6 @@
     },
     {
       "bundle": "sun.awt.resources.awt"
-    },
-    {
-      "glob": "db/**"
     }
   ]
 }

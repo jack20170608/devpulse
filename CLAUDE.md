@@ -46,7 +46,7 @@ Integration scripts: `integration-test/jira/run-jira.sh` runs the built Jira JAR
 The root `pom.xml` is the only place the project version is defined (`<revision>`); child `<parent><version>` uses `${revision}`, and internal dependencies use `${project.version}`. `devpulse-dependencies` manages external dependency versions, `devpulse-bom` manages consumable internal versions. The Flatten plugin (`resolveCiFriendliesOnly`) keeps installed POMs free of unresolved `${revision}`.
 
 Dependency direction:
-- Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, and `RunService`).
+- Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, and `RunService`), `devpulse-server` (loopback HTTP daemon).
 - `devpulse-pulse` holds Pulse's commands as a library for the unified CLI; `devpulse-tools` aggregates independent tools and currently holds only `jira`. Tools may depend on shared libraries but **never on each other**.
 - Libraries register no CLI commands and there is no dynamic plugin loading.
 - `devpulse` is the unified entry point: its commands wrap Pulse's task graph. `devpulse-dist` packages Pulse and Jira only. `devpulse-poc` is an experimental module, not shipped.

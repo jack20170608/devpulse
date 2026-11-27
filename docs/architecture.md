@@ -16,6 +16,7 @@
 | [`devpulse-core`](devpulse-core/architecture.md) | Java DAG、Bash 计划与运行时、历史、长驻进程及环境采集 |
 | [`devpulse-storage`](relational-storage.md) | 运行状态的关系型存储、schema 迁移与复用索引 |
 | [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹与运行编排 |
+| [`devpulse-server`](devpulse-server/architecture.md) | 本地服务端：回环 HTTP、token 认证与健康/环境端点 |
 | [`devpulse-pulse`](devpulse-pulse/architecture.md) | YAML 配置、任务命令与静态审阅 |
 | [`devpulse-tools/jira`](devpulse-tools/jira/architecture.md) | Jira REST、连接配置与内容转换 |
 | [`devpulse`](devpulse/architecture.md) | 组合式兼容命令分发 |
@@ -45,6 +46,7 @@ The former monolithic architecture document has been split by Maven module; this
 | [`devpulse-core`](devpulse-core/architecture.md) | Java DAG, Bash planning/runtime, history, daemons, and environment collection |
 | [`devpulse-storage`](relational-storage.md) | Relational run state, schema migrations, and the reuse index |
 | [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, and run orchestration |
+| [`devpulse-server`](devpulse-server/architecture.md) | Local server: loopback HTTP, token auth, health and environment endpoints |
 | [`devpulse-pulse`](devpulse-pulse/architecture.md) | YAML configuration, workflow commands, and static review |
 | [`devpulse-tools/jira`](devpulse-tools/jira/architecture.md) | Jira REST, connection configuration, and content conversion |
 | [`devpulse`](devpulse/architecture.md) | Combined compatibility command dispatch |
