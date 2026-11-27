@@ -4,30 +4,60 @@
 # top-most EditorConfig file
 root = true
 
-# Unix-style newlines with a newline ending every file
+# ---------------------------------------------------------------------------
+# Global defaults: UTF-8, LF endings, 4-space indentation, final newline.
+# Java follows AOSP style; see the [*.java] section below.
+# ---------------------------------------------------------------------------
 [*]
 charset = utf-8
 end_of_line = lf
-indent_size = 2
 indent_style = space
+indent_size = 4
+tab_width = 4
 insert_final_newline = true
 max_line_length = 160
 trim_trailing_whitespace = true
+
+# ---------------------------------------------------------------------------
+# Java - AOSP style (Android Open Source Project)
+#
+# Mirrors the Spotless configuration in pom.xml: google-java-format with
+# <style>AOSP</style>. AOSP means 4-space block indent, 8-space continuation
+# indent and a 100-column limit; tabs are never used.
+#
+# Not expressible in EditorConfig (enforced by google-java-format instead):
+# K&R brace placement, no wildcard imports, no unused imports, one blank line
+# between methods and members.
+# ---------------------------------------------------------------------------
+[*.java]
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 100
+insert_final_newline = true
+trim_trailing_whitespace = true
+# Editor extension understood by some plugins; ignored by editors that lack it.
+continuation_indent_size = 8
+
+# ---------------------------------------------------------------------------
+# Data files keep 2-space indentation
+#
+# YAML nesting is semantic and both formats are 2-space throughout this repo,
+# so a 4-space default would mix indentation styles in the same file.
+# ---------------------------------------------------------------------------
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.conf]
+indent_size = 2
 
 [*.{tf,tfvars}]
 indent_size = 4
 indent_style = space
 
-[*.conf]
-indent_size = 2
-
 [*.{xml,html,xhtml}]
 indent_size = 4
 max_line_length = 160
-
-[*.java]
-indent_size = 4
-max_line_length = 100
 
 # Markdown / reStructuredText keep trailing whitespace: two spaces mean a hard
 # line break. Case variants are listed explicitly because EditorConfig pattern
@@ -38,7 +68,7 @@ trim_trailing_whitespace = false
 
 # Tab indentation (no size specified)
 [Makefile]
-tab_width = 2
+tab_width = 4
 indent_style = tab
 
 [COMMIT_EDITMSG]
