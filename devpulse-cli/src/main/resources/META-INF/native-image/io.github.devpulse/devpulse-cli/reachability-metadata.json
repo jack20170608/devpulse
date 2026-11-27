@@ -188,6 +188,20 @@
       ]
     },
     {
+      "type": "io.github.devpulse.cli.ServerCommand$Binding",
+      "fields": [
+        {
+          "name": "directory"
+        },
+        {
+          "name": "port"
+        },
+        {
+          "name": "spec"
+        }
+      ]
+    },
+    {
       "type": "io.github.devpulse.cli.ServerCommand$Run",
       "fields": [
         {
@@ -200,6 +214,15 @@
           "name": "spec"
         }
       ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.github.devpulse.cli.ServerCommand$Start",
       "methods": [
         {
           "name": "<init>",

@@ -10,28 +10,37 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Guards the loopback contract: an authenticated request is answered, an anonymous one is not. */
+/**
+ * Guards the loopback contract: a request carrying the client header is answered, one without it is
+ * not.
+ */
 class ServerBootstrapTest {
     @TempDir Path directory;
 
+    private static HttpResponse<String> get(ServerBootstrap.Running running, String path)
+            throws Exception {
+        return get(running, path, "test");
+    }
+
     private static HttpResponse<String> get(
-            ServerBootstrap.Running running, String path, String token) throws Exception {
-        var request =
+            ServerBootstrap.Running running, String path, String clientHeader) throws Exception {
+        var builder =
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + running.port() + path))
-                        .header("Authorization", "Bearer " + token)
-                        .GET()
-                        .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                        .GET();
+        if (clientHeader != null) {
+            builder.header(Auth.CLIENT_HEADER, clientHeader);
+        }
+        return HttpClient.newHttpClient()
+                .send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
-    void servesHealthWhenTheTokenMatches() throws Exception {
+    void servesHealthWhenTheClientHeaderIsPresent() throws Exception {
         var settings =
-                new ServerSettings(
-                        "127.0.0.1", 0, "test-token", directory.resolve("server.json"), directory);
+                new ServerSettings("127.0.0.1", 0, directory.resolve("server.json"), directory);
 
         try (var running = ServerBootstrap.start(settings)) {
-            var response = get(running, "/api/health", "test-token");
+            var response = get(running, "/api/health");
 
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.body()).contains("\"view\":\"health\"");
@@ -40,23 +49,22 @@ class ServerBootstrapTest {
     }
 
     @Test
-    void refusesRequestsWithoutTheToken() throws Exception {
+    void refusesRequestsWithoutTheClientHeader() throws Exception {
         var settings =
-                new ServerSettings(
-                        "127.0.0.1", 0, "test-token", directory.resolve("server.json"), directory);
+                new ServerSettings("127.0.0.1", 0, directory.resolve("server.json"), directory);
 
         try (var running = ServerBootstrap.start(settings)) {
-            var response = get(running, "/api/health", "wrong-token");
+            var response = get(running, "/api/health", null);
 
-            assertThat(response.statusCode()).isEqualTo(401);
-            assertThat(response.body()).contains("UNAUTHORIZED");
+            assertThat(response.statusCode()).isEqualTo(403);
+            assertThat(response.body()).contains("CLIENT_HEADER_REQUIRED");
         }
     }
 
     @Test
     void recordsItsPortInTheStateFile() throws Exception {
         var stateFile = directory.resolve("server.json");
-        var settings = new ServerSettings("127.0.0.1", 0, "test-token", stateFile, directory);
+        var settings = new ServerSettings("127.0.0.1", 0, stateFile, directory);
 
         try (var running = ServerBootstrap.start(settings)) {
             var state = ServerState.read(stateFile).orElseThrow();

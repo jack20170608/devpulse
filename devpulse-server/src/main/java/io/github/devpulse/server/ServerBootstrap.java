@@ -20,7 +20,8 @@ import java.util.UUID;
  * every request, and a state file so a client can find the port the OS assigned.
  *
  * <p>The structure mirrors the host-helper reference (app context, bootstrap, handlers, one JSON
- * response helper) without its SSO or database layers; devpulse authenticates with a local token.
+ * response helper) without its SSO or database layers; devpulse has no accounts, so it relies on
+ * the loopback bind plus the Host and client-header checks in {@link Auth}.
  */
 public final class ServerBootstrap {
     public static final String VERSION = implementationVersion();
@@ -59,7 +60,6 @@ public final class ServerBootstrap {
 
     public static Running start(ServerSettings settings) throws IOException {
         var bootId = UUID.randomUUID().toString();
-        var token = settings.token();
         var startedAt = Instant.now();
         var server =
                 MuServerBuilder.httpServer()
@@ -72,7 +72,6 @@ public final class ServerBootstrap {
                                         guarded(
                                                 request,
                                                 response,
-                                                token,
                                                 () ->
                                                         healthJson(
                                                                 bootId,
@@ -85,7 +84,6 @@ public final class ServerBootstrap {
                                         guarded(
                                                 request,
                                                 response,
-                                                token,
                                                 () -> doctorJson(settings.directory())))
                         .start();
         var handle = new Running(server, bootId);
@@ -95,15 +93,18 @@ public final class ServerBootstrap {
     }
 
     /** Run a handler only after the Host and bearer checks pass. */
-    private static void guarded(
-            MuRequest request, MuResponse response, String token, JsonSupplier body)
+    private static void guarded(MuRequest request, MuResponse response, JsonSupplier body)
             throws IOException {
         if (!Auth.hostAllowed(request.headers().get("Host"), request.serverURI().getPort())) {
             deny(response, 400, "BAD_HOST", "The Host header does not name this server.");
             return;
         }
-        if (!Auth.bearer(request.headers().get("Authorization"), token)) {
-            deny(response, 401, "UNAUTHORIZED", "A valid bearer token is required.");
+        if (!Auth.clientHeader(request.headers().get(Auth.CLIENT_HEADER))) {
+            deny(
+                    response,
+                    403,
+                    "CLIENT_HEADER_REQUIRED",
+                    "Send " + Auth.CLIENT_HEADER + " to identify the client.");
             return;
         }
         response.contentType("application/json");

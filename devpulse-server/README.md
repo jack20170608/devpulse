@@ -15,19 +15,20 @@
 | 项 | 内容 |
 |---|---|
 | 端点 | `GET /api/health`、`GET /api/doctor` |
-| 认证 | `Authorization: Bearer <token>`，token 在 `~/.devpulse/token`（0600，首次自动生成） |
-| Host 校验 | 只接受 `127.0.0.1:<port>`、`localhost:<port>`、`[::1]:<port>`，防 DNS rebinding |
-| 端口 | 默认 `--port 0`，由系统分配，写入 `~/.devpulse/server.json` |
+| 认证 | **无**（单人本机工具）；以 Host 校验 + `X-Devpulse-Client` 头防跨站与 DNS rebinding |
+| Host 校验 | 只接受 `127.0.0.1:<port>`、`localhost:<port>`、`[::1]:<port>` |
+| 端口 | 默认 **12580**；被占用时报错并提示 `--port` |
 | 状态文件 | `{pid, port, bootId, version, startedAt}`，`devpulse server status` 读取 |
 
 ### 认证为何不用 SSO
 
-参考实现 host-helper 面向多用户部署，需要 zora-sso；devpulse 首版只有"本机同一用户"，因此用本地 token + 回环绑定即可，不引入会话与角色。
+参考实现 host-helper 面向多用户部署，需要 zora-sso；devpulse 首版只有"本机同一用户"，因此用回环绑定 + Host 校验 + 自定义请求头即可，不引入账号、会话与角色。
 
 ### 运行
 
 ```bash
-devpulse server run          # 前台运行
+devpulse server start        # 后台启动，就绪后返回（默认 12580）
+devpulse server run          # 前台运行（调试用）
 devpulse server status       # 是否在运行、端口、版本
 devpulse server stop         # 请求停止（SIGTERM）
 ```
@@ -39,7 +40,7 @@ devpulse server stop         # 请求停止（SIGTERM）
 | 检查 | 结果 |
 |---|---|
 | `bash native.sh --verify` | 11 项冒烟全过（含 MuServer 类链接进镜像） |
-| 原生 `server run` | 启动、写状态文件、`/api/health` 200、无 token 401、`/api/doctor` 正常、`server stop` 退出 |
+| 原生 `server run` | 启动、写状态文件、`/api/health` 200、缺客户端头 403、`/api/doctor` 正常、`server stop` 退出 |
 
 两点实现约束：
 
@@ -56,12 +57,12 @@ It registers no CLI command; `devpulse server run|status|stop` come from the uni
 
 ### Implemented (first slice of phase 3)
 
-`GET /api/health` and `GET /api/doctor`, authenticated with a bearer token from `~/.devpulse/token` (mode 0600, generated on first use). The server validates the `Host` header against the loopback names and port to block DNS rebinding, binds an OS-assigned port by default, and records pid, port, boot id, version and start time in `~/.devpulse/server.json`, which `devpulse server status` reads.
+`GET /api/health` and `GET /api/doctor`, with **no authentication**: this is a single-user local tool. The server binds port 12580 by default, validates the `Host` header against the loopback names and port, requires `X-Devpulse-Client` on every request, and records pid, port, boot id, version and start time in `~/.devpulse/server.json`, which `devpulse server status` reads.
 
-The reference project authenticates with zora-sso because it serves multiple users; this version serves one local user, so a local token and a loopback bind are enough.
+The reference project authenticates with zora-sso because it serves multiple users; this version serves one local user, so a loopback bind plus those two checks is the boundary.
 
 ### Native image
 
-The server uses MuServer (Netty) and is verified under GraalVM CE 25.0.2: the native smoke suite passes all eleven checks, and a native `server run` starts, writes its state file, answers `/api/health` (200 with the token, 401 without), serves `/api/doctor`, and stops on request.
+The server uses MuServer (Netty) and is verified under GraalVM CE 25.0.2: the native smoke suite passes all eleven checks, and a native `server run` starts, writes its state file, answers `/api/health` (200 with the client header, 403 without), serves `/api/doctor`, and stops on request.
 
 Two implementation constraints follow: the state file is written as plain JSON rather than through a reflective mapper, and new commands or records require re-recording the reflection metadata with the GraalVM agent — otherwise the native build succeeds and fails only on that path at runtime.

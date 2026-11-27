@@ -34,7 +34,7 @@ devpulse server stop     请求优雅停止，超时后退出
 |---|---|
 | 协议 | loopback HTTP/1.1 + JSON；事件用 SSE |
 | 绑定 | 仅 `127.0.0.1` |
-| 认证 | `Authorization: Bearer <token>`，token 在 `~/.devpulse/token`（权限 0600） |
+| 认证 | **无**（单人本机工具，不加账号与 token） |
 | 防 DNS rebinding | 校验 `Host` 头必须是 `127.0.0.1:<port>` 或 `localhost:<port>` |
 | 版本握手 | 请求头 `X-Devpulse-Version`；0.x 阶段要求完全一致，否则 409 |
 
@@ -133,7 +133,7 @@ data: {"runId":"r1","task":"build","state":"SUCCESS","exitCode":0,"at":"2026-11-
 
 ```text
 devpulse run dev
-  → 读 token
+  → 带 `X-Devpulse-Client` 头
   → POST /api/runs
   → GET /api/runs/{id}/events 跟随
   → 断线：带 Last-Event-ID 重连
@@ -142,9 +142,22 @@ devpulse run dev
 
 `review` 与 `--dry-run` 走 `POST /api/plan`；`status` 走 `GET /api/runs`；`doctor` 先本地诊断再 `GET /api/doctor`。
 
-### 8. v1 明确不做
+### 8. Web UI（首版只读）
 
-远程访问与 TLS、多用户与权限、SSE 推送日志正文、Web UI、运行期插件热加载、运行队列与优先级。
+服务端同时提供本地 Web 界面，与 CLI 共用同一份 HTTP API：
+
+| 页面 | 内容 |
+|---|---|
+| 运行列表 | 按项目/状态过滤，分页 |
+| 运行详情 | 任务表、状态、耗时、退出码 |
+| 日志 | 任务日志尾读（`/api/runs/{id}/logs/{task}`） |
+| 环境 | `doctor` 报告 |
+
+首版**不包含**触发运行、取消运行、编辑配置；这些交互等到 API 的提交语义稳定后再做。
+
+### 9. v1 明确不做
+
+远程访问与 TLS、多用户与权限、SSE 推送日志正文、运行期插件热加载、运行队列与优先级。
 
 ## English
 
@@ -156,7 +169,7 @@ A stale lock is a lock whose pid is gone or whose health probe fails; `status` r
 
 ### 2. Transport and authentication
 
-Loopback HTTP/1.1 with JSON, SSE for events, bound to `127.0.0.1` only. Clients send `Authorization: Bearer <token>` from `~/.devpulse/token` (mode 0600). The server validates the `Host` header to block DNS rebinding, and requires an exact `X-Devpulse-Version` match while the product is 0.x, answering 409 otherwise. Remote access, TLS and multi-user permissions are out of scope.
+Loopback HTTP/1.1 with JSON and SSE, bound to `127.0.0.1` only, on port 12580 by default; a busy port is an error rather than a silent fallback. There is no authentication: the product serves one local user. The server validates `Host` against the loopback names and port, and every `/api` request must carry `X-Devpulse-Client`, which a cross-site form cannot set without a preflight. `X-Devpulse-Version` must match exactly while the product is 0.x. Remote access, TLS and multi-user permissions are out of scope.
 
 ### 3. Endpoints
 
