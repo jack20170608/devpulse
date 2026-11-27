@@ -15,7 +15,7 @@ Build the combined compatibility CLI as a GraalVM native executable.
 Requires native-image, either on PATH or under $GRAALVM_HOME/bin. The JAR is
 still the complete artifact; the native executable is an additional build.
 
-Output: devpulse/target/devpulse-native
+Output: devpulse-cli/target/devpulse-native
 USAGE
 }
 
@@ -45,8 +45,8 @@ if [[ -z "$native_image" ]]; then
 	exit 1
 fi
 
-jar="${SCRIPT_DIR}/devpulse/target/devpulse.jar"
-binary="${SCRIPT_DIR}/devpulse/target/devpulse-native"
+jar="${SCRIPT_DIR}/devpulse-cli/target/devpulse.jar"
+binary="${SCRIPT_DIR}/devpulse-cli/target/devpulse-native"
 
 build_args=()
 if [[ "$clean" == true ]]; then
@@ -55,7 +55,7 @@ fi
 if [[ "$quiet" == true ]]; then
 	build_args+=(--quiet)
 fi
-bash "${SCRIPT_DIR}/build.sh" devpulse "${build_args[@]}"
+bash "${SCRIPT_DIR}/build.sh" cli "${build_args[@]}"
 
 # The reachability metadata lives in the CLI resources, so native-image reads it
 # from the JAR; no extra configuration directory is needed here.

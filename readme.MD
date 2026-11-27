@@ -46,10 +46,9 @@ devpulse-bom/            内部产物版本
 devpulse-core/           DAG 执行引擎、Bash 与环境采集共享库
 devpulse-storage/        运行状态持久化（H2 + JDBI）、schema 迁移与复用索引
 devpulse-execution/      执行内核：配置解析、计划、指纹与运行编排
-devpulse-pulse/          Pulse 命令库（由统一入口装配）
+devpulse-cli/            统一 CLI：入口、Pulse 命令与服务端子命令
 devpulse-tools/          独立工具聚合
   jira/                  独立的 Jira CLI
-devpulse/                统一 CLI 入口
 devpulse-dist/           发行包（devpulse 与 Jira）
 ```
 
@@ -99,10 +98,9 @@ devpulse-bom/            Internal artifact versions
 devpulse-core/           DAG engine, shared Bash support, and environment collection
 devpulse-storage/        Run state persistence (H2 + JDBI), schema migrations, and the reuse index
 devpulse-execution/      Execution kernel: configuration, plan, fingerprints, and run orchestration
-devpulse-pulse/          Pulse commands, packaged as a library for the entry point
+devpulse-cli/            Unified CLI: entry point, Pulse commands, server subcommand
 devpulse-tools/          Independent tool aggregator
   jira/                  Standalone Jira CLI
-devpulse/                Unified CLI entry point
 devpulse-dist/           Release archives (devpulse and Jira)
 ```
 

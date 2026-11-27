@@ -34,7 +34,7 @@ GRAALVM_HOME=/path/to/graalvm bash native.sh            # 只构建
 GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # 构建并运行冒烟检查
 ```
 
-产物为 `devpulse/target/devpulse-native`，大小约 47 MB。`--verify` 覆盖版本、帮助、流水线执行、`status`、`review`、长驻进程生命周期、`stop`，以及未知目标（`12`）和任务失败（`30`）两个分类退出码：原生镜像缺少反射配置时编译仍然成功，只有运行到该路径才报错，因此冒烟检查是这层产物的真正门禁。反射与资源元数据位于 `devpulse/src/main/resources/META-INF/native-image/`，由 GraalVM agent 在 Linux x64 上录制；在其它平台构建时应先在目标平台重新录制。新增 classpath 资源（例如数据库迁移 SQL）时必须在本目录元数据的 `resources` 里登记：用 `glob` 形式，`pattern` 写法在当前 GraalVM 版本下不生效；漏登记的后果是原生版运行到读取该资源时才崩溃。链接阶段需要系统的 zlib 开发库（如 Debian/Ubuntu 的 `zlib1g-dev`）。
+产物为 `devpulse-cli/target/devpulse-native`，大小约 47 MB。`--verify` 覆盖版本、帮助、流水线执行、`status`、`review`、长驻进程生命周期、`stop`，以及未知目标（`12`）和任务失败（`30`）两个分类退出码：原生镜像缺少反射配置时编译仍然成功，只有运行到该路径才报错，因此冒烟检查是这层产物的真正门禁。反射与资源元数据位于 `devpulse/src/main/resources/META-INF/native-image/`，由 GraalVM agent 在 Linux x64 上录制；在其它平台构建时应先在目标平台重新录制。新增 classpath 资源（例如数据库迁移 SQL）时必须在本目录元数据的 `resources` 里登记：用 `glob` 形式，`pattern` 写法在当前 GraalVM 版本下不生效；漏登记的后果是原生版运行到读取该资源时才崩溃。链接阶段需要系统的 zlib 开发库（如 Debian/Ubuntu 的 `zlib1g-dev`）。
 
 ### 命令概览与帮助
 
@@ -56,9 +56,9 @@ java -jar devpulse\target\devpulse.jar --version
 
 ### 各命令使用说明
 
-工作流命令与 YAML 配置见 [Pulse](../devpulse-pulse/README.md)。Jira 不属于组合入口，请参阅 [Jira](../devpulse-tools/jira/README.md)。
+工作流命令与 YAML 配置见 [Pulse](docs/devpulse-cli/pulse-commands.md)。Jira 不属于组合入口，请参阅 [Jira](../devpulse-tools/jira/README.md)。
 
-[架构设计](../docs/devpulse/architecture.md)
+[架构设计](../docs/devpulse-cli/architecture.md)
 
 ## English
 
@@ -92,7 +92,7 @@ GRAALVM_HOME=/path/to/graalvm bash native.sh            # build only
 GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # build and run the smoke checks
 ```
 
-The output is `devpulse/target/devpulse-native`, about 47 MB. `--verify` covers version, help, pipeline execution, `status`, `review`, a daemon lifecycle, `stop`, and the two classified exit codes for an unknown target (`12`) and a failing task (`30`). A native image whose reflection metadata is incomplete still compiles; it fails only when that path runs, so the smoke checks are the real gate for this artifact. The reflection and resource metadata lives in `devpulse/src/main/resources/META-INF/native-image/` and was recorded by the GraalVM agent on Linux x64; record it again on any other target platform. A new classpath resource (a database migration, for example) must be registered in this directory's metadata `resources`: use the `glob` form, because `pattern` does not take effect with the current GraalVM version here, and an unregistered resource only fails when the native binary reads it. Linking needs the system zlib development library (for example `zlib1g-dev` on Debian/Ubuntu).
+The output is `devpulse-cli/target/devpulse-native`, about 47 MB. `--verify` covers version, help, pipeline execution, `status`, `review`, a daemon lifecycle, `stop`, and the two classified exit codes for an unknown target (`12`) and a failing task (`30`). A native image whose reflection metadata is incomplete still compiles; it fails only when that path runs, so the smoke checks are the real gate for this artifact. The reflection and resource metadata lives in `devpulse/src/main/resources/META-INF/native-image/` and was recorded by the GraalVM agent on Linux x64; record it again on any other target platform. A new classpath resource (a database migration, for example) must be registered in this directory's metadata `resources`: use the `glob` form, because `pattern` does not take effect with the current GraalVM version here, and an unregistered resource only fails when the native binary reads it. Linking needs the system zlib development library (for example `zlib1g-dev` on Debian/Ubuntu).
 
 ### Command overview and help
 
@@ -114,6 +114,6 @@ java -jar devpulse\target\devpulse.jar --version
 
 ### Command guides
 
-See [Pulse](../devpulse-pulse/README.md) for workflow commands and YAML configuration,. Jira is not part of the combined entry point; see [Jira](../devpulse-tools/jira/README.md).
+See [Pulse](docs/devpulse-cli/pulse-commands.md) for workflow commands and YAML configuration,. Jira is not part of the combined entry point; see [Jira](../devpulse-tools/jira/README.md).
 
-[Architecture](../docs/devpulse/architecture.md)
+[Architecture](../docs/devpulse-cli/architecture.md)

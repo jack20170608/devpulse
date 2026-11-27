@@ -43,7 +43,12 @@
             </dependency>
             <dependency>
                 <groupId>io.github.devpulse</groupId>
-                <artifactId>pulse</artifactId>
+                <artifactId>devpulse-cli</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.devpulse</groupId>
+                <artifactId>devpulse-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

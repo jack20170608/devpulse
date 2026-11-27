@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
 	cat <<'USAGE'
-Usage: bash build.sh [all|pulse|jira|devpulse|dist] [--clean] [--quiet]
+Usage: bash build.sh [all|jira|cli|dist] [--clean] [--quiet]
 
 Build all modules by default, or select a tool and its Maven dependencies.
 cli builds the combined compatibility CLI; dist always cleans before building
@@ -18,7 +18,7 @@ clean=false
 quiet=false
 while (($#)); do
 	case "$1" in
-		all|pulse|jira|devpulse|dist)
+		all|jira|cli|dist)
 			if [[ "$selected" == true ]]; then
 				echo "build: select exactly one target." >&2
 				exit 2
@@ -47,7 +47,7 @@ fi
 
 case "$target" in
 	all) ;;
-	devpulse) args+=(--projects :devpulse --also-make) ;;
+	cli) args+=(--projects :devpulse-cli --also-make) ;;
 	dist) args+=(--projects :devpulse-dist --also-make) ;;
 	*) args+=(--projects ":$target" --also-make) ;;
 esac

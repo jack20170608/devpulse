@@ -8,7 +8,7 @@
     <baseDirectory>devpulse-${project.version}</baseDirectory>
     <files>
         <file>
-            <source>../devpulse/target/devpulse.jar</source>
+            <source>../devpulse-cli/target/devpulse.jar</source>
             <outputDirectory>/</outputDirectory>
             <destName>devpulse.jar</destName>
         </file>

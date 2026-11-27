@@ -17,7 +17,7 @@
     <dependencies>
         <dependency>
             <groupId>io.github.devpulse</groupId>
-            <artifactId>devpulse</artifactId>
+            <artifactId>devpulse-cli</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -41,7 +41,7 @@
                             <target>
                                 <mkdir dir="${project.build.directory}/checksums/devpulse"/>
                                 <mkdir dir="${project.build.directory}/checksums/jira"/>
-                                <checksum file="${project.basedir}/../devpulse/target/devpulse.jar"
+                                <checksum file="${project.basedir}/../devpulse-cli/target/devpulse.jar"
                                           todir="${project.build.directory}/checksums/devpulse"
                                           fileext=".sha256" algorithm="SHA-256" format="MD5SUM"/>
                                 <checksum file="${project.basedir}/../devpulse-tools/jira/target/devpulse-jira.jar"

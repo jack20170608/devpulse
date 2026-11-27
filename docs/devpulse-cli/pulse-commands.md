@@ -4,7 +4,7 @@
 
 ## 中文
 
-[项目首页](../../readme.MD) | [架构设计](../../docs/devpulse-pulse/architecture.md)
+[项目首页](../../readme.MD) | [架构设计](pulse-commands-architecture.md)
 
 Pulse 读取项目的 YAML 任务配置，通过共享 Bash 运行时执行批任务及本地长驻进程。这些命令由统一的 `devpulse` 入口提供；Jira 不在其中。
 
@@ -19,7 +19,7 @@ bash build.sh pulse
 java -jar devpulse\target\devpulse.jar --help
 ```
 
-以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `devpulse run [TARGET]` 或 `devpulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，统一入口见 [devpulse CLI](../../devpulse/README.md)。
+以下所有构建及 JAR 示例均从仓库根目录运行；安装后用 `devpulse run [TARGET]` 或 `devpulse init|review|status|stop|doctor`。安装见 [发行与安装](../../devpulse-dist/README.md)，统一入口见 [devpulse CLI](../../devpulse-cli/README.md)。
 
 ### `init`：创建配置模板
 
@@ -280,7 +280,7 @@ Jira 的 HOCON 配置、模板以及 `.devpulse` 下的历史与长驻进程元�
 
 ## English
 
-[Project home](../../readme.MD) | [Architecture](../../docs/devpulse-pulse/architecture.md)
+[Project home](../../readme.MD) | [Architecture](pulse-commands-architecture.md)
 
 Pulse reads YAML task configuration and executes batches and local daemons through the shared Bash runtime. The unified `devpulse` entry point provides these commands; Jira is not among them.
 
@@ -295,7 +295,7 @@ bash build.sh pulse
 java -jar devpulse\target\devpulse.jar --help
 ```
 
-All build and JAR examples below run from the repository root. After installation use `devpulse run [TARGET]` or `devpulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [devpulse CLI](../../devpulse/README.md) for the entry point.
+All build and JAR examples below run from the repository root. After installation use `devpulse run [TARGET]` or `devpulse init|review|status|stop|doctor`. See [distribution and installation](../../devpulse-dist/README.md), and the [devpulse CLI](../../devpulse-cli/README.md) for the entry point.
 
 ### `init`: create a configuration template
 

@@ -4,12 +4,12 @@
 
 ## 中文
 
-本文已迁移，请参阅 [组合式兼容 CLI 使用说明](../devpulse/README.md#中文)。
+本文已迁移，请参阅 [组合式兼容 CLI 使用说明](../devpulse-cli/README.md#中文)。
 
-任务配置、执行与长驻进程见 [Pulse 使用说明](../devpulse-pulse/README.md#中文)。
+任务配置、执行与长驻进程见 [Pulse 使用说明](docs/devpulse-cli/pulse-commands.md#中文)。
 
 ## English
 
-This document has moved. See [Combined compatibility CLI guide](../devpulse/README.md#english).
+This document has moved. See [Combined compatibility CLI guide](../devpulse-cli/README.md#english).
 
-See the [Pulse guide](../devpulse-pulse/README.md#english) for task configuration, execution, and daemons.
+See the [Pulse guide](docs/devpulse-cli/pulse-commands.md#english) for task configuration, execution, and daemons.

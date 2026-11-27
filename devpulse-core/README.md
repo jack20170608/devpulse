@@ -268,7 +268,7 @@ try (var history = new RunHistory(directory).begin("dev", graph, 4)) {
 }
 ```
 
-以上片段按顺序在同一方法内使用。调用方负责历史 Writer 的关闭与退出钩子，以及 Daemon 的手动停止；CLI 配置与命令见 [Pulse 使用说明](../devpulse-pulse/README.md)。
+以上片段按顺序在同一方法内使用。调用方负责历史 Writer 的关闭与退出钩子，以及 Daemon 的手动停止；CLI 配置与命令见 [Pulse 使用说明](docs/devpulse-cli/pulse-commands.md)。
 
 ## English
 
@@ -536,4 +536,4 @@ try (var history = new RunHistory(directory).begin("dev", graph, 4)) {
 }
 ```
 
-Use the snippets in order inside the same method. Callers own the history Writer, shutdown hooks, and manual daemon stopping. See the [Pulse guide](../devpulse-pulse/README.md) for CLI configuration and commands.
+Use the snippets in order inside the same method. Callers own the history Writer, shutdown hooks, and manual daemon stopping. See the [Pulse guide](docs/devpulse-cli/pulse-commands.md) for CLI configuration and commands.
