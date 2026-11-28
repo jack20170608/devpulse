@@ -54,8 +54,9 @@ public final class ServerCommand implements Runnable {
 
         @Option(
                 names = "--directory",
-                description = "Project directory for the doctor report (default: from"
-                        + " configuration).")
+                description =
+                        "Project directory for the doctor report (default: from"
+                                + " configuration).")
         Path directory;
 
         Integer fail(String message, int code) {
@@ -137,9 +138,14 @@ public final class ServerCommand implements Runnable {
                 command.add("server");
                 command.add("run");
                 command.add("--port");
-                command.add(Integer.toString(port));
+                command.add(Integer.toString(config.port()));
                 command.add("--directory");
-                command.add(directory.toAbsolutePath().toString());
+                command.add(config.runDirectory().toAbsolutePath().toString());
+                command.add("--config");
+                command.add(
+                        (configFile == null ? AppConfig.defaultFile() : configFile)
+                                .toAbsolutePath()
+                                .toString());
                 var process =
                         new ProcessBuilder(command)
                                 .redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()))
@@ -204,7 +210,7 @@ public final class ServerCommand implements Runnable {
                                         config.host(),
                                         config.port(),
                                         paths.state(),
-                                        config.directory().toAbsolutePath()));
+                                        config.runDirectory().toAbsolutePath()));
             } catch (IOException exception) {
                 return fail(
                         "cannot start the server: " + exception.getMessage(),

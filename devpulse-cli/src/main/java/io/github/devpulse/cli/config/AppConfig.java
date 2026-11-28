@@ -56,7 +56,7 @@ public record AppConfig(
         if (Files.isRegularFile(path)) {
             try {
                 config =
-                        ConfigFactory.parseFile(path)
+                        ConfigFactory.parseFile(path.toFile())
                                 .withFallback(ConfigFactory.parseString(DEFAULTS))
                                 .resolve(ConfigResolveOptions.defaults());
             } catch (ConfigException.Parse | ConfigException.BadValue exception) {
@@ -72,8 +72,10 @@ public record AppConfig(
         } else {
             config = ConfigFactory.parseString(DEFAULTS).resolve();
         }
-        for (var key : new String[] {"workflows.dir", "server.host", "server.port", "run.directory",
-                "log.level"}) {
+        for (var key :
+                new String[] {
+                    "workflows.dir", "server.host", "server.port", "run.directory", "log.level"
+                }) {
             recordDefault(sources, key);
         }
 
