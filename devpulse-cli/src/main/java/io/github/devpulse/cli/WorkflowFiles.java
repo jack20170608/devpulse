@@ -25,7 +25,8 @@ final class WorkflowFiles {
     static Path resolve(Path project, Path configured, String argument) throws IOException {
         if (argument == null || argument.isBlank()) {
             throw new IOException(
-                    "No workflow given. Available: " + String.join(", ", available(project, configured)));
+                    "No workflow given. Available: "
+                            + String.join(", ", available(project, configured)));
         }
         var lower = argument.toLowerCase(Locale.ROOT);
         var looksLikePath =

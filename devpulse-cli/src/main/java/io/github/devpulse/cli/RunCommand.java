@@ -97,9 +97,7 @@ public final class RunCommand implements Callable<Integer> {
 
         PulseConfiguration config;
         try {
-            var workflowFile =
-                    WorkflowFiles.resolve(
-                            directory, Path.of(".workflow"), workflow);
+            var workflowFile = WorkflowFiles.resolve(directory, Path.of(".workflow"), workflow);
             config = PulseConfiguration.load(directory, workflowFile);
         } catch (ConfigException | IOException exception) {
             return fail(
@@ -138,7 +136,8 @@ public final class RunCommand implements Callable<Integer> {
         var concurrency = jobs == null ? DEFAULT_PARALLELISM : jobs;
         if (dryRun) {
             if (json) {
-                out.println(PulseJson.plan(config.workflowId(), config.directory(), concurrency, plan));
+                out.println(
+                        PulseJson.plan(config.workflowId(), config.directory(), concurrency, plan));
             } else {
                 out.println(
                         "Plan: "

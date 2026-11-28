@@ -88,11 +88,11 @@ public final class InitCommand implements Callable<Integer> {
                     .println(
                             "Initialized "
                                     + target
-                                    + ". Edit the example tasks, then run: devpulse run " + id);
+                                    + ". Edit the example tasks, then run: devpulse run "
+                                    + id);
             return 0;
         } catch (FileAlreadyExistsException exception) {
-            err.println(
-                    "init: workflow already exists: " + target + ". Use --force to overwrite.");
+            err.println("init: workflow already exists: " + target + ". Use --force to overwrite.");
             return 1;
         } catch (IOException exception) {
             err.println("init: could not write " + target + ": " + exception.getMessage());

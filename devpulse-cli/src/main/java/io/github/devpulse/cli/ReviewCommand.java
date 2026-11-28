@@ -79,9 +79,7 @@ public final class ReviewCommand implements Callable<Integer> {
         }
         PulseConfiguration config;
         try {
-            var workflowFile =
-                    WorkflowFiles.resolve(
-                            directory, Path.of(".workflow"), workflow);
+            var workflowFile = WorkflowFiles.resolve(directory, Path.of(".workflow"), workflow);
             config = PulseConfiguration.load(directory, workflowFile);
         } catch (ConfigException | IOException exception) {
             return CommandOutput.fail(

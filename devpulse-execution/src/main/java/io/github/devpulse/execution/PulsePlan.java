@@ -58,7 +58,8 @@ public record PulsePlan(
             throw invalidTask(tasks.get(exception.task().id()), "needs", exception.getMessage());
         }
         return new PulsePlan(
-                graph, graph.topologicalOrder().stream().map(key -> tasks.get(key.id())).toList(),
+                graph,
+                graph.topologicalOrder().stream().map(key -> tasks.get(key.id())).toList(),
                 daemonOptions);
     }
 

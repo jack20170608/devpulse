@@ -21,9 +21,9 @@ import java.util.regex.Pattern;
 /**
  * One workflow file: a single YAML document describing one DAG.
  *
- * <p>The file name is the identifier, so {@code .workflow/build.yaml} is the workflow {@code build}.
- * The document itself carries only a display name and the task list; everything about the machine
- * belongs to the application configuration instead.
+ * <p>The file name is the identifier, so {@code .workflow/build.yaml} is the workflow {@code
+ * build}. The document itself carries only a display name and the task list; everything about the
+ * machine belongs to the application configuration instead.
  */
 public record PulseConfiguration(
         Path directory,
@@ -37,10 +37,9 @@ public record PulseConfiguration(
     private static final Pattern TASK_ID = Pattern.compile("[a-z][a-z0-9_-]*");
     private static final List<String> TOP_LEVEL = List.of("name", "tasks");
     private static final List<String> TASK_FIELDS = List.of("id", "kind", "needs", "spec");
-    private static final List<String> BASH_FIELDS =
-            List.of("run", "ready", "stop", "stopTimeout");
-    private static final List<String> READY_FIELDS = List.of("cmd", "timeout", "interval",
-            "checkTimeout");
+    private static final List<String> BASH_FIELDS = List.of("run", "ready", "stop", "stopTimeout");
+    private static final List<String> READY_FIELDS =
+            List.of("cmd", "timeout", "interval", "checkTimeout");
 
     public PulseConfiguration {
         tasks = List.copyOf(tasks);
@@ -132,10 +131,11 @@ public record PulseConfiguration(
                         case WORKFLOW -> source;
                         case TASK ->
                                 source.getList("tasks").stream()
-                                        .map(value -> ((com.typesafe.config.ConfigObject) value)
+                                        .map(value ->
+                                                ((com.typesafe.config.ConfigObject) value)
                                                         .toConfig())
-                                        .filter(task -> task.getString("id")
-                                                        .equals(exception.name()))
+                                        .filter(task ->
+                                                task.getString("id").equals(exception.name()))
                                         .findFirst()
                                         .orElse(source);
                         case PIPELINE, TARGET -> source;
