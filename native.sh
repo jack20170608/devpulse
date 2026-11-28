@@ -6,7 +6,15 @@ usage() {
 	cat <<'USAGE'
 Usage: bash native.sh [--verify] [--clean] [--quiet]
 
-Build the combined compatibility CLI as a GraalVM native executable.
+Build the CLI as a GraalVM native executable.
+
+DEFERRED: the product ships the JVM JAR only until its shape settles. The
+binary builds, but its runtime is not green yet: logback loads its configurator
+and appenders reflectively, so the native image needs reflection metadata for
+ch.qos.logback.classic.util.DefaultJoranConfigurator and the appender classes in
+logback.xml, otherwise the server fails on startup with ClassNotFoundException.
+Re-enable this script (and the CI job that ran it) only after that metadata is
+recorded and --verify passes again.
 
   --verify  Run the native smoke checks after building.
   --clean   Rebuild the CLI JAR from a clean state first.
@@ -59,7 +67,12 @@ bash "${SCRIPT_DIR}/build.sh" cli "${build_args[@]}"
 
 # The reachability metadata lives in the CLI resources, so native-image reads it
 # from the JAR; no extra configuration directory is needed here.
-"$native_image" -jar "$jar" -o "$binary" --no-fallback
+# logback keeps its logger cache, level table and context in static fields, and
+# netty's build-time-initialized loggers capture those instances, so GraalVM
+# needs the whole logback package initialized at build time. The flag has to be
+# passed here: a native-image.properties in the jar is not read in -jar mode.
+"$native_image" -jar "$jar" -o "$binary" --no-fallback \
+	--initialize-at-build-time=ch.qos.logback
 
 # A native build only fails at runtime on a code path the metadata missed, so the
 # smoke checks are the real gate for this artifact.

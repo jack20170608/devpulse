@@ -21,6 +21,7 @@
 | 7 | 客户端与服务端统一为一个二进制 `devpulse`，不加短别名；`pulse` 名字退役 | 版本永远一致；少一个故障源 |
 | 8 | `review` 与 `--dry-run` 走服务端 API | 配置语义只有一份 |
 | 9 | 服务端由 `server start` 显式启动；是否自动拉起留到客户端改走服务端时再定 | 显式启动可预测，隐藏进程难排查 |
+| 10 | 产物形态：现阶段只发 **JVM JAR**；GraalVM 原生镜像推迟到产品形态稳定后 | 形态还在变，native 的反射元数据与构建参数会持续返工 |
 
 ### 2. 一个二进制
 
@@ -163,7 +164,7 @@ devpulse-dist          发行
 | 单机多用户同时使用 | 首版不支持；`requested_by` 字段先记录，不以此做隔离 |
 | `pulse` 退役破坏既有用法 | pre-1.0 一次改干净，文档与 CHANGELOG 注明 |
 
-**不做**：运行期热插拔插件（与 native 冲突）、远程执行、多用户权限、容器隔离。
+**不做**：运行期热插拔插件（与将来的 native 冲突）、远程执行、多用户权限、容器隔离。
 
 ## English
 
@@ -180,6 +181,7 @@ devpulse-dist          发行
 | 7 | One binary `devpulse` for client and server, no short alias; the `pulse` name retires | Versions can never diverge |
 | 8 | `review` and `--dry-run` go through the server API | Configuration semantics exist once |
 | 9 | The server starts explicitly with `server start`; auto-start is revisited when client commands move to the server | An explicit start is predictable; a hidden process is hard to debug |
+| 10 | Artifact: the **JVM JAR** only for now; the GraalVM native image is deferred until the product shape settles | The shape is still moving, so native reflection metadata and build flags would keep changing |
 
 ### 2. One binary
 

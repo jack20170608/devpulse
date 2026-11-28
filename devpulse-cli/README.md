@@ -23,18 +23,18 @@ bash build.sh --clean
 java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
-CLI 产物为 `devpulse-cli\target\devpulse.jar`，它同时是发行包与原生镜像使用的唯一入口。模块组织见 [架构导航](../docs/architecture.md)，安装说明见 [发行与安装](../devpulse-dist/README.md)。Git Bash 中 `bash run.sh --help` 构建并运行 CLI，`bash integration-test/jira/run-jira.sh --help` 只运行已构建的 Jira；脚本仅在其子进程中移除 `JAVA_TOOL_OPTIONS`。
+CLI 产物为 `devpulse-cli\target\devpulse.jar`，它是发行包使用的唯一入口。模块组织见 [架构导航](../docs/architecture.md)，安装说明见 [发行与安装](../devpulse-dist/README.md)。Git Bash 中 `bash run.sh --help` 构建并运行 CLI，`bash integration-test/jira/run-jira.sh --help` 只运行已构建的 Jira；脚本仅在其子进程中移除 `JAVA_TOOL_OPTIONS`。
 
-### 原生可执行文件（可选）
+### 原生可执行文件（推迟）
 
-除 JAR 之外，还可以用 GraalVM 的 `native-image` 构建单文件原生可执行程序，把 `--version`、`--help` 等短命令的启动耗时从约 300 ms 降到 120 ms 左右（实测）。它是额外的产物，JAR 仍是功能完整的兜底入口，两者并存。
+阶段一只发 JVM JAR，原生镜像推迟到产品形态稳定之后再启用。`native.sh` 仍在仓库里，但不在发布路径上，`--verify` 目前也不会通过。
 
-```bash
-GRAALVM_HOME=/path/to/graalvm bash native.sh            # 只构建
-GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # 构建并运行冒烟检查
-```
+已经验证过的结论（恢复这项工作时从这里开始）：
 
-产物为 `devpulse-cli/target/devpulse-native`，大小约 69 MB。`--verify` 覆盖版本、帮助、流水线执行、`status`、`review`、长驻进程生命周期、`stop`，以及未知目标（`12`）和任务失败（`30`）两个分类退出码：原生镜像缺少反射配置时编译仍然成功，只有运行到该路径才报错，因此冒烟检查是这层产物的真正门禁。反射与资源元数据位于 `devpulse-cli/src/main/resources/META-INF/native-image/`，由 GraalVM agent 在 Linux x64 上录制；在其它平台构建时应先在目标平台重新录制。新增 classpath 资源（例如数据库迁移 SQL）时必须在本目录元数据的 `resources` 里登记：用 `glob` 形式，`pattern` 写法在当前 GraalVM 版本下不生效；漏登记的后果是原生版运行到读取该资源时才崩溃。链接阶段需要系统的 zlib 开发库（如 Debian/Ubuntu 的 `zlib1g-dev`）。
+| 环节 | 状态 |
+|---|---|
+| 编译 | 需要 `--initialize-at-build-time=ch.qos.logback`；写在 jar 内的 `native-image.properties` 在 `-jar` 模式下不生效 |
+| 运行 | logback 通过反射加载 `DefaultJoranConfigurator` 与 XML 里声明的 appender，缺反射元数据时服务端启动即 `ClassNotFoundException` |
 
 ### 命令概览与帮助
 
@@ -82,18 +82,18 @@ bash build.sh --clean
 java -jar devpulse-cli\target\devpulse.jar --help
 ```
 
-The CLI artifact is `devpulse-cli\target\devpulse.jar`; it is the single entry point used by release archives and the native image. See the [architecture index](../docs/architecture.md) for modules and [distribution and installation](../devpulse-dist/README.md) for installation. In Git Bash, `bash run.sh --help` builds and runs the CLI, while `bash integration-test/jira/run-jira.sh --help` runs the built Jira JAR. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
+The CLI artifact is `devpulse-cli\target\devpulse.jar`; it is the single entry point used by release archives. See the [architecture index](../docs/architecture.md) for modules and [distribution and installation](../devpulse-dist/README.md) for installation. In Git Bash, `bash run.sh --help` builds and runs the CLI, while `bash integration-test/jira/run-jira.sh --help` runs the built Jira JAR. Scripts remove `JAVA_TOOL_OPTIONS` only in their child processes.
 
-### Native executable (optional)
+### Native executable (deferred)
 
-Besides the JAR, GraalVM `native-image` can build a single-file native executable that starts short commands such as `--version` and `--help` in about 120 ms instead of roughly 300 ms (measured). It is an additional artifact; the JAR stays the complete fallback, and the two coexist.
+The product ships the JVM JAR only until its shape settles. `native.sh` stays in the repository but is not on the release path, and `--verify` does not pass today.
 
-```bash
-GRAALVM_HOME=/path/to/graalvm bash native.sh            # build only
-GRAALVM_HOME=/path/to/graalvm bash native.sh --verify   # build and run the smoke checks
-```
+What the investigation already established, so the work resumes in the right place:
 
-The output is `devpulse-cli/target/devpulse-native`, about 69 MB. `--verify` covers version, help, pipeline execution, `status`, `review`, a daemon lifecycle, `stop`, and the two classified exit codes for an unknown target (`12`) and a failing task (`30`). A native image whose reflection metadata is incomplete still compiles; it fails only when that path runs, so the smoke checks are the real gate for this artifact. The reflection and resource metadata lives in `devpulse-cli/src/main/resources/META-INF/native-image/` and was recorded by the GraalVM agent on Linux x64; record it again on any other target platform. A new classpath resource (a database migration, for example) must be registered in this directory's metadata `resources`: use the `glob` form, because `pattern` does not take effect with the current GraalVM version here, and an unregistered resource only fails when the native binary reads it. Linking needs the system zlib development library (for example `zlib1g-dev` on Debian/Ubuntu).
+| Step | Status |
+|---|---|
+| Compile | needs `--initialize-at-build-time=ch.qos.logback`; a `native-image.properties` inside the jar is not read in `-jar` mode |
+| Runtime | logback loads `DefaultJoranConfigurator` and the appenders named in the XML reflectively, so without reflection metadata the server fails at startup |
 
 ### Command overview and help
 

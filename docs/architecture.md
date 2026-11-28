@@ -24,6 +24,13 @@
 | [`devpulse-bom`](devpulse-bom/architecture.md) | 内部可消费模块版本 |
 | [`devpulse-tools`](devpulse-tools/architecture.md) | 独立工具的 Maven 聚合（当前仅 Jira） |
 
+### 专题文档
+
+| 文档 | 内容 |
+|------|------|
+| [GraalVM 原生镜像踩坑清单](research/native-image-pitfalls.md) | 打包原生可执行文件时的元数据、资源、构建期初始化与平台差异 |
+| [数据库层资料汇编](research/database-layer-research.md) | 持久层设计与实现的外部资料索引 |
+
 ### 依赖与文档边界
 
 独立工具不互相依赖；Pulse 直接复用 core 的环境采集与 Bash 能力，其工作流也依赖 core。Jira 独立运行。CLI 模块把 Pulse 命令与服务端子命令装配成一个可执行文件，发行模块打包 CLI 与 Jira；core 不注册命令或动态加载工具。Java 任务与 Bash 工作流共享 DAG 调度，Bash Adapter 负责进程、日志和历史；Daemon 支持就绪及健康监测，由用户管理停止。
@@ -51,6 +58,13 @@ The former monolithic architecture document has been split by Maven module; this
 | [`devpulse-dependencies`](devpulse-dependencies/architecture.md) | External dependencies and inherited build versions |
 | [`devpulse-bom`](devpulse-bom/architecture.md) | Consumable internal module versions |
 | [`devpulse-tools`](devpulse-tools/architecture.md) | Maven aggregation of independent tools (Jira today) |
+
+### Topic guides
+
+| Document | Subject |
+|----------|---------|
+| [GraalVM native image pitfalls](research/native-image-pitfalls.md) | Metadata, resources, build-time initialization, and platform differences when packaging a native executable |
+| [Database layer resources](research/database-layer-research.md) | External reading list for persistence design and implementation |
 
 ### Dependency and documentation boundaries
 

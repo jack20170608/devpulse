@@ -29,26 +29,3 @@ jobs:
       - name: Run machine gate
         run: bash verify.sh
 
-  native:
-    name: native image (GraalVM 25)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up GraalVM 25
-        uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '25'
-          distribution: 'graalvm-community'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          cache: maven
-
-      # native-image links against zlib; the development symlink is what -lz needs.
-      - name: Install zlib development headers
-        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
-
-      # A native image with incomplete metadata still compiles and fails only at
-      # runtime, so the smoke checks in --verify are the gate for this job.
-      - name: Build and verify the native executable
-        run: bash native.sh --verify
