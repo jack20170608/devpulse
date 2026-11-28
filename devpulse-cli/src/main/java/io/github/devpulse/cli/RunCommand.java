@@ -2,6 +2,7 @@ package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
 import io.github.devpulse.bash.BashShell;
+import io.github.devpulse.execution.PlanManifest;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulsePlan;
 import io.github.devpulse.execution.RunHistory;
