@@ -20,10 +20,7 @@ public record PulsePlan(
     }
 
     static PulsePlan create(
-            List<BashTaskDefinition> definitions,
-            Map<String, List<String>> pipelines,
-            Map<String, DaemonOptions> daemonOptions,
-            String target) {
+            List<BashTaskDefinition> definitions, Map<String, DaemonOptions> daemonOptions) {
         if (definitions.isEmpty()) {
             throw new PlanningException(
                     Scope.WORKFLOW, null, "tasks", "At least one task is required.");
@@ -60,44 +57,9 @@ public record PulsePlan(
         } catch (DagGraph.InvalidGraph exception) {
             throw invalidTask(tasks.get(exception.task().id()), "needs", exception.getMessage());
         }
-        for (var entry : pipelines.entrySet()) {
-            if (entry.getValue().isEmpty()) {
-                throw new PlanningException(
-                        Scope.PIPELINE,
-                        entry.getKey(),
-                        "tasks",
-                        "Pipeline " + entry.getKey() + " must contain at least one task.");
-            }
-            for (var name : entry.getValue()) {
-                if (!tasks.containsKey(name)) {
-                    throw new PlanningException(
-                            Scope.PIPELINE,
-                            entry.getKey(),
-                            "tasks",
-                            "Pipeline " + entry.getKey() + " has unknown task: " + name);
-                }
-            }
-        }
-        if (tasks.containsKey(target) && pipelines.containsKey(target)) {
-            throw new PlanningException(
-                    Scope.TARGET,
-                    target,
-                    "target",
-                    "Ambiguous target: " + target + " is both a task and a pipeline. Rename one.");
-        }
-        List<String> roots;
-        if (pipelines.containsKey(target)) {
-            roots = pipelines.get(target);
-        } else if (tasks.containsKey(target)) {
-            roots = List.of(target);
-        } else {
-            throw new PlanningException(
-                    Scope.TARGET, target, "target", "Unknown task or pipeline: " + target);
-        }
-        var selected = graph.select(roots.stream().map(keys::get).toList());
         return new PulsePlan(
-                selected,
-                selected.topologicalOrder().stream().map(key -> tasks.get(key.id())).toList(),
+                graph,
+                graph.topologicalOrder().stream().map(key -> tasks.get(key.id())).toList(),
                 daemonOptions);
     }
 

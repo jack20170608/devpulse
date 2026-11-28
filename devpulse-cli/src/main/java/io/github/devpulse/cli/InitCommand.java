@@ -11,35 +11,42 @@ import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
 @Command(
         name = "init",
         mixinStandardHelpOptions = true,
         versionProvider = VersionProvider.class,
-        description = "Initialize a local .devpulse.yaml task configuration.")
+        description = "Write a workflow template under .workflow/.")
 public final class InitCommand implements Callable<Integer> {
-    private static final String DEFAULT_CONFIGURATION =
+    private static final String TEMPLATE =
             """
-            # 示例任务仅打印消息，请替换为实际项目命令。
-            # Example tasks only print messages; replace with project commands.
-            version: 1
-            parallelism: 4
+            # 一个文件定义一个 workflow；文件名即 workflow id。
+            # One file defines one workflow; the file name is its id.
+            name: %s
 
             tasks:
-              check:
-                cmd: "echo 'devpulse: replace with a project check'"
-              build:
-                cmd: "echo 'devpulse: replace with a project build'"
-                needs: [check]
+              - id: check
+                kind: bash
+                spec:
+                  run: echo 'devpulse: replace with a project check'
 
-            pipelines:
-              dev:
-                description: "示例检查与构建 / Example check and build"
-                tasks: [check, build]
+              - id: build
+                kind: bash
+                needs: [check]
+                spec:
+                  run: echo 'devpulse: replace with a project build'
             """;
 
     @Spec private CommandSpec spec;
+
+    @Parameters(
+            index = "0",
+            arity = "0..1",
+            paramLabel = "WORKFLOW",
+            description = "Workflow id to create (default: workflow).")
+    private String workflow;
 
     @Option(
             names = "--directory",
@@ -47,28 +54,30 @@ public final class InitCommand implements Callable<Integer> {
             description = "Project directory to initialize " + "(default: ${DEFAULT-VALUE}).")
     private Path directory;
 
-    @Option(names = "--force", description = "Overwrite an existing .devpulse.yaml file.")
+    @Option(names = "--force", description = "Overwrite an existing workflow file.")
     private boolean force;
 
     @Override
     public Integer call() {
         var root = directory.toAbsolutePath().normalize();
-        var target = root.resolve(".devpulse.yaml");
+        var id = workflow == null ? "workflow" : workflow;
+        var target = root.resolve(".workflow").resolve(id + ".yaml");
         var err = spec.commandLine().getErr();
         if (!Files.isDirectory(root)) {
             err.println("init: project directory does not exist: " + root);
             return 1;
         }
         try {
+            Files.createDirectories(target.getParent());
             if (force
                     && Files.exists(target, LinkOption.NOFOLLOW_LINKS)
                     && !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
-                err.println("init: configuration is not a regular file: " + target);
+                err.println("init: workflow is not a regular file: " + target);
                 return 1;
             }
             Files.writeString(
                     target,
-                    DEFAULT_CONFIGURATION,
+                    TEMPLATE.formatted(id),
                     StandardCharsets.UTF_8,
                     force ? StandardOpenOption.CREATE : StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE,
@@ -79,13 +88,11 @@ public final class InitCommand implements Callable<Integer> {
                     .println(
                             "Initialized "
                                     + target
-                                    + ". Review the example commands before running tasks.");
+                                    + ". Edit the example tasks, then run: devpulse run "
+                                    + id);
             return 0;
         } catch (FileAlreadyExistsException exception) {
-            err.println(
-                    "init: configuration already exists: "
-                            + target
-                            + ". Use --force to overwrite.");
+            err.println("init: workflow already exists: " + target + ". Use --force to overwrite.");
             return 1;
         } catch (IOException exception) {
             err.println("init: could not write " + target + ": " + exception.getMessage());

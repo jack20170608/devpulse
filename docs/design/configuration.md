@@ -59,8 +59,6 @@ project/
 
 ```yaml
 name: 构建流水线          # 可选，仅用于展示；缺省等于文件 stem
-env:                      # 可选，注入本文件所有任务
-  NODE_ENV: ci
 
 tasks:
   - id: compile
@@ -80,7 +78,6 @@ tasks:
 | 字段 | 必需 | 说明 |
 |---|---|---|
 | `name` | 否 | 展示名；**不参与寻址**，id 永远是文件 stem |
-| `env` | 否 | 合并进每个任务；任务级 `env` 优先 |
 | `tasks` | 是 | 非空列表 |
 | `tasks[].id` | 是 | 文件内唯一；`^[a-z][a-z0-9_-]*$` |
 | `tasks[].kind` | 是 | 执行器种类；首版只有 `bash`，未知 kind 报错 |
@@ -217,16 +214,16 @@ POST /api/runs
 
 ### 13. run 记录的 schema 变更
 
-`run` 表新增两列（v3 仍是未发布的基线，直接改 `V1__central-store.sql`，不新增迁移文件）：
+`run` 表新增四列（v3 仍是未发布的基线，直接改 `V1__central-store.sql`，不新增迁移文件）：
 
 | 列 | 类型 | 说明 |
 |---|---|---|
 | `workflow_id` | text | 提交时的 workflow id（文件 stem） |
 | `workflow_path` | text | 提交时给出的路径；能相对项目目录表示时存相对路径 |
+| `workflow_revision` | int | 执行的服务器 revision；本地直接运行、未经服务端时为 `null` |
+| `workflow_hash` | text | 文件内容的 SHA-256，用于区分"跑的是旧快照还是新内容" |
 
-`plan.conf` 快照仍在，重跑以快照为准；新增两列的作用是让 UI、`status` 和日志能显示"这是哪个 workflow、文件在哪"，而不必解析快照。
-
-建议再加一列 `workflow_hash`（payload 的 SHA-256）：文件被改过之后重跑，能判断"跑的是旧快照还是新内容"。这一条是我加的，需要你确认。
+`plan.conf` 快照仍在，重跑以快照为准；新增列让 UI、`status` 和日志能显示"这是哪个 workflow、文件在哪、内容是哪一版"，而不必解析快照。服务端持有 workflow 内容与不可变 revision 历史（`workflow` 与 `workflow_revision` 表），项目里的 `.workflow/<id>.yaml` 是它的数字孪生。
 
 ### 14. 明确不做
 
@@ -287,7 +284,6 @@ The file name is the identifier: `.workflow/build.yaml` has id `build`.
 | Field | Required | Meaning |
 |---|---|---|
 | `name` | no | display name only; never used for addressing |
-| `env` | no | merged into every task; task-level `env` wins |
 | `tasks` | yes | non-empty list |
 | `tasks[].id` | yes | unique in the file, `^[a-z][a-z0-9_-]*$` |
 | `tasks[].kind` | yes | executor kind; only `bash` at first |
@@ -387,7 +383,7 @@ Delete `logback.xml` and configure appenders in code from `devpulse.log.level`: 
 
 ### 13. Run record schema change
 
-The `run` table gains `workflow_id` and `workflow_path` (the path as given, relative to the project directory when possible). The baseline `V1__central-store.sql` is still unpublished, so it is edited in place. The `plan.conf` snapshot remains authoritative for reruns; the new columns let the UI, `status` and logs say which workflow and file a run belongs to without parsing the snapshot. A `workflow_hash` column (SHA-256 of the payload) would let a rerun distinguish a stale snapshot from newly edited content — that suggestion still needs a decision.
+The `run` table gains four columns: `workflow_id` (the file stem), `workflow_path` (the path as given, relative to the project directory when possible), `workflow_revision` (the server revision executed, `null` for a local run that never touched the server), and `workflow_hash` (SHA-256 of the content, so a rerun can tell a stale snapshot from newly edited content). The baseline `V1__central-store.sql` is still unpublished, so it is edited in place. The `plan.conf` snapshot remains authoritative for reruns; the new columns let the UI, `status` and logs say which workflow, file and revision a run belongs to without parsing the snapshot. The server owns the content and its immutable revision history (`workflow` and `workflow_revision`); the project's `.workflow/<id>.yaml` is its twin.
 
 ### 14. Out of scope
 

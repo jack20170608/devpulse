@@ -69,7 +69,14 @@
 ```text
 project(id PK, path UNIQUE, name, created_at, last_seen_at)
 
-run(id PK, project_id FK, target, parallelism, state,
+workflow(project_id FK, workflow_id, name, content, content_hash, revision,
+         created_at, updated_at, PRIMARY KEY (project_id, workflow_id))
+
+workflow_revision(project_id, workflow_id, revision, content, content_hash,
+                  created_at, PRIMARY KEY (project_id, workflow_id, revision))
+
+run(id PK, project_id FK, target, workflow_id, workflow_path,
+    workflow_revision, workflow_hash, parallelism, state,
     requested_by, queued_at, started_at, finished_at,
     worker_pid, worker_started_at, server_boot_id,
     bash, tool_version, parent_run_id)
@@ -100,6 +107,7 @@ schema_version(version, applied_at)
 
 设计要点：
 
+- **workflow 的 head 与 revision 分表**：`workflow` 只放当前版本，`workflow_revision` 存每次推送的不可变内容；run 记录引用 revision，因此重跑能精确回到当时执行的那一版，而 head 继续前移。
 - **`project` 是一等实体**，路径（`toRealPath()`）唯一。字符串路径不是身份：软链与 Windows 大小写会把同一目录拆成两个项目。
 - **`task_edge` 独立成表**，而不是把依赖序列化进 `task.needs`：web 端要按依赖关系查询与渲染，序列化字段查不了。列名写出方向（dependent 依赖 prerequisite），两侧都有外键——v2 只约束了依赖方。
 - **`task_result` 是跨运行复用索引**，键为 `(project_id, name, fingerprint)`。项目必须进主键：同名同指纹的任务在不同项目里语义不同，跨项目复用必须禁止。
@@ -240,7 +248,14 @@ The engine keeps its role while storage becomes a reusable, independently testab
 ```text
 project(id PK, path UNIQUE, name, created_at, last_seen_at)
 
-run(id PK, project_id FK, target, parallelism, state,
+workflow(project_id FK, workflow_id, name, content, content_hash, revision,
+         created_at, updated_at, PRIMARY KEY (project_id, workflow_id))
+
+workflow_revision(project_id, workflow_id, revision, content, content_hash,
+                  created_at, PRIMARY KEY (project_id, workflow_id, revision))
+
+run(id PK, project_id FK, target, workflow_id, workflow_path,
+    workflow_revision, workflow_hash, parallelism, state,
     requested_by, queued_at, started_at, finished_at,
     worker_pid, worker_started_at, server_boot_id,
     bash, tool_version, parent_run_id)
@@ -271,6 +286,7 @@ schema_version(version, applied_at)
 
 Design notes:
 
+- **Workflow heads and workflow revisions are separate tables**: `workflow` holds only the current version, while `workflow_revision` keeps every pushed payload immutable. A run references the revision it executed, so a rerun returns to that exact version while the head keeps moving.
 - **`project` is a first-class entity**, unique by path from `toRealPath()`. A path string is not an identity: symlinks and Windows case folding split one directory into two projects.
 - **`task_edge` is its own table** rather than a serialized column: a web client must query and render dependencies, and a serialized field cannot be queried. The column names carry the direction, and both sides have foreign keys — v2 constrained only the dependent.
 - **`task_result` is the cross-run reuse index**, keyed by `(project_id, name, fingerprint)`. The project belongs in the key: the same task name and fingerprint mean different things in different projects, so reuse must never cross that boundary.

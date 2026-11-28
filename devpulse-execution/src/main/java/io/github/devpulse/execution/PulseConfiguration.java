@@ -2,7 +2,6 @@ package io.github.devpulse.execution;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
-import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigUtil;
 import com.typesafe.config.ConfigValueType;
 import io.github.devpulse.bash.BashTaskDefinition;
@@ -13,72 +12,97 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
+/**
+ * One workflow file: a single YAML document describing one DAG.
+ *
+ * <p>The file name is the identifier, so {@code .workflow/build.yaml} is the workflow {@code
+ * build}. The document itself carries only a display name and the task list; everything about the
+ * machine belongs to the application configuration instead.
+ */
 public record PulseConfiguration(
         Path directory,
-        int parallelism,
+        Path file,
+        String workflowId,
+        String name,
         List<BashTaskDefinition> tasks,
-        Map<String, List<String>> pipelines,
         Map<String, DaemonOptions> daemonOptions,
         Config source) {
+
+    private static final Pattern TASK_ID = Pattern.compile("[a-z][a-z0-9_-]*");
+    private static final List<String> TOP_LEVEL = List.of("name", "tasks");
+    private static final List<String> TASK_FIELDS = List.of("id", "kind", "needs", "spec");
+    private static final List<String> BASH_FIELDS = List.of("run", "ready", "stop", "stopTimeout");
+    private static final List<String> READY_FIELDS =
+            List.of("cmd", "timeout", "interval", "checkTimeout");
+
     public PulseConfiguration {
         tasks = List.copyOf(tasks);
-        var copy = new LinkedHashMap<String, List<String>>();
-        pipelines.forEach((name, targets) -> copy.put(name, List.copyOf(targets)));
-        pipelines = Collections.unmodifiableMap(copy);
         daemonOptions = Map.copyOf(daemonOptions);
     }
 
-    public static PulseConfiguration load(Path directory) throws IOException {
+    /**
+     * Loads one workflow file.
+     *
+     * @param directory the project directory relative paths are based on
+     * @param file the workflow file
+     */
+    public static PulseConfiguration load(Path directory, Path file) throws IOException {
         var root = directory.toAbsolutePath().normalize();
-        var file = root.resolve(".devpulse.yaml");
+        var workflow = file.isAbsolute() ? file.normalize() : root.resolve(file).normalize();
         if (!Files.isDirectory(root)) {
             throw new IOException("Project directory does not exist: " + root);
         }
-        if (!Files.isRegularFile(file)) {
-            if (Files.exists(root.resolve(".devpulse.conf"))) {
-                throw new IOException(
-                        "Legacy .devpulse.conf is no longer supported. "
-                                + "Migrate it to .devpulse.yaml using the migration guide "
-                                + "in docs/core-cli.md; renaming alone is not sufficient.");
-            }
+        if (!Files.isRegularFile(workflow)) {
             throw new IOException(
-                    "Configuration not found: " + file + ". Run devpulse init first.");
+                    "Workflow not found: " + workflow + ". Run devpulse init <name> first.");
         }
-        var config = YamlConfiguration.load(file);
-        rejectUnknownFields(config, List.of("version", "parallelism", "tasks", "pipelines"));
-        config =
-                config.withFallback(
-                        ConfigFactory.parseMap(
-                                Map.of("version", 1, "parallelism", 4, "pipelines", Map.of())));
-        if (positiveInteger(config, "version") != 1) {
-            throw invalid(config, "version", "Only version 1 is supported.");
+        var config = YamlConfiguration.load(workflow);
+        if (config.isEmpty()) {
+            throw invalid(config, "tasks", "A workflow must contain at least one task.");
         }
-        var parallelism = positiveInteger(config, "parallelism");
-        requireType(config, "tasks", ConfigValueType.OBJECT);
+        rejectUnknown(config, "workflow", TOP_LEVEL);
+        if (config.hasPathOrNull("name")) {
+            requireType(config, "name", ConfigValueType.STRING);
+        }
+        requireType(config, "tasks", ConfigValueType.LIST);
+        var id = id(workflow);
         var tasks = new ArrayList<BashTaskDefinition>();
         var daemonOptions = new LinkedHashMap<String, DaemonOptions>();
-        var taskSection = config.getConfig("tasks");
-        for (var name : taskSection.root().keySet()) {
-            var path = ConfigUtil.quoteString(name);
-            requireType(taskSection, path, ConfigValueType.OBJECT);
-            var tool = taskSection.getConfig(path);
-            rejectUnknownFields(
-                    tool,
-                    List.of("description", "cmd", "needs", "type", "ready", "stop", "stopTimeout"));
-            if (tool.hasPathOrNull("description")) {
-                requireType(tool, "description", ConfigValueType.STRING);
+        var seen = new LinkedHashSet<String>();
+        var list = config.getList("tasks");
+        for (var index = 0; index < list.size(); index++) {
+            var item = list.get(index);
+            if (item.valueType() != ConfigValueType.OBJECT) {
+                throw new ConfigException.BadValue(item.origin(), "tasks", "Must be an object.");
             }
-            var daemon = daemon(tool);
+            var task = ((com.typesafe.config.ConfigObject) item).toConfig();
+            requireType(task, "id", ConfigValueType.STRING);
+            var taskId = task.getString("id");
+            if (!TASK_ID.matcher(taskId).matches()) {
+                throw invalid(task, "id", "Must match [a-z][a-z0-9_-]*");
+            }
+            if (!seen.add(taskId)) {
+                throw invalid(task, "id", "Duplicate task id: " + taskId);
+            }
+            rejectUnknown(task, "task", TASK_FIELDS);
+            var kind = task.hasPathOrNull("kind") ? nonBlankString(task, "kind") : "bash";
+            if (!kind.equals("bash")) {
+                throw invalid(task, "kind", "Unknown task kind: " + kind);
+            }
+            requireType(task, "spec", ConfigValueType.OBJECT);
+            var spec = task.getConfig("spec");
+            rejectUnknown(spec, "spec", BASH_FIELDS);
+            var daemon = daemon(spec);
             if (daemon != null) {
-                var ready = tool.getConfig("ready");
+                var ready = spec.getConfig("ready");
                 daemonOptions.put(
-                        name,
+                        taskId,
                         new DaemonOptions(
                                 duration(ready, "timeout", DaemonOptions.DEFAULT.readyTimeout()),
                                 duration(ready, "interval", DaemonOptions.DEFAULT.checkInterval()),
@@ -89,44 +113,32 @@ public record PulseConfiguration(
             }
             tasks.add(
                     new BashTaskDefinition(
-                            name,
-                            nonBlankString(tool, "cmd"),
-                            tool.hasPathOrNull("needs") ? stringList(tool, "needs") : List.of(),
+                            taskId,
+                            nonBlankString(spec, "run"),
+                            task.hasPathOrNull("needs") ? stringList(task, "needs") : List.of(),
                             daemon));
         }
-        requireType(config, "pipelines", ConfigValueType.OBJECT);
-        var pipelines = new LinkedHashMap<String, List<String>>();
-        var section = config.getConfig("pipelines");
-        for (var name : section.root().keySet()) {
-            var path = ConfigUtil.quoteString(name);
-            requireType(section, path, ConfigValueType.OBJECT);
-            var pipeline = section.getConfig(path);
-            rejectUnknownFields(pipeline, List.of("description", "tasks"));
-            if (pipeline.hasPathOrNull("description")) {
-                requireType(pipeline, "description", ConfigValueType.STRING);
-            }
-            pipelines.put(name, stringList(pipeline, "tasks"));
-        }
-        return new PulseConfiguration(root, parallelism, tasks, pipelines, daemonOptions, config);
+        var name = config.hasPathOrNull("name") ? config.getString("name") : id;
+        return new PulseConfiguration(root, workflow, id, name, tasks, daemonOptions, config);
     }
 
-    public PulsePlan plan(String target) throws IOException {
+    public PulsePlan plan() throws IOException {
         try {
-            return PulsePlan.create(tasks, pipelines, daemonOptions, target);
+            return PulsePlan.create(tasks, daemonOptions);
         } catch (PlanningException exception) {
-            if (exception.scope() == PlanningException.Scope.TARGET) {
-                throw new IOException(exception.getMessage(), exception);
-            }
             var section =
                     switch (exception.scope()) {
                         case WORKFLOW -> source;
                         case TASK ->
-                                source.getConfig("tasks")
-                                        .getConfig(ConfigUtil.quoteString(exception.name()));
-                        case PIPELINE ->
-                                source.getConfig("pipelines")
-                                        .getConfig(ConfigUtil.quoteString(exception.name()));
-                        case TARGET -> throw new IllegalStateException(exception);
+                                source.getList("tasks").stream()
+                                        .map(value ->
+                                                ((com.typesafe.config.ConfigObject) value)
+                                                        .toConfig())
+                                        .filter(task ->
+                                                task.getString("id").equals(exception.name()))
+                                        .findFirst()
+                                        .orElse(source);
+                        case PIPELINE, TARGET -> source;
                     };
             var origin =
                     section.hasPathOrNull(exception.field())
@@ -136,26 +148,30 @@ public record PulseConfiguration(
         }
     }
 
-    private static Daemon daemon(Config tool) {
-        var type = tool.hasPathOrNull("type") ? nonBlankString(tool, "type") : "task";
-        if (!List.of("task", "daemon").contains(type)) {
-            throw invalid(tool, "type", "Expected task or daemon.");
-        }
+    /** The identifier of a workflow file: its stem. */
+    public static String id(Path file) {
+        var name = file.getFileName().toString();
+        var dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
+    }
+
+    private static Daemon daemon(Config spec) {
+        var type = spec.hasPathOrNull("ready") ? "daemon" : "task";
         if (type.equals("task")) {
-            for (var field : List.of("ready", "stop", "stopTimeout")) {
-                if (tool.hasPathOrNull(field)) {
-                    throw invalid(tool, field, "Only daemon tasks support this field.");
+            for (var field : List.of("stop", "stopTimeout")) {
+                if (spec.hasPathOrNull(field)) {
+                    throw invalid(spec, field, "Only daemon tasks support this field.");
                 }
             }
             return null;
         }
-        requireType(tool, "ready", ConfigValueType.OBJECT);
-        var ready = tool.getConfig("ready");
-        rejectUnknownFields(ready, List.of("cmd", "interval", "timeout", "checkTimeout"));
+        requireType(spec, "ready", ConfigValueType.OBJECT);
+        var ready = spec.getConfig("ready");
+        rejectUnknown(ready, "ready", READY_FIELDS);
         return new Daemon(
                 nonBlankString(ready, "cmd"),
-                tool.hasPathOrNull("stop") ? nonBlankString(tool, "stop") : null,
-                duration(tool, "stopTimeout", Duration.ofSeconds(5)));
+                spec.hasPathOrNull("stop") ? nonBlankString(spec, "stop") : null,
+                duration(spec, "stopTimeout", Duration.ofSeconds(5)));
     }
 
     private static Duration duration(Config config, String path, Duration fallback) {
@@ -170,16 +186,6 @@ public record PulseConfiguration(
             }
         } catch (ArithmeticException exception) {
             throw invalid(config, path, "Duration is too large.");
-        }
-        return value;
-    }
-
-    private static int positiveInteger(Config config, String path) {
-        requireType(config, path, ConfigValueType.NUMBER);
-        var number = config.getNumber(path);
-        var value = number.intValue();
-        if (value <= 0 || number.doubleValue() != value) {
-            throw invalid(config, path, "Must be a positive 32-bit integer.");
         }
         return value;
     }
@@ -206,13 +212,16 @@ public record PulseConfiguration(
     }
 
     private static void requireType(Config config, String path, ConfigValueType expected) {
+        if (!config.hasPathOrNull(path)) {
+            throw invalid(config, path, "Required field is missing.");
+        }
         var value = config.getValue(path);
         if (value.valueType() != expected) {
             throw invalid(config, path, "Expected " + expected + ".");
         }
     }
 
-    private static void rejectUnknownFields(Config config, List<String> allowed) {
+    private static void rejectUnknown(Config config, String scope, List<String> allowed) {
         for (var key : config.root().keySet()) {
             if (!allowed.contains(key)) {
                 throw invalid(config, ConfigUtil.quoteString(key), "Unknown field: " + key);
@@ -221,6 +230,10 @@ public record PulseConfiguration(
     }
 
     private static ConfigException.BadValue invalid(Config config, String path, String message) {
-        return new ConfigException.BadValue(config.getValue(path).origin(), path, message);
+        var origin =
+                config.hasPathOrNull(path)
+                        ? config.getValue(path).origin()
+                        : config.root().origin();
+        return new ConfigException.BadValue(origin, path, message);
     }
 }

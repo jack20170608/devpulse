@@ -17,7 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 /**
- * Guards the machine-readable contract of {@code pulse}: exit codes classify what went wrong, and
+ * Guards the machine-readable contract of {@code run}: exit codes classify what went wrong, and
  * {@code --format json} prints exactly one parseable document so a caller needs no stderr parsing.
  */
 class RunCommandJsonTest {
@@ -38,8 +38,10 @@ class RunCommandJsonTest {
         return new Outcome(command.execute(all), out.toString(), err.toString());
     }
 
-    private void write(String yaml) throws IOException {
-        Files.writeString(directory.resolve(".devpulse.yaml"), yaml);
+    private void write(String workflow, String yaml) throws IOException {
+        var workflows = directory.resolve(".workflow");
+        Files.createDirectories(workflows);
+        Files.writeString(workflows.resolve(workflow + ".yaml"), yaml);
     }
 
     private static JsonObject task(JsonArray tasks, String name) {
@@ -55,16 +57,16 @@ class RunCommandJsonTest {
     @Test
     void printsThePlanAsOneJsonDocument() throws IOException {
         write(
+                "dev",
                 """
                 tasks:
-                  build:
-                    cmd: 'true'
-                  test:
-                    cmd: 'true'
+                  - id: build
+                    spec:
+                      run: 'true'
+                  - id: test
                     needs: [build]
-                pipelines:
-                  dev:
-                    tasks: [test]
+                    spec:
+                      run: 'true'
                 """);
         var result = execute("dev", "--dry-run", "--format", "json");
 
@@ -83,14 +85,16 @@ class RunCommandJsonTest {
     @Test
     void describesDaemonReadinessInThePlan() throws IOException {
         write(
+                "server",
                 """
                 tasks:
-                  server:
-                    type: daemon
-                    cmd: 'true'
-                    ready:
-                      cmd: 'true'
-                      interval: 250ms
+                  - id: server
+                    kind: bash
+                    spec:
+                      run: 'true'
+                      ready:
+                        cmd: 'true'
+                        interval: 250ms
                 """);
         var result = execute("server", "--dry-run", "--format", "json");
 
@@ -109,7 +113,7 @@ class RunCommandJsonTest {
 
     @Test
     void keepsTextOutputForDryRun() throws IOException {
-        write("tasks:\n  check:\n    cmd: 'true'\n");
+        write("check", "tasks:\n  - id: check\n    spec:\n      run: 'true'\n");
         var result = execute("check", "--dry-run");
 
         assertThat(result.exitCode()).isEqualTo(ExitCodes.OK);
@@ -119,7 +123,7 @@ class RunCommandJsonTest {
 
     @Test
     void classifiesAnInvalidConfiguration() throws IOException {
-        write("tasks:\n  check:\n    cmd: 'true'\nextra: 1\n");
+        write("check", "tasks:\n  - id: check\n    spec:\n      run: 'true'\nextra: 1\n");
         var result = execute("check", "--dry-run", "--format", "json");
 
         assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_INVALID);
@@ -128,34 +132,35 @@ class RunCommandJsonTest {
         assertThat(error.get("exitCode").getAsInt()).isEqualTo(10);
         assertThat(error.get("message").getAsString()).contains("Unknown field: extra");
         assertThat(error.get("line").getAsInt()).isPositive();
-        assertThat(error.get("file").getAsString()).endsWith(".devpulse.yaml");
+        assertThat(error.get("file").getAsString()).endsWith("check.yaml");
     }
 
     @Test
-    void classifiesAnUnknownTarget() throws IOException {
-        write("tasks:\n  check:\n    cmd: 'true'\n");
+    void classifiesAMissingWorkflow() {
         var result = execute("missing", "--dry-run", "--format", "json");
 
-        assertThat(result.exitCode()).isEqualTo(ExitCodes.TARGET_INVALID);
+        assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_INVALID);
         var error = JsonParser.parseString(result.out()).getAsJsonObject().getAsJsonObject("error");
-        assertThat(error.get("code").getAsString()).isEqualTo("TARGET_INVALID");
-        assertThat(error.get("message").getAsString())
-                .contains("Unknown task or pipeline: missing");
+        assertThat(error.get("code").getAsString()).isEqualTo("CONFIG_INVALID");
+        assertThat(error.get("message").getAsString()).contains("Workflow not found");
     }
 
     @Test
     void classifiesADependencyCycle() throws IOException {
         write(
+                "check",
                 """
                 tasks:
-                  a:
-                    cmd: 'true'
+                  - id: a
                     needs: [b]
-                  b:
-                    cmd: 'true'
+                    spec:
+                      run: 'true'
+                  - id: b
                     needs: [a]
+                    spec:
+                      run: 'true'
                 """);
-        var result = execute("a", "--dry-run", "--format", "json");
+        var result = execute("check", "--dry-run", "--format", "json");
 
         assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_GRAPH);
         var error = JsonParser.parseString(result.out()).getAsJsonObject().getAsJsonObject("error");
@@ -204,7 +209,7 @@ class RunCommandJsonTest {
 
     @Test
     void keepsTextErrorsOnStderr() throws IOException {
-        write("tasks:\n  check:\n    cmd: 'true'\nextra: 1\n");
+        write("check", "tasks:\n  - id: check\n    spec:\n      run: 'true'\nextra: 1\n");
         var result = execute("check", "--dry-run");
 
         assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_INVALID);

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
-/** Guards {@code review --format json}: same plan document as {@code pulse --dry-run}, no TUI. */
+/** Guards {@code review --format json}: same plan document as {@code run --dry-run}, no TUI. */
 class ReviewCommandJsonTest {
     @TempDir Path directory;
 
@@ -31,23 +31,25 @@ class ReviewCommandJsonTest {
         return new Outcome(command.execute(all), out.toString(), err.toString());
     }
 
-    private void write(String yaml) throws IOException {
-        Files.writeString(directory.resolve(".devpulse.yaml"), yaml);
+    private void write(String workflow, String yaml) throws IOException {
+        var workflows = directory.resolve(".workflow");
+        Files.createDirectories(workflows);
+        Files.writeString(workflows.resolve(workflow + ".yaml"), yaml);
     }
 
     @Test
     void emitsThePlanWithoutOpeningTheInterface() throws IOException {
         write(
+                "dev",
                 """
                 tasks:
-                  build:
-                    cmd: 'true'
-                  test:
-                    cmd: 'true'
+                  - id: build
+                    spec:
+                      run: 'true'
+                  - id: test
                     needs: [build]
-                pipelines:
-                  dev:
-                    tasks: [test]
+                    spec:
+                      run: 'true'
                 """);
         var result = execute("dev", "--format", "json");
 
@@ -60,7 +62,7 @@ class ReviewCommandJsonTest {
 
     @Test
     void classifiesAnInvalidConfiguration() throws IOException {
-        write("tasks:\n  check:\n    cmd: 'true'\nextra: 1\n");
+        write("check", "tasks:\n  - id: check\n    spec:\n      run: 'true'\nextra: 1\n");
         var result = execute("check", "--format", "json");
 
         assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_INVALID);
@@ -69,12 +71,12 @@ class ReviewCommandJsonTest {
     }
 
     @Test
-    void classifiesAnUnknownTarget() throws IOException {
-        write("tasks:\n  check:\n    cmd: 'true'\n");
+    void classifiesAMissingWorkflow() {
         var result = execute("missing", "--format", "json");
 
-        assertThat(result.exitCode()).isEqualTo(ExitCodes.TARGET_INVALID);
+        assertThat(result.exitCode()).isEqualTo(ExitCodes.CONFIG_INVALID);
         var error = JsonParser.parseString(result.out()).getAsJsonObject().getAsJsonObject("error");
-        assertThat(error.get("code").getAsString()).isEqualTo("TARGET_INVALID");
+        assertThat(error.get("code").getAsString()).isEqualTo("CONFIG_INVALID");
+        assertThat(error.get("message").getAsString()).contains("Workflow not found");
     }
 }

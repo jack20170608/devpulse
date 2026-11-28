@@ -83,6 +83,10 @@ public final class RunDao extends BaseDaoJdbiImpl<RunRecord, RunKey> {
                 result.getString("server_boot_id"),
                 result.getString("bash"),
                 result.getString("tool_version"),
-                result.getString("parent_run_id"));
+                result.getString("parent_run_id"),
+                result.getString("workflow_id"),
+                result.getString("workflow_path"),
+                Bindings.integer(result, "workflow_revision"),
+                result.getString("workflow_hash"));
     }
 }

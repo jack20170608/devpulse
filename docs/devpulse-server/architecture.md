@@ -17,13 +17,24 @@ devpulse-storage  ───┴─→ devpulse-server ──→ devpulse（server
 
 | 层 | 类 | 职责 |
 |---|---|---|
-| 设置 | `ServerSettings` | 绑定地址、端口、token、状态文件路径、doctor 目录 |
-| 路径 | `ServerPaths` | `~/.devpulse` 下 token 与状态文件的位置 |
-| 认证 | `ServerToken`、`Auth` | 生成/读取 token；Bearer 与 Host 两个纯函数校验 |
+| 设置 | `ServerSettings` | 绑定地址、端口、状态文件、doctor 目录、中央库路径 |
+| 路径 | `ServerPaths` | `~/.devpulse` 下 `server.json` 与 `server.mv.db` 的位置 |
+| 认证 | `Auth` | 客户头与 Host 两个纯函数校验 |
 | 状态 | `ServerState` | `{pid, port, bootId, version, startedAt}` 的读写 |
+| 存储 | `JdbiRunStore`、`WorkflowStore` | 中央库连接池、workflow head 与不可变 revision |
 | 装配 | `ServerBootstrap` | 建 MuServer、注册路由、守卫每个请求、启动后写状态文件 |
 
 `Auth` 与 `ServerState` 不依赖 socket，可以在没有网络的测试里覆盖。
+
+### workflow 注册表
+
+启动时打开 `~/.devpulse/server.mv.db`（连接池）并迁移 schema。服务端是 workflow 内容的真相源，项目里的 `.workflow/<id>.yaml` 是数字孪生：
+
+- `GET /api/workflows`、`GET /api/workflows/{id}`（可带 `revision=`）、`GET /api/workflows/{id}/revisions` 读；
+- `PUT /api/workflows/{id}` 写：每次推送追加一条不可变 revision 并前移 head，旧 revision 永不改写；
+- `baseRevision` 过期返回 `409 WORKFLOW_CONFLICT` 与当前 head，调用方选择 `--force` 覆盖或先 `pull`。
+
+CLI 本地运行把 workflow id、路径与内容 SHA-256 写入 run 记录；`workflow_revision` 在服务端提交路径接通前为 `null`。
 
 ### 与参考实现的关系
 
@@ -49,7 +60,11 @@ The server owns execution and persistence. Clients speak HTTP only: they never o
 
 ### Layers
 
-`ServerSettings` (bind address, port, token, state file, doctor directory), `ServerPaths` (the two files under `~/.devpulse`), `ServerToken` and `Auth` (token creation plus two pure checks), `ServerState` (pid, port, boot id, version, started time), and `ServerBootstrap` (build MuServer, register routes, guard every request, write the state file). `Auth` and `ServerState` touch no socket, so tests cover them without a network.
+`ServerSettings` (bind address, port, state file, doctor directory, central database), `ServerPaths` (`server.json` and `server.mv.db` under `~/.devpulse`), `Auth` (two pure checks), `ServerState` (pid, port, boot id, version, started time), `JdbiRunStore` and `WorkflowStore` (the pooled central database, workflow heads and immutable revisions), and `ServerBootstrap` (build MuServer, register routes, guard every request, write the state file). `Auth` and `ServerState` touch no socket, so tests cover them without a network.
+
+### Workflow registry
+
+The server opens `~/.devpulse/server.mv.db` pooled and migrates it at startup. It is the source of truth for workflow content; a project's `.workflow/<id>.yaml` is a twin: `GET /api/workflows`, `GET /api/workflows/{id}` (optionally `revision=`) and `GET /api/workflows/{id}/revisions` read; `PUT /api/workflows/{id}` appends an immutable revision and moves the head, never rewriting an old one. A stale `baseRevision` returns `409 WORKFLOW_CONFLICT` with the current head, so the caller picks `--force` or pulls first. A local CLI run records the workflow id, path and content SHA-256 on the run; `workflow_revision` stays `null` until the server submission path lands.
 
 ### Relation to the reference implementation
 

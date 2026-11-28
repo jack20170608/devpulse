@@ -8,9 +8,11 @@ import io.github.devpulse.execution.RunHistory;
 import io.github.devpulse.execution.RunService;
 import io.github.devpulse.execution.WorkflowRun;
 import io.github.devpulse.review.TaskDetails;
+import io.github.devpulse.storage.ContentHash;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -33,15 +35,18 @@ import picocli.CommandLine.Spec;
         },
         description = "Run a local task or pipeline " + "according to its dependencies.")
 public final class RunCommand implements Callable<Integer> {
+    /** Default concurrency until the application configuration exposes it. */
+    private static final int DEFAULT_PARALLELISM = 4;
+
     @Spec private CommandSpec spec;
 
     @Parameters(
             index = "0",
             arity = "0..1",
             defaultValue = "dev",
-            paramLabel = "TARGET",
+            paramLabel = "WORKFLOW",
             description = "Task or pipeline to run " + "(default: ${DEFAULT-VALUE}).")
-    private String target;
+    private String workflow;
 
     @Option(
             names = "--directory",
@@ -92,9 +97,13 @@ public final class RunCommand implements Callable<Integer> {
                     null);
         }
 
+        Path workflowFile;
+        String workflowHash;
         PulseConfiguration config;
         try {
-            config = PulseConfiguration.load(directory);
+            workflowFile = WorkflowFiles.resolve(directory, Path.of(".workflow"), workflow);
+            config = PulseConfiguration.load(directory, workflowFile);
+            workflowHash = ContentHash.sha256(Files.readString(workflowFile));
         } catch (ConfigException | IOException exception) {
             return fail(
                     json,
@@ -108,7 +117,7 @@ public final class RunCommand implements Callable<Integer> {
 
         PulsePlan plan;
         try {
-            plan = config.plan(target);
+            plan = config.plan();
         } catch (ConfigException.BadValue exception) {
             return fail(
                     json,
@@ -129,14 +138,15 @@ public final class RunCommand implements Callable<Integer> {
                     exception);
         }
 
-        var concurrency = jobs == null ? config.parallelism() : jobs;
+        var concurrency = jobs == null ? DEFAULT_PARALLELISM : jobs;
         if (dryRun) {
             if (json) {
-                out.println(PulseJson.plan(target, config.directory(), concurrency, plan));
+                out.println(
+                        PulseJson.plan(config.workflowId(), config.directory(), concurrency, plan));
             } else {
                 out.println(
                         "Plan: "
-                                + target
+                                + config.workflowId()
                                 + " ("
                                 + plan.tasks().size()
                                 + " tasks, parallelism "
@@ -174,7 +184,12 @@ public final class RunCommand implements Callable<Integer> {
                     RunService.execute(
                             shell,
                             config.directory(),
-                            target,
+                            config.workflowId(),
+                            new PlanManifest.WorkflowRef(
+                                    config.workflowId(),
+                                    workflowPath(config.directory(), workflowFile),
+                                    null,
+                                    workflowHash),
                             plan,
                             concurrency,
                             json ? new PrintWriter(Writer.nullWriter()) : out,
@@ -189,7 +204,7 @@ public final class RunCommand implements Callable<Integer> {
             if (json) {
                 out.println(
                         PulseJson.run(
-                                target,
+                                config.workflowId(),
                                 config.directory(),
                                 outcome.runId(),
                                 result.state().name(),
@@ -222,6 +237,13 @@ public final class RunCommand implements Callable<Integer> {
                     exception.getMessage(),
                     exception);
         }
+    }
+
+    /** The workflow path as the user gave it, relative to the project when possible. */
+    private static String workflowPath(Path directory, Path file) {
+        var root = directory.toAbsolutePath().normalize();
+        var target = file.toAbsolutePath().normalize();
+        return target.startsWith(root) ? root.relativize(target).toString() : target.toString();
     }
 
     /**

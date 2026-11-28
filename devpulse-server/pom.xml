@@ -19,6 +19,11 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.github.devpulse</groupId>
+            <artifactId>devpulse-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.muserver</groupId>
             <artifactId>mu-server</artifactId>
         </dependency>
