@@ -59,8 +59,6 @@ project/
 
 ```yaml
 name: 构建流水线          # 可选，仅用于展示；缺省等于文件 stem
-env:                      # 可选，注入本文件所有任务
-  NODE_ENV: ci
 
 tasks:
   - id: compile
@@ -80,7 +78,6 @@ tasks:
 | 字段 | 必需 | 说明 |
 |---|---|---|
 | `name` | 否 | 展示名；**不参与寻址**，id 永远是文件 stem |
-| `env` | 否 | 合并进每个任务；任务级 `env` 优先 |
 | `tasks` | 是 | 非空列表 |
 | `tasks[].id` | 是 | 文件内唯一；`^[a-z][a-z0-9_-]*$` |
 | `tasks[].kind` | 是 | 执行器种类；首版只有 `bash`，未知 kind 报错 |
@@ -287,7 +284,6 @@ The file name is the identifier: `.workflow/build.yaml` has id `build`.
 | Field | Required | Meaning |
 |---|---|---|
 | `name` | no | display name only; never used for addressing |
-| `env` | no | merged into every task; task-level `env` wins |
 | `tasks` | yes | non-empty list |
 | `tasks[].id` | yes | unique in the file, `^[a-z][a-z0-9_-]*$` |
 | `tasks[].kind` | yes | executor kind; only `bash` at first |
