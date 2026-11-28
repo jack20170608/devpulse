@@ -8,7 +8,11 @@ import io.github.devpulse.storage.dao.RunDao;
 import io.github.devpulse.storage.dao.TaskDao;
 import io.github.devpulse.storage.dao.TaskEdgeDao;
 import io.github.devpulse.storage.dao.TaskResultDao;
+import io.github.devpulse.storage.dao.WorkflowDao;
+import io.github.devpulse.storage.dao.WorkflowRevisionDao;
+import io.github.devpulse.storage.jdbi.Bindings;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,7 +32,7 @@ import org.jdbi.v3.core.JdbiException;
  * which writes the project, the run, its tasks and their edges in one transaction so a failed start
  * leaves no row behind.
  */
-public final class JdbiRunStore implements RunStore {
+public final class JdbiRunStore implements RunStore, WorkflowStore {
 
     private final Jdbi jdbi;
     private final ProjectDao projectDao;
@@ -37,6 +41,8 @@ public final class JdbiRunStore implements RunStore {
     private final TaskEdgeDao edgeDao;
     private final TaskResultDao resultDao;
     private final DaemonInstanceDao daemonDao;
+    private final WorkflowDao workflowDao;
+    private final WorkflowRevisionDao workflowRevisionDao;
 
     /** Set when this store owns a connection pool that {@link #close()} must release. */
     private final AutoCloseable closeable;
@@ -54,6 +60,8 @@ public final class JdbiRunStore implements RunStore {
         this.edgeDao = new TaskEdgeDao(jdbi);
         this.resultDao = new TaskResultDao(jdbi);
         this.daemonDao = new DaemonInstanceDao(jdbi);
+        this.workflowDao = new WorkflowDao(jdbi);
+        this.workflowRevisionDao = new WorkflowRevisionDao(jdbi);
     }
 
     /** Open or create a store backed by one H2 file. */
@@ -296,6 +304,127 @@ public final class JdbiRunStore implements RunStore {
             throws IOException {
         try {
             daemonDao.updateHealth(runId, taskId, health, error, checkedAt);
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public WorkflowRecord push(
+            ProjectRecord project,
+            String workflowId,
+            String name,
+            String content,
+            Integer baseRevision)
+            throws IOException {
+        if (workflowId == null || !workflowId.matches("[a-z][a-z0-9_-]*")) {
+            throw new IllegalArgumentException(
+                    "workflow id must match [a-z][a-z0-9_-]*: " + workflowId);
+        }
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("Workflow content must not be blank.");
+        }
+        if (content.getBytes(StandardCharsets.UTF_8).length > MAX_CONTENT_BYTES) {
+            throw new IllegalArgumentException(
+                    "Workflow content must not exceed " + MAX_CONTENT_BYTES + " bytes.");
+        }
+        var hash = ContentHash.sha256(content);
+        var displayName = name == null || name.isBlank() ? null : name;
+        try {
+            return jdbi.inTransaction(handle -> {
+                projectDao.upsert(handle, project);
+                var current =
+                        handle.createQuery(
+                                        "SELECT * FROM workflow "
+                                                + "WHERE project_id = :projectId "
+                                                + "AND workflow_id = :workflowId "
+                                                + "FOR UPDATE")
+                                .bind("projectId", project.id())
+                                .bind("workflowId", workflowId)
+                                .mapTo(WorkflowRecord.class)
+                                .findOne();
+                if (current.isPresent()
+                        && baseRevision != null
+                        && baseRevision != current.get().revision()) {
+                    throw new WorkflowConflictException(current.get());
+                }
+                var revision = current.map(head -> head.revision() + 1).orElse(1);
+                var now = Instant.now();
+                var createdAt = current.map(WorkflowRecord::createdAt).orElse(now);
+                var update =
+                        handle.createUpdate(
+                                "MERGE INTO workflow (project_id, workflow_id, name, "
+                                        + "content, content_hash, revision, created_at, "
+                                        + "updated_at) KEY (project_id, workflow_id) "
+                                        + "VALUES (:projectId, :workflowId, :name, "
+                                        + ":content, :contentHash, :revision, :createdAt, "
+                                        + ":updatedAt)");
+                Bindings.text(update, "projectId", project.id());
+                Bindings.text(update, "workflowId", workflowId);
+                Bindings.text(update, "name", displayName);
+                Bindings.text(update, "content", content);
+                Bindings.text(update, "contentHash", hash);
+                Bindings.number(update, "revision", revision);
+                Bindings.instant(update, "createdAt", createdAt);
+                Bindings.instant(update, "updatedAt", now);
+                update.execute();
+                workflowRevisionDao
+                        .invokeCreate(
+                                new WorkflowRevisionRecord(
+                                        project.id(), workflowId, revision, content, hash, now))
+                        .withHandle(handle);
+                return new WorkflowRecord(
+                        project.id(),
+                        workflowId,
+                        displayName,
+                        content,
+                        hash,
+                        revision,
+                        createdAt,
+                        now);
+            });
+        } catch (WorkflowConflictException exception) {
+            throw exception;
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public Optional<WorkflowRecord> findWorkflow(String projectId, String workflowId)
+            throws IOException {
+        try {
+            return workflowDao.findOne(new WorkflowKey(projectId, workflowId));
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public List<WorkflowRecord> listWorkflows(String projectId) throws IOException {
+        try {
+            return workflowDao.listByProject(projectId);
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public Optional<WorkflowRevisionRecord> findRevision(
+            String projectId, String workflowId, int revision) throws IOException {
+        try {
+            return workflowRevisionDao.findOne(
+                    new WorkflowRevisionKey(projectId, workflowId, revision));
+        } catch (JdbiException exception) {
+            throw wrap(exception);
+        }
+    }
+
+    @Override
+    public List<WorkflowRevisionRecord> listRevisions(
+            String projectId, String workflowId, int limit) throws IOException {
+        try {
+            return workflowRevisionDao.list(projectId, workflowId, limit);
         } catch (JdbiException exception) {
             throw wrap(exception);
         }

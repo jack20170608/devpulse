@@ -2,6 +2,8 @@ package io.github.devpulse.core.bash;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.devpulse.core.dag.DagGraph;
+import io.github.devpulse.core.dag.TaskKey;
 import io.github.devpulse.storage.JdbiRunStore;
 import io.github.devpulse.storage.ProjectRecord;
 import io.github.devpulse.storage.RunRecord;
@@ -11,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -56,6 +59,40 @@ class RunHistoryTest {
         assertThat(list.getFirst().snapshot().tasks())
                 .anySatisfy(state -> assertThat(state.needs()).containsExactly("build"));
         assertThat(list.getFirst().snapshot().tasks()).hasSize(2);
+    }
+
+    @Test
+    void recordsTheWorkflowIdentityOfTheRun(@TempDir Path project) throws IOException {
+        Files.createDirectories(project.resolve(".devpulse"));
+        var workflow =
+                new PlanManifest.WorkflowRef("build", ".workflow/build.yaml", 3, "content-hash");
+        var manifest =
+                new PlanManifest(
+                        "build",
+                        project.toString(),
+                        1,
+                        "/bin/bash",
+                        "0.1.5",
+                        null,
+                        Map.of("build", new PlanManifest.Node("build", "fp-build", List.of())),
+                        workflow);
+        var graph = DagGraph.builder();
+        graph.node(TaskKey.of("build", Integer.class), List.of());
+        String id;
+        try (var writer = new RunHistory(project).begin("build", graph.build(), 1, manifest)) {
+            id = writer.id();
+            writer.ended(RunHistory.State.SUCCESS);
+        }
+
+        try (var store = JdbiRunStore.open(project.resolve(".devpulse").resolve("state"))) {
+            store.migrate();
+            var run = store.run(id).orElseThrow();
+            assertThat(run.workflowId()).isEqualTo("build");
+            assertThat(run.workflowPath()).isEqualTo(".workflow/build.yaml");
+            assertThat(run.workflowRevision()).isEqualTo(3);
+            assertThat(run.workflowHash()).isEqualTo("content-hash");
+        }
+        assertThat(new RunHistory(project).plan(id).workflow()).isEqualTo(workflow);
     }
 
     private static TaskRecord task(String runId, String name, List<String> needs) {

@@ -289,7 +289,18 @@ public final class RunHistory {
                     config.hasPath("bash") ? config.getString("bash") : null,
                     config.hasPath("toolVersion") ? config.getString("toolVersion") : null,
                     config.hasPath("parentRunId") ? config.getString("parentRunId") : null,
-                    nodes);
+                    nodes,
+                    config.hasPath("workflow")
+                            ? new PlanManifest.WorkflowRef(
+                                    config.getString("workflow.id"),
+                                    config.getString("workflow.path"),
+                                    config.hasPath("workflow.revision")
+                                            ? config.getInt("workflow.revision")
+                                            : null,
+                                    config.hasPath("workflow.hash")
+                                            ? config.getString("workflow.hash")
+                                            : null)
+                            : null);
         } catch (ConfigException exception) {
             throw new IOException(
                     "Cannot read plan manifest " + file + ": " + exception.getMessage(), exception);
@@ -378,6 +389,7 @@ public final class RunHistory {
     }
 
     private RunRecord runRecord(Snapshot snapshot, PlanManifest manifest) {
+        var workflow = manifest == null ? null : manifest.workflow();
         return new RunRecord(
                 snapshot.id(),
                 projectId,
@@ -393,7 +405,11 @@ public final class RunHistory {
                 null,
                 manifest == null ? null : manifest.bash(),
                 manifest == null ? null : manifest.toolVersion(),
-                manifest == null ? null : manifest.parentRunId());
+                manifest == null ? null : manifest.parentRunId(),
+                workflow == null ? null : workflow.id(),
+                workflow == null ? null : workflow.path(),
+                workflow == null ? null : workflow.revision(),
+                workflow == null ? null : workflow.hash());
     }
 
     private static List<TaskRecord> taskRecords(Snapshot snapshot, PlanManifest manifest) {
@@ -542,6 +558,15 @@ public final class RunHistory {
         put(data, "bash", manifest.bash());
         put(data, "toolVersion", manifest.toolVersion());
         put(data, "parentRunId", manifest.parentRunId());
+        var workflow = manifest.workflow();
+        if (workflow != null) {
+            var ref = new LinkedHashMap<String, Object>();
+            put(ref, "id", workflow.id());
+            put(ref, "path", workflow.path());
+            put(ref, "revision", workflow.revision());
+            put(ref, "hash", workflow.hash());
+            data.put("workflow", ref);
+        }
         var nodes = new ArrayList<Map<String, Object>>();
         for (var node : manifest.nodes().values()) {
             var item = new LinkedHashMap<String, Object>();

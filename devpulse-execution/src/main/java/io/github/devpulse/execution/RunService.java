@@ -42,6 +42,7 @@ public final class RunService {
             BashShell shell,
             Path directory,
             String target,
+            PlanManifest.WorkflowRef workflow,
             PulsePlan plan,
             int concurrency,
             PrintWriter console,
@@ -63,6 +64,7 @@ public final class RunService {
                                 manifest(
                                         target,
                                         directory,
+                                        workflow,
                                         plan,
                                         concurrency,
                                         shell,
@@ -94,6 +96,7 @@ public final class RunService {
     private static PlanManifest manifest(
             String target,
             Path directory,
+            PlanManifest.WorkflowRef workflow,
             PulsePlan plan,
             int concurrency,
             BashShell shell,
@@ -112,7 +115,8 @@ public final class RunService {
                 shell.executable().toString(),
                 RunService.class.getPackage().getImplementationVersion(),
                 null,
-                nodes);
+                nodes,
+                workflow);
     }
 
     /**

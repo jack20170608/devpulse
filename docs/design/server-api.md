@@ -1,6 +1,6 @@
 # 服务端接口设计（阶段 3 评审稿）/ Server API design (phase 3 review)
 
-**状态 / Status**：评审稿，未实现 / Review draft, not implemented
+**状态 / Status**：部分实现（workflow 注册表已落地，运行提交与事件流未实现）/ Partially implemented (workflow registry exists; run submission and events do not)
 
 [项目首页](../../readme.MD) | [中文](#中文) | [English](#english)
 
@@ -55,6 +55,15 @@ devpulse server stop     请求优雅停止，超时后退出
 | POST | `/api/runs/{id}/cancel` | 取消运行，幂等，返回 `202` |
 | POST | `/api/plan` | 静态计划（等价于 `review` / `--dry-run`） |
 | POST | `/api/daemons/{instanceId}/stop` | 停止长驻进程 |
+| GET | `/api/workflows?project=` | workflow 列表 |
+| GET | `/api/workflows/{id}?project=&revision=` | 当前版本或指定 revision 的内容 |
+| PUT | `/api/workflows/{id}` | 推送新 revision；`baseRevision` 过期返回 409 |
+| GET | `/api/workflows/{id}/revisions?project=&limit=` | revision 历史（新到旧） |
+
+workflow 注册表：服务端是 workflow 内容的真相源，项目里的 `.workflow/<id>.yaml` 是数字孪生。`PUT`
+请求体为 `{"project": "...", "content": "<YAML 原文>", "name": "...", "baseRevision": 2}`；每次推送写入
+一条不可变 revision 并前移 head。`baseRevision` 与服务端当前 revision 不一致时返回
+`409 WORKFLOW_CONFLICT`，附带 `currentRevision` 与 `currentHash`；省略 `baseRevision` 表示不带前提覆盖。
 
 请求示例：
 
@@ -90,6 +99,7 @@ POST /api/runs
 | `RETRY_REFUSED` | 409 | 状态不允许该操作 |
 | `VERSION_MISMATCH` | 409 | 客户端与服务端版本不一致 |
 | `TASK_FAILED` / `DAEMON_*` | — | 不作为 HTTP 错误返回，它们是运行结果 |
+| `WORKFLOW_CONFLICT` | 409 | 推送基于过期 revision |
 | `INFRASTRUCTURE` | 500 | 存储或文件写入失败 |
 | `INTERRUPTED` | 503 | 服务端正在关闭 |
 
@@ -173,11 +183,13 @@ Loopback HTTP/1.1 with JSON and SSE, bound to `127.0.0.1` only, on port 12580 by
 
 ### 3. Endpoints
 
-Health, doctor, projects, submit a run, list runs, run detail, events, task logs, cancel, plan, and stopping a daemon. Submission returns `202` with the run id; the plan endpoint shares the run payload but creates no record and executes nothing.
+Health, doctor, projects, submit a run, list runs, run detail, events, task logs, cancel, plan, stopping a daemon, and the workflow registry. Submission returns `202` with the run id; the plan endpoint shares the run payload but creates no record and executes nothing.
+
+The workflow registry is implemented: `GET /api/workflows`, `GET /api/workflows/{id}` (optionally `revision=`), `PUT /api/workflows/{id}`, and `GET /api/workflows/{id}/revisions`. The server is the source of truth; a project's `.workflow/<id>.yaml` is its twin. A push writes an immutable revision and moves the head. A `baseRevision` that no longer matches the head returns `409 WORKFLOW_CONFLICT` with `currentRevision` and `currentHash`; omitting it overwrites without a precondition.
 
 ### 4. Errors
 
-Every failure carries `{"error": {"code, message"}}`. The code reuses the CLI's failure classes — `USAGE`, `CONFIG_INVALID`, `CONFIG_GRAPH`, `TARGET_INVALID`, `ENVIRONMENT`, `RETRY_REFUSED`, `INFRASTRUCTURE`, `INTERRUPTED` — plus `VERSION_MISMATCH`. A failed task is not an HTTP error: the request succeeded, and the outcome appears in the run state and the closing event.
+Every failure carries `{"error": {"code, message"}}`. The code reuses the CLI's failure classes — `USAGE`, `CONFIG_INVALID`, `CONFIG_GRAPH`, `TARGET_INVALID`, `ENVIRONMENT`, `RETRY_REFUSED`, `INFRASTRUCTURE`, `INTERRUPTED` — plus `VERSION_MISMATCH` and `WORKFLOW_CONFLICT`. A failed task is not an HTTP error: the request succeeded, and the outcome appears in the run state and the closing event.
 
 ### 5. Events
 

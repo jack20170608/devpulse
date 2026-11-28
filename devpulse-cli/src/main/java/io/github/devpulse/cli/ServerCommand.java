@@ -210,7 +210,8 @@ public final class ServerCommand implements Runnable {
                                         config.host(),
                                         config.port(),
                                         paths.state(),
-                                        config.runDirectory().toAbsolutePath()));
+                                        config.runDirectory().toAbsolutePath(),
+                                        paths.database()));
             } catch (IOException exception) {
                 return fail(
                         "cannot start the server: " + exception.getMessage(),

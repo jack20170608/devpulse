@@ -1,6 +1,7 @@
 package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
+import io.github.devpulse.core.bash.PlanManifest;
 import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.bash.WorkflowRun;
 import io.github.devpulse.core.environment.BashShell;
@@ -8,9 +9,11 @@ import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulsePlan;
 import io.github.devpulse.execution.RunService;
 import io.github.devpulse.review.TaskDetails;
+import io.github.devpulse.storage.ContentHash;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
@@ -95,10 +98,13 @@ public final class RunCommand implements Callable<Integer> {
                     null);
         }
 
+        Path workflowFile;
+        String workflowHash;
         PulseConfiguration config;
         try {
-            var workflowFile = WorkflowFiles.resolve(directory, Path.of(".workflow"), workflow);
+            workflowFile = WorkflowFiles.resolve(directory, Path.of(".workflow"), workflow);
             config = PulseConfiguration.load(directory, workflowFile);
+            workflowHash = ContentHash.sha256(Files.readString(workflowFile));
         } catch (ConfigException | IOException exception) {
             return fail(
                     json,
@@ -180,6 +186,11 @@ public final class RunCommand implements Callable<Integer> {
                             shell,
                             config.directory(),
                             config.workflowId(),
+                            new PlanManifest.WorkflowRef(
+                                    config.workflowId(),
+                                    workflowPath(config.directory(), workflowFile),
+                                    null,
+                                    workflowHash),
                             plan,
                             concurrency,
                             json ? new PrintWriter(Writer.nullWriter()) : out,
@@ -227,6 +238,13 @@ public final class RunCommand implements Callable<Integer> {
                     exception.getMessage(),
                     exception);
         }
+    }
+
+    /** The workflow path as the user gave it, relative to the project when possible. */
+    private static String workflowPath(Path directory, Path file) {
+        var root = directory.toAbsolutePath().normalize();
+        var target = file.toAbsolutePath().normalize();
+        return target.startsWith(root) ? root.relativize(target).toString() : target.toString();
     }
 
     /**

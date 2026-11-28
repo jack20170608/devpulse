@@ -11,6 +11,8 @@ DROP TABLE IF EXISTS task_need;
 DROP TABLE IF EXISTS daemon_instance;
 DROP TABLE IF EXISTS task_result;
 DROP TABLE IF EXISTS task;
+DROP TABLE IF EXISTS workflow_revision;
+DROP TABLE IF EXISTS workflow;
 DROP TABLE IF EXISTS run;
 DROP TABLE IF EXISTS project;
 
@@ -23,10 +25,40 @@ CREATE TABLE project (
     CONSTRAINT project_path_unique UNIQUE (path)
 );
 
+CREATE TABLE workflow (
+    project_id VARCHAR(64) NOT NULL,
+    workflow_id VARCHAR(256) NOT NULL,
+    name VARCHAR(256),
+    content CLOB NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    revision INT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (project_id, workflow_id),
+    CONSTRAINT workflow_project FOREIGN KEY (project_id) REFERENCES project (id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE workflow_revision (
+    project_id VARCHAR(64) NOT NULL,
+    workflow_id VARCHAR(256) NOT NULL,
+    revision INT NOT NULL,
+    content CLOB NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (project_id, workflow_id, revision),
+    CONSTRAINT revision_workflow FOREIGN KEY (project_id, workflow_id)
+        REFERENCES workflow (project_id, workflow_id) ON DELETE CASCADE
+);
+
 CREATE TABLE run (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     project_id VARCHAR(64) NOT NULL,
     target VARCHAR(256) NOT NULL,
+    workflow_id VARCHAR(256),
+    workflow_path VARCHAR(1024),
+    workflow_revision INT,
+    workflow_hash VARCHAR(64),
     parallelism INT NOT NULL,
     state VARCHAR(32) NOT NULL,
     requested_by VARCHAR(256),
