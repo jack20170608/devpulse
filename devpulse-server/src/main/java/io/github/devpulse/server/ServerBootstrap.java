@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Builds the loopback HTTP server: two read-only endpoints, a bearer check and a Host check on
@@ -25,6 +27,7 @@ import java.util.UUID;
  */
 public final class ServerBootstrap {
     public static final String VERSION = implementationVersion();
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServerBootstrap.class);
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private ServerBootstrap() {}
@@ -54,6 +57,7 @@ public final class ServerBootstrap {
 
         @Override
         public void close() {
+            LOGGER.info("Shutting down (boot {})", bootId);
             server.stop();
         }
     }
@@ -89,6 +93,11 @@ public final class ServerBootstrap {
         var handle = new Running(server, bootId);
         new ServerState(ProcessHandle.current().pid(), handle.port(), bootId, VERSION, startedAt)
                 .write(settings.stateFile());
+        LOGGER.info(
+                "Listening on http://127.0.0.1:{} (boot {}, version {})",
+                handle.port(),
+                bootId,
+                VERSION);
         return handle;
     }
 
