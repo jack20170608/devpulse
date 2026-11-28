@@ -1,5 +1,6 @@
 package io.github.devpulse.cli;
 
+import io.github.devpulse.cli.config.AppConfig;
 import io.github.devpulse.server.ServerBootstrap;
 import io.github.devpulse.server.ServerPaths;
 import io.github.devpulse.server.ServerSettings;
@@ -44,20 +45,26 @@ public final class ServerCommand implements Runnable {
         @Spec CommandSpec spec;
 
         @Option(
-                names = "--directory",
-                defaultValue = ".",
-                description = "Project directory used for the doctor report (default: .).")
-        Path directory;
+                names = "--config",
+                description = "Configuration file (default: ~/.devpulse/config.conf).")
+        Path configFile;
+
+        @Option(names = "--port", description = "Port to bind (default: from configuration).")
+        Integer port;
 
         @Option(
-                names = "--port",
-                defaultValue = "" + ServerSettings.DEFAULT_PORT,
-                description = "Port to bind (default: ${DEFAULT-VALUE}).")
-        int port;
+                names = "--directory",
+                description = "Project directory for the doctor report (default: from"
+                        + " configuration).")
+        Path directory;
 
         Integer fail(String message, int code) {
             spec.commandLine().getErr().println("devpulse: " + message);
             return code;
+        }
+
+        AppConfig config() {
+            return AppConfig.load(configFile, port, directory);
         }
     }
 
@@ -97,6 +104,12 @@ public final class ServerCommand implements Runnable {
         @Override
         public Integer call() {
             var out = spec.commandLine().getOut();
+            AppConfig config;
+            try {
+                config = config();
+            } catch (IllegalArgumentException exception) {
+                return fail(exception.getMessage(), ExitCodes.USAGE);
+            }
             var paths = ServerPaths.defaults();
             var existing = ServerState.read(paths.state());
             if (existing.isPresent()
@@ -177,15 +190,21 @@ public final class ServerCommand implements Runnable {
         public Integer call() {
             var out = spec.commandLine().getOut();
             var paths = ServerPaths.defaults();
+            AppConfig config;
+            try {
+                config = config();
+            } catch (IllegalArgumentException exception) {
+                return fail(exception.getMessage(), ExitCodes.USAGE);
+            }
             ServerBootstrap.Running running;
             try {
                 running =
                         ServerBootstrap.start(
                                 new ServerSettings(
-                                        "127.0.0.1",
-                                        port,
+                                        config.host(),
+                                        config.port(),
                                         paths.state(),
-                                        directory.toAbsolutePath()));
+                                        config.directory().toAbsolutePath()));
             } catch (IOException exception) {
                 return fail(
                         "cannot start the server: " + exception.getMessage(),
