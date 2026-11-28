@@ -1,12 +1,12 @@
 package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
-import io.github.devpulse.core.bash.RunHistory;
-import io.github.devpulse.core.bash.WorkflowRun;
-import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.bash.BashShell;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.PulsePlan;
+import io.github.devpulse.execution.RunHistory;
 import io.github.devpulse.execution.RunService;
+import io.github.devpulse.execution.WorkflowRun;
 import io.github.devpulse.review.TaskDetails;
 import java.io.IOException;
 import java.io.PrintWriter;

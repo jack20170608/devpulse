@@ -1,4 +1,4 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.bash;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -6,7 +6,6 @@ import io.github.devpulse.core.dag.DagRun;
 import io.github.devpulse.core.dag.DagWorkflow;
 import io.github.devpulse.core.dag.TaskKey;
 import io.github.devpulse.core.dag.TaskOptions;
-import io.github.devpulse.core.environment.BashShell;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;

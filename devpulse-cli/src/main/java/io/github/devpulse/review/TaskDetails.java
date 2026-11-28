@@ -1,6 +1,6 @@
 package io.github.devpulse.review;
 
-import io.github.devpulse.core.bash.BashTaskDefinition;
+import io.github.devpulse.bash.BashTaskDefinition;
 import io.github.devpulse.core.dag.DaemonOptions;
 import java.util.List;
 

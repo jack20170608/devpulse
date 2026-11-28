@@ -16,7 +16,7 @@
 - 使用 Maven 管理依赖、构建与打包。`devpulse-dependencies/pom.xml` 管理外部依赖版本，`devpulse-bom/pom.xml` 管理内部可消费模块版本；根 `pom.xml` 的 `pluginManagement` 管理构建插件版本。
 - 项目版本只在根 `pom.xml` 的 `<revision>` 定义；根项目及子模块父版本使用 `${revision}`，内部依赖版本继续用 `${project.version}`。保留 Flatten Maven Plugin 的 `resolveCiFriendliesOnly` 设置，使安装和发布的 POM 不含未解析的 `${revision}`。
 - 核心、工具聚合模块、CLI 模块、发行模块及内部 BOM 通过本地相对路径继承 `devpulse-dependencies`，无需先安装兄弟 BOM 才能解析父 POM；存在内部代码依赖的模块仍需通过根 reactor 的 `--also-make` 一起构建。不要在运行模块中声明对 BOM 的普通运行时依赖。
-- 根目录为 Maven 聚合项目；`devpulse-core` 仅提供 Bash 和环境盘点共享代码。Jira 在 `devpulse-tools` 下生成可执行 JAR；Pulse 的命令与统一入口合并为 `devpulse-cli` 模块，打包成一个可执行 JAR。工具模块可以依赖共享库，但不可相互依赖；共享库不注册或加载工具命令，且不使用动态插件加载。
+- 根目录为 Maven 聚合项目；`devpulse-core` 只提供零依赖的 DAG 调度，Bash 执行与环境盘点位于 `devpulse-plugin/bash`。Jira 在 `devpulse-tools` 下生成可执行 JAR；Pulse 的命令与统一入口合并为 `devpulse-cli` 模块，打包成一个可执行 JAR。工具模块可以依赖共享库，但不可相互依赖；共享库不注册或加载工具命令，且不使用动态插件加载。
 - 使用 picocli 构建 CLI，通过 `@Command` 注解定义命令和子命令。
 - 使用 Typesafe Config（`com.typesafe:config`）解析 HOCON 配置，不引入 Jackson 进行配置映射。
 - 使用原生 Java 控制台输出，可选用 jansi 提供终端颜色和进度展示。
@@ -93,7 +93,7 @@ java -jar devpulse-tools\jira\target\devpulse-jira.jar --help
 - Use Maven for dependencies, builds, and packaging. Manage external dependency versions in `devpulse-dependencies/pom.xml`, consumable internal module versions in `devpulse-bom/pom.xml`, and build plugin versions in the root `pom.xml`'s `pluginManagement`.
 - Define the project version only in the root `pom.xml`'s `<revision>`; use `${revision}` for root and child parent versions, while keeping `${project.version}` for internal dependencies. Retain the Flatten Maven Plugin's `resolveCiFriendliesOnly` setting so installed and deployed POMs have no unresolved `${revision}`.
 - Core, the tool aggregator, the CLI module, the distribution module, and the internal BOM inherit `devpulse-dependencies` via local relative parent paths so the parent POM does not require installing a sibling BOM first. Modules with internal code dependencies must still be built through the root reactor with `--also-make`. Do not add a BOM as a regular runtime dependency.
-- The root is a Maven reactor; `devpulse-core` provides only shared Bash and environment inventory code. Jira builds an executable JAR under `devpulse-tools`; Pulse's commands and the unified entry point live together in `devpulse-cli`, packaged as one executable. Tools may depend on the shared library but must not depend on one another; the shared library does not register or load tool commands, and there is no dynamic plugin loading.
+- The root is a Maven reactor; `devpulse-core` provides only zero-dependency DAG scheduling, while Bash execution and environment inventory live in `devpulse-plugin/bash`. Jira builds an executable JAR under `devpulse-tools`; Pulse's commands and the unified entry point live together in `devpulse-cli`, packaged as one executable. Tools may depend on the shared library but must not depend on one another; the shared library does not register or load tool commands, and there is no dynamic plugin loading.
 - Use picocli for the CLI and its `@Command` annotations for commands and subcommands.
 - Use Typesafe Config (`com.typesafe:config`) to parse HOCON configuration. Do not introduce Jackson for configuration mapping.
 - Use standard Java console output, optionally with jansi for terminal colors and progress display.

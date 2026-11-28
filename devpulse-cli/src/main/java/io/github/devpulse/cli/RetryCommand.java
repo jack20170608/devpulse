@@ -1,9 +1,9 @@
 package io.github.devpulse.cli;
 
 import com.typesafe.config.ConfigException;
-import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.execution.PulseConfiguration;
 import io.github.devpulse.execution.RetryPlan;
+import io.github.devpulse.execution.RunHistory;
 import io.github.devpulse.execution.TaskFingerprints;
 import java.io.IOException;
 import java.nio.file.Path;

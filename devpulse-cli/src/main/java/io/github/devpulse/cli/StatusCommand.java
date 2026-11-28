@@ -1,7 +1,7 @@
 package io.github.devpulse.cli;
 
-import io.github.devpulse.core.bash.DaemonManager;
-import io.github.devpulse.core.bash.RunHistory;
+import io.github.devpulse.bash.DaemonManager;
+import io.github.devpulse.execution.RunHistory;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;

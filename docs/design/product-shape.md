@@ -150,7 +150,7 @@ devpulse-dist          发行
 | 2 | 统一二进制：`devpulse-cli` → `devpulse`，`pulse` 退役为默认动作 | 命令名变化 |
 | 3 | 服务端骨架：`server start` + HTTP + 自动拉起；`run` 仍可本地执行 | 新增能力 |
 | 4 | 执行迁到服务端：客户端只走 API；`review`/`--dry-run` 改走 API | **客户端不再本地执行** |
-| 5 | `core.bash` 正名（`RunHistory`/`WorkflowRun`/`PlanManifest` → `core.run`），Bash 执行器抽成插件 | 内部结构 |
+| 5 | `core.bash` 正名（`RunHistory`/`WorkflowRun`/`PlanManifest` → `core.run`），Bash 执行器抽成插件（已拆出 `devpulse-plugin/bash`；SPI 等第二个执行后端出现再做，见 [core + plugin 演进预研](../research/core-plugin-evolution.md)） | 内部结构 |
 | 6 | YAML 切到 `kind`/`spec`，校验下沉 | **配置破坏性变更** |
 
 阶段 0、1、2 与插件化无关，可以先做。

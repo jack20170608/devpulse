@@ -1,4 +1,4 @@
-package io.github.devpulse.core.environment;
+package io.github.devpulse.bash;
 
 import java.nio.file.Path;
 import java.util.List;

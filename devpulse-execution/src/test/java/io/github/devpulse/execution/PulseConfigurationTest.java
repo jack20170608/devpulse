@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import com.typesafe.config.ConfigException;
-import io.github.devpulse.core.bash.BashTaskDefinition;
+import io.github.devpulse.bash.BashTaskDefinition;
 import io.github.devpulse.core.dag.DaemonOptions;
 import java.io.IOException;
 import java.nio.file.Files;

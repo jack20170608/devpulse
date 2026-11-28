@@ -1,10 +1,7 @@
 package io.github.devpulse.execution;
 
-import io.github.devpulse.core.bash.BashTaskAdapter;
-import io.github.devpulse.core.bash.PlanManifest;
-import io.github.devpulse.core.bash.RunHistory;
-import io.github.devpulse.core.bash.WorkflowRun;
-import io.github.devpulse.core.environment.BashShell;
+import io.github.devpulse.bash.BashShell;
+import io.github.devpulse.bash.BashTaskAdapter;
 import io.github.devpulse.storage.TaskResult;
 import java.io.IOException;
 import java.io.PrintWriter;

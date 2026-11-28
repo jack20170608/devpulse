@@ -2,7 +2,6 @@ package io.github.devpulse.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.dag.DagGraph;
 import io.github.devpulse.core.dag.TaskKey;
 import java.io.IOException;

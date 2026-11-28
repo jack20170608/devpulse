@@ -34,6 +34,7 @@ Run a single test (artifact ID `pulse`/`jira` is unprefixed; keep `-am` so react
 ```bash
 mvn --batch-mode -pl :devpulse-storage -am test -Dtest=RunStoreTest -Dsurefire.failIfNoSpecifiedTests=false
 mvn --batch-mode -pl :devpulse-core -am test -Dtest=DagWorkFlowTest -Dsurefire.failIfNoSpecifiedTests=false
+mvn --batch-mode -pl :bash -am test -Dtest=BashTaskAdapterTest -Dsurefire.failIfNoSpecifiedTests=false
 mvn --batch-mode -pl :pulse -am test -Dtest=PulseConfigurationTest -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
@@ -46,12 +47,12 @@ Integration scripts: `integration-test/jira/run-jira.sh` runs the built Jira JAR
 The root `pom.xml` is the only place the project version is defined (`<revision>`); child `<parent><version>` uses `${revision}`, and internal dependencies use `${project.version}`. `devpulse-dependencies` manages external dependency versions, `devpulse-bom` manages consumable internal versions. The Flatten plugin (`resolveCiFriendliesOnly`) keeps installed POMs free of unresolved `${revision}`.
 
 Dependency direction:
-- Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (DAG engine, Bash adapter, environment collection), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, and `RunService`), `devpulse-server` (loopback HTTP daemon).
+- Shared libraries: `devpulse-common` (HTTP/TLS helpers), `devpulse-storage` (run persistence), `devpulse-core` (pure DAG engine, JDK only), `devpulse-plugin/bash` (Bash process execution, daemons, environment collection, and the `TaskHistory` seam), `devpulse-execution` (YAML configuration, plan assembly, fingerprints, run records, and `RunService`), `devpulse-server` (loopback HTTP daemon).
 - `devpulse-cli` is the unified CLI: the entry point, Pulse's commands and the server subcommand, packaged as one executable. `devpulse-tools` aggregates independent tools and currently holds only `jira`. Tools may depend on shared libraries but **never on each other**.
 - Libraries register no CLI commands and there is no dynamic plugin loading.
 - `devpulse-dist` packages the CLI and Jira. `devpulse-poc` is an experimental module, not shipped.
 
-Core does not read Pulse YAML. Pulse owns YAML config, plan assembly, CLI commands, and presentation; core owns graph planning, scheduling, process execution, and persistence.
+Core does not read Pulse YAML, run processes, or touch persistence: it owns graph planning and scheduling only. `devpulse-plugin/bash` owns process execution and daemons, `devpulse-execution` owns YAML config, plan assembly, run records, and presentation hand-off.
 
 ### Pulse execution flow
 

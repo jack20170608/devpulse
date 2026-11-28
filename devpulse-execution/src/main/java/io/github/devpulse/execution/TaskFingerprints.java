@@ -1,6 +1,6 @@
 package io.github.devpulse.execution;
 
-import io.github.devpulse.core.bash.BashTaskDefinition;
+import io.github.devpulse.bash.BashTaskDefinition;
 import io.github.devpulse.core.dag.DaemonOptions;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

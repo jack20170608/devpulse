@@ -1,8 +1,7 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.bash;
 
 import io.github.devpulse.core.dag.DaemonOptions;
 import io.github.devpulse.core.dag.DagDaemon;
-import io.github.devpulse.core.environment.BashShell;
 import io.github.devpulse.storage.DaemonRecord;
 import io.github.devpulse.storage.JdbiRunStore;
 import io.github.devpulse.storage.RunStore;
@@ -109,14 +108,14 @@ public final class DaemonManager {
         }
     }
 
-    private final RunHistory.Writer history;
+    private final TaskHistory history;
     private final BashShell bash;
     private final Path project;
     private final String runId;
     private final Path directory;
     private final ConcurrentHashMap<String, String> taskIds = new ConcurrentHashMap<>();
 
-    public DaemonManager(RunHistory.Writer history, BashShell bash, Path project) {
+    public DaemonManager(TaskHistory history, BashShell bash, Path project) {
         this.history = history;
         this.bash = Objects.requireNonNull(bash, "bash");
         this.project = Objects.requireNonNull(project, "project").toAbsolutePath().normalize();

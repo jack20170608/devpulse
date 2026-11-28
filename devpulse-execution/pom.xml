@@ -19,6 +19,16 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.github.devpulse</groupId>
+            <artifactId>bash</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.devpulse</groupId>
+            <artifactId>devpulse-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
         </dependency>

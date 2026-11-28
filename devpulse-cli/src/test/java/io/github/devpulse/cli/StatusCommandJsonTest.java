@@ -3,9 +3,9 @@ package io.github.devpulse.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonParser;
-import io.github.devpulse.core.bash.DaemonManager;
-import io.github.devpulse.core.bash.RunHistory;
+import io.github.devpulse.bash.DaemonManager;
 import io.github.devpulse.core.dag.DagDaemon;
+import io.github.devpulse.execution.RunHistory;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Path;

@@ -13,9 +13,11 @@
 | 模块 | 职责 |
 |------|------|
 | [`devpulse-common`](devpulse-common/architecture.md) | 跨模块共享通用代码 |
-| [`devpulse-core`](devpulse-core/architecture.md) | Java DAG、Bash 计划与运行时、历史、长驻进程及环境采集 |
+| [`devpulse-core`](devpulse-core/architecture.md) | 纯 DAG 调度：图校验、就绪队列、虚拟线程调度与协作取消（零依赖） |
+| [`devpulse-plugin`](devpulse-plugin/architecture.md) | 执行插件聚合：每个插件独立成模块，只依赖 `devpulse-core` |
+| [`devpulse-plugin/bash`](devpulse-plugin/bash/architecture.md) | Bash 执行插件：进程执行、Daemon 管理、环境采集与 `TaskHistory` 接缝 |
 | [`devpulse-storage`](design/relational-storage.md) | 运行状态的关系型存储、schema 迁移与复用索引 |
-| [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹与运行编排 |
+| [`devpulse-execution`](devpulse-execution/architecture.md) | 执行内核：配置解析、计划、指纹、运行编排与运行记录 |
 | [`devpulse-server`](devpulse-server/architecture.md) | 本地服务端：回环 HTTP、token 认证与健康/环境端点 |
 | [`devpulse-cli`](devpulse-cli/architecture.md) | 统一 CLI：入口装配、Pulse 命令与呈现 |
 | [`devpulse-tools/jira`](devpulse-tools/jira/architecture.md) | Jira REST、连接配置与内容转换 |
@@ -30,6 +32,7 @@
 |------|------|
 | [GraalVM 原生镜像踩坑清单](research/native-image-pitfalls.md) | 打包原生可执行文件时的元数据、资源、构建期初始化与平台差异 |
 | [数据库层资料汇编](research/database-layer-research.md) | 持久层设计与实现的外部资料索引 |
+| [core + plugin 演进预研](research/core-plugin-evolution.md) | 何时引入执行器 SPI、三条路线对比与反模式清单 |
 
 ### 依赖与文档边界
 
@@ -48,9 +51,11 @@ The former monolithic architecture document has been split by Maven module; this
 | Module | Responsibility |
 |--------|----------------|
 | [`devpulse-common`](devpulse-common/architecture.md) | Shared common code |
-| [`devpulse-core`](devpulse-core/architecture.md) | Java DAG, Bash planning/runtime, history, daemons, and environment collection |
+| [`devpulse-core`](devpulse-core/architecture.md) | Pure DAG scheduling: graph validation, ready queue, virtual-thread dispatch, cooperative cancellation (zero dependencies) |
+| [`devpulse-plugin`](devpulse-plugin/architecture.md) | Execution plugin aggregation: each plugin is its own module and depends only on `devpulse-core` |
+| [`devpulse-plugin/bash`](devpulse-plugin/bash/architecture.md) | Bash execution plugin: process execution, daemons, environment collection, and the `TaskHistory` seam |
 | [`devpulse-storage`](design/relational-storage.md) | Relational run state, schema migrations, and the reuse index |
-| [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, and run orchestration |
+| [`devpulse-execution`](devpulse-execution/architecture.md) | Execution kernel: configuration, plan, fingerprints, run orchestration, and run records |
 | [`devpulse-server`](devpulse-server/architecture.md) | Local server: loopback HTTP, token auth, health and environment endpoints |
 | [`devpulse-cli`](devpulse-cli/architecture.md) | Unified CLI: entry assembly, Pulse commands, and presentation |
 | [`devpulse-tools/jira`](devpulse-tools/jira/architecture.md) | Jira REST, connection configuration, and content conversion |
@@ -65,6 +70,7 @@ The former monolithic architecture document has been split by Maven module; this
 |----------|---------|
 | [GraalVM native image pitfalls](research/native-image-pitfalls.md) | Metadata, resources, build-time initialization, and platform differences when packaging a native executable |
 | [Database layer resources](research/database-layer-research.md) | External reading list for persistence design and implementation |
+| [Evolving core into a plugin host](research/core-plugin-evolution.md) | When to introduce an executor SPI, three options compared, and anti-patterns |
 
 ### Dependency and documentation boundaries
 

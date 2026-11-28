@@ -1,7 +1,7 @@
 package io.github.devpulse.execution;
 
-import io.github.devpulse.core.bash.BashTaskAdapter;
-import io.github.devpulse.core.bash.BashTaskDefinition;
+import io.github.devpulse.bash.BashTaskAdapter;
+import io.github.devpulse.bash.BashTaskDefinition;
 import io.github.devpulse.core.dag.DaemonOptions;
 import io.github.devpulse.core.dag.DagGraph;
 import io.github.devpulse.core.dag.DagWorkflow;

@@ -1,9 +1,8 @@
-package io.github.devpulse.core;
+package io.github.devpulse.bash;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.devpulse.core.bash.BashTaskDefinition;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;

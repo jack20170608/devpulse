@@ -1,4 +1,4 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.execution;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
@@ -14,6 +14,7 @@ import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigResolveOptions;
 import com.typesafe.config.ConfigSyntax;
 import com.typesafe.config.ConfigValueFactory;
+import io.github.devpulse.bash.TaskHistory;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagGraph;
 import io.github.devpulse.storage.DaemonRecord;
@@ -631,7 +632,7 @@ public final class RunHistory {
         }
     }
 
-    public static final class Writer implements AutoCloseable {
+    public static final class Writer implements AutoCloseable, TaskHistory {
         private final Path directory;
         private final FileChannel channel;
         private final FileLock lock;
@@ -712,7 +713,8 @@ public final class RunHistory {
             return openLog(name, false);
         }
 
-        synchronized BufferedWriter openLog(String name, boolean append) throws IOException {
+        @Override
+        public synchronized BufferedWriter openLog(String name, boolean append) throws IOException {
             return Files.newBufferedWriter(
                     directory.resolve(task(name).logPath()),
                     StandardCharsets.UTF_8,

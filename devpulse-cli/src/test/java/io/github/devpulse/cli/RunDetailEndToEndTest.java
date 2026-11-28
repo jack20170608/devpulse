@@ -3,11 +3,11 @@ package io.github.devpulse.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonParser;
-import io.github.devpulse.core.bash.PlanManifest;
-import io.github.devpulse.core.bash.RunHistory;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagGraph;
 import io.github.devpulse.core.dag.TaskKey;
+import io.github.devpulse.execution.PlanManifest;
+import io.github.devpulse.execution.RunHistory;
 import io.github.devpulse.storage.DaemonRecord;
 import java.io.IOException;
 import java.io.PrintWriter;

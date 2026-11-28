@@ -28,7 +28,8 @@ devpulse 面向"**本地、无容器、Bash 原生、有状态**"的任务编排
 | 文档 | 内容 |
 |------|------|
 | [Pulse 命令说明](docs/devpulse-cli/pulse-commands.md) | 任务配置、执行、审阅、状态与长驻进程 |
-| [Core 使用说明](devpulse-core/README.md) | Java DAG Builder、Bash 工作流嵌入与环境采集 |
+| [Core 使用说明](devpulse-core/README.md) | 纯 DAG 调度：图定义、就绪队列与协作取消 |
+| [Bash 插件使用说明](devpulse-plugin/bash/README.md) | Bash 执行、Daemon 管理与环境采集 |
 | [devpulse CLI 使用说明](devpulse/README.md) | 统一入口与命令导航 |
 | [发行与安装](devpulse-dist/README.md) | 本地构建安装、升级与卸载 |
 | [Jira 使用说明](devpulse-tools/jira/README.md) | 连接配置、Issue 操作与 Markdown 边界 |
@@ -43,7 +44,9 @@ devpulse 面向"**本地、无容器、Bash 原生、有状态**"的任务编排
 ```text
 devpulse-dependencies/   外部依赖版本
 devpulse-bom/            内部产物版本
-devpulse-core/           DAG 执行引擎、Bash 与环境采集共享库
+devpulse-core/           纯 DAG 调度（零依赖）
+devpulse-plugin/         执行插件聚合（POM）
+  bash/                  Bash 执行插件：进程、Daemon 与环境采集
 devpulse-storage/        运行状态持久化（H2 + JDBI）、schema 迁移与复用索引
 devpulse-execution/      执行内核：配置解析、计划、指纹与运行编排
 devpulse-cli/            统一 CLI：入口、Pulse 命令与服务端子命令
@@ -80,7 +83,8 @@ devpulse targets task orchestration that is **local, container-free, native to B
 | Document | Contents |
 |----------|----------|
 | [Pulse commands](docs/devpulse-cli/pulse-commands.md) | Task configuration, execution, review, status, and daemons |
-| [Core guide](devpulse-core/README.md) | Java DAG Builder, embedded Bash workflows, and environment collection |
+| [Core guide](devpulse-core/README.md) | Pure DAG scheduling: graphs, ready queue, cooperative cancellation |
+| [Bash plugin guide](devpulse-plugin/bash/README.md) | Bash execution, daemons, and environment collection |
 | [devpulse CLI guide](devpulse/README.md) | Unified entry point and command navigation |
 | [Distribution and installation](devpulse-dist/README.md) | Local build installation, upgrades, and removal |
 | [Jira guide](devpulse-tools/jira/README.md) | Connection configuration, issue operations, and Markdown boundaries |
@@ -95,7 +99,9 @@ devpulse targets task orchestration that is **local, container-free, native to B
 ```text
 devpulse-dependencies/   External dependency versions
 devpulse-bom/            Internal artifact versions
-devpulse-core/           DAG engine, shared Bash support, and environment collection
+devpulse-core/           Pure DAG scheduling (zero dependencies)
+devpulse-plugin/         Execution plugin aggregation (POM)
+  bash/                  Bash execution plugin: processes, daemons, environment collection
 devpulse-storage/        Run state persistence (H2 + JDBI), schema migrations, and the reuse index
 devpulse-execution/      Execution kernel: configuration, plan, fingerprints, and run orchestration
 devpulse-cli/            Unified CLI: entry point, Pulse commands, server subcommand

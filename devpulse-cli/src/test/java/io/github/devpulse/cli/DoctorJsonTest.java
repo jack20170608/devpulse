@@ -3,8 +3,8 @@ package io.github.devpulse.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonParser;
-import io.github.devpulse.core.environment.BashShell;
-import io.github.devpulse.core.environment.EnvironmentGatherer;
+import io.github.devpulse.bash.BashShell;
+import io.github.devpulse.bash.EnvironmentGatherer;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;

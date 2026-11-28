@@ -1,4 +1,4 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

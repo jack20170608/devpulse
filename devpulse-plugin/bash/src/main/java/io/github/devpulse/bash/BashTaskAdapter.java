@@ -1,9 +1,8 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.bash;
 
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagTask;
 import io.github.devpulse.core.dag.TaskContext;
-import io.github.devpulse.core.environment.BashShell;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,7 +32,7 @@ public final class BashTaskAdapter {
     private final BashShell bash;
     private final Path directory;
     private final PrintWriter out;
-    private final RunHistory.Writer history;
+    private final TaskHistory history;
     private final DaemonManager daemons;
     private final Object cleanupGate = new Object();
 
@@ -41,8 +40,7 @@ public final class BashTaskAdapter {
         this(bash, directory, out, null);
     }
 
-    public BashTaskAdapter(
-            BashShell bash, Path directory, PrintWriter out, RunHistory.Writer history) {
+    public BashTaskAdapter(BashShell bash, Path directory, PrintWriter out, TaskHistory history) {
         this.bash = Objects.requireNonNull(bash, "bash");
         this.directory =
                 Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();

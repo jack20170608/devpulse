@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import io.github.devpulse.core.environment.EnvironmentGatherer;
+import io.github.devpulse.bash.EnvironmentGatherer;
 import io.muserver.Method;
 import io.muserver.MuRequest;
 import io.muserver.MuResponse;

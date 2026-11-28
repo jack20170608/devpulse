@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.devpulse</groupId>
+        <artifactId>devpulse-dependencies</artifactId>
+        <version>${revision}</version>
+        <relativePath>../devpulse-dependencies/pom.xml</relativePath>
+    </parent>
+    <artifactId>devpulse-plugin</artifactId>
+    <packaging>pom</packaging>
+    <name>devpulse execution plugins</name>
+    <modules>
+        <module>bash</module>
+    </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.devpulse</groupId>
+            <artifactId>devpulse-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+</project>

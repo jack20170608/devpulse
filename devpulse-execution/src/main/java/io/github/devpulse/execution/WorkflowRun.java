@@ -1,5 +1,6 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.execution;
 
+import io.github.devpulse.bash.BashTaskAdapter;
 import io.github.devpulse.core.dag.DagDaemon;
 import io.github.devpulse.core.dag.DagRun;
 import io.github.devpulse.core.dag.DagWorkflow;

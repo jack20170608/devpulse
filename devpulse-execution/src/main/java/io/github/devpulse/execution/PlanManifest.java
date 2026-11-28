@@ -1,4 +1,4 @@
-package io.github.devpulse.core.bash;
+package io.github.devpulse.execution;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;

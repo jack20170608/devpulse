@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import io.github.devpulse.core.environment.EnvironmentGatherer;
+import io.github.devpulse.bash.EnvironmentGatherer;
 
 /** Builds the JSON document that {@code doctor --format json} prints. */
 final class DoctorJson {

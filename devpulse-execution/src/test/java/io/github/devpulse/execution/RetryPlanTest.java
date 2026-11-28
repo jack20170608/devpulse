@@ -2,8 +2,6 @@ package io.github.devpulse.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.devpulse.core.bash.PlanManifest;
-import io.github.devpulse.core.bash.RunHistory;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

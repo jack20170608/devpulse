@@ -1,7 +1,5 @@
 package io.github.devpulse.execution;
 
-import io.github.devpulse.core.bash.PlanManifest;
-import io.github.devpulse.core.bash.RunHistory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
