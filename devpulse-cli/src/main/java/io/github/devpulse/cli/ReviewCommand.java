@@ -22,15 +22,18 @@ import picocli.CommandLine.Spec;
         description =
                 "Validate and review a task or pipeline plan " + "without executing commands.")
 public final class ReviewCommand implements Callable<Integer> {
+    /** Default concurrency until the application configuration exposes it. */
+    private static final int DEFAULT_PARALLELISM = 4;
+
     @Spec private CommandSpec spec;
 
     @Parameters(
             index = "0",
             arity = "0..1",
             defaultValue = "dev",
-            paramLabel = "TARGET",
+            paramLabel = "WORKFLOW",
             description = "Task or pipeline to review " + "(default: ${DEFAULT-VALUE}).")
-    private String target;
+    private String workflow;
 
     @Option(
             names = "--directory",
@@ -76,7 +79,10 @@ public final class ReviewCommand implements Callable<Integer> {
         }
         PulseConfiguration config;
         try {
-            config = PulseConfiguration.load(directory);
+            var workflowFile =
+                    WorkflowFiles.resolve(
+                            directory, Path.of(".workflow"), workflow);
+            config = PulseConfiguration.load(directory, workflowFile);
         } catch (ConfigException | IOException exception) {
             return CommandOutput.fail(
                     json,
@@ -90,7 +96,7 @@ public final class ReviewCommand implements Callable<Integer> {
         }
         PulsePlan plan;
         try {
-            plan = config.plan(target);
+            plan = config.plan();
         } catch (ConfigException.BadValue exception) {
             return CommandOutput.fail(
                     json,
@@ -112,19 +118,19 @@ public final class ReviewCommand implements Callable<Integer> {
                     exception.getMessage(),
                     exception);
         }
-        var concurrency = jobs == null ? config.parallelism() : jobs;
+        var concurrency = jobs == null ? DEFAULT_PARALLELISM : jobs;
         if (json) {
-            out.println(PulseJson.plan(target, config.directory(), concurrency, plan));
+            out.println(PulseJson.plan(config.workflowId(), config.directory(), concurrency, plan));
             out.flush();
             return ExitCodes.OK;
         }
         try {
-            if (!plain && ReviewTui.show(target, config, plan, concurrency)) {
+            if (!plain && ReviewTui.show(config.workflowId(), config, plan, concurrency)) {
                 return ExitCodes.OK;
             }
             out.println(
                     "Plan: "
-                            + target
+                            + config.workflowId()
                             + " ("
                             + plan.tasks().size()
                             + " tasks, parallelism "

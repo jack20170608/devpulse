@@ -86,22 +86,8 @@ public final class RetryCommand implements Callable<Integer> {
                             + "rerun with --dry-run to inspect the retry plan.",
                     null);
         }
-        PulseConfiguration config;
         try {
-            config = PulseConfiguration.load(directory);
-        } catch (ConfigException | IOException exception) {
-            return CommandOutput.fail(
-                    json,
-                    out,
-                    err,
-                    "retry",
-                    ExitCodes.CONFIG_INVALID,
-                    "CONFIG_INVALID",
-                    exception.getMessage(),
-                    exception);
-        }
-        try {
-            var history = new RunHistory(config.directory());
+            var history = new RunHistory(directory.toAbsolutePath().normalize());
             var parent = history.get(runId);
             if (!force
                     && (parent.snapshot().state() == RunHistory.State.RUNNING
@@ -121,7 +107,12 @@ public final class RetryCommand implements Callable<Integer> {
                         null);
             }
             var manifest = history.plan(runId);
-            var plan = config.plan(manifest.target());
+            var config =
+                    PulseConfiguration.load(
+                            directory,
+                            WorkflowFiles.resolve(
+                                    directory, Path.of(".workflow"), manifest.target()));
+            var plan = config.plan();
             var fingerprints = TaskFingerprints.of(plan.tasks(), plan.daemonOptions());
             var needs = new LinkedHashMap<String, List<String>>();
             var daemons = new LinkedHashSet<String>();

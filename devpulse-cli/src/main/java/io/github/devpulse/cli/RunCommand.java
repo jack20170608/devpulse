@@ -33,15 +33,18 @@ import picocli.CommandLine.Spec;
         },
         description = "Run a local task or pipeline " + "according to its dependencies.")
 public final class RunCommand implements Callable<Integer> {
+    /** Default concurrency until the application configuration exposes it. */
+    private static final int DEFAULT_PARALLELISM = 4;
+
     @Spec private CommandSpec spec;
 
     @Parameters(
             index = "0",
             arity = "0..1",
             defaultValue = "dev",
-            paramLabel = "TARGET",
+            paramLabel = "WORKFLOW",
             description = "Task or pipeline to run " + "(default: ${DEFAULT-VALUE}).")
-    private String target;
+    private String workflow;
 
     @Option(
             names = "--directory",
@@ -94,7 +97,10 @@ public final class RunCommand implements Callable<Integer> {
 
         PulseConfiguration config;
         try {
-            config = PulseConfiguration.load(directory);
+            var workflowFile =
+                    WorkflowFiles.resolve(
+                            directory, Path.of(".workflow"), workflow);
+            config = PulseConfiguration.load(directory, workflowFile);
         } catch (ConfigException | IOException exception) {
             return fail(
                     json,
@@ -108,7 +114,7 @@ public final class RunCommand implements Callable<Integer> {
 
         PulsePlan plan;
         try {
-            plan = config.plan(target);
+            plan = config.plan();
         } catch (ConfigException.BadValue exception) {
             return fail(
                     json,
@@ -129,14 +135,14 @@ public final class RunCommand implements Callable<Integer> {
                     exception);
         }
 
-        var concurrency = jobs == null ? config.parallelism() : jobs;
+        var concurrency = jobs == null ? DEFAULT_PARALLELISM : jobs;
         if (dryRun) {
             if (json) {
-                out.println(PulseJson.plan(target, config.directory(), concurrency, plan));
+                out.println(PulseJson.plan(config.workflowId(), config.directory(), concurrency, plan));
             } else {
                 out.println(
                         "Plan: "
-                                + target
+                                + config.workflowId()
                                 + " ("
                                 + plan.tasks().size()
                                 + " tasks, parallelism "
@@ -174,7 +180,7 @@ public final class RunCommand implements Callable<Integer> {
                     RunService.execute(
                             shell,
                             config.directory(),
-                            target,
+                            config.workflowId(),
                             plan,
                             concurrency,
                             json ? new PrintWriter(Writer.nullWriter()) : out,
@@ -189,7 +195,7 @@ public final class RunCommand implements Callable<Integer> {
             if (json) {
                 out.println(
                         PulseJson.run(
-                                target,
+                                config.workflowId(),
                                 config.directory(),
                                 outcome.runId(),
                                 result.state().name(),

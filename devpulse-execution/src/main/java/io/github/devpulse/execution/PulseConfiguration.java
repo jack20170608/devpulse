@@ -231,7 +231,7 @@ public record PulseConfiguration(
 
     private static ConfigException.BadValue invalid(Config config, String path, String message) {
         var origin =
-                config.root().hasPathOrNull(path)
+                config.hasPathOrNull(path)
                         ? config.getValue(path).origin()
                         : config.root().origin();
         return new ConfigException.BadValue(origin, path, message);
